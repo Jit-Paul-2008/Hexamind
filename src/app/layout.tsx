@@ -13,8 +13,8 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Hexamind | Premium Experience",
-  description: "Immersive 3D and AI powered web experience.",
+  title: "Hexamind — ARIA Intelligence Pipeline",
+  description: "Multi-agent adversarial reasoning visualised as a live node graph.",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
       lang="en"
       className={`${spaceGrotesk.variable} ${playfair.variable} h-full antialiased dark`}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground selection:bg-indigo-charcoal selection:text-white">
+      <body className="h-screen overflow-hidden bg-[#0a0b0f] text-foreground selection:bg-indigo-charcoal selection:text-white">
         {children}
       </body>
     </html>

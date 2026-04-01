@@ -1,7 +1,11 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────────────────── */
+/* Hexamind Design System — Dark Node-Based Canvas                            */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
 :root {
-  --background: #111216;
+  --background: #0a0b0f;
   --foreground: #b6bac5;
 }
 
@@ -14,38 +18,58 @@
   --font-serif: var(--font-playfair);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0d0f13;
-    --foreground: #b6bac5;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
-  overflow-x: hidden;
+  overflow: hidden;
+  height: 100vh;
 }
 
-/* Custom scrollbar to match aesthetic */
+/* ─────────────────────────────────────────────────────────────────────────── */
+/* ReactFlow overrides — dark canvas                                          */
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+.react-flow__pane {
+  cursor: grab !important;
+}
+
+.react-flow__pane:active {
+  cursor: grabbing !important;
+}
+
+/* Hide default edge markers */
+.react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+/* Minimap — hidden (not needed for this layout) */
+.react-flow__minimap {
+  display: none !important;
+}
+
+/* Controls panel — glass styling handled by Tailwind classes in HexamindCanvas */
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/* Custom scrollbar (for node content overflow)                                */
+/* ─────────────────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 4px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--background);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #383e4e;
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #525a6e;
+  background: rgba(255, 255, 255, 0.14);
 }
 
-/* ── ARIA wordmark refractive gradient animation ── */
-@keyframes aria-refraction {
-  0%   { background-position: 0%   50%; }
-  50%  { background-position: 100% 50%; }
-  100% { background-position: 0%   50%; }
+/* ─────────────────────────────────────────────────────────────────────────── */
+/* Textarea autoresize helper                                                  */
+/* ─────────────────────────────────────────────────────────────────────────── */
+textarea {
+  field-sizing: content;
 }
