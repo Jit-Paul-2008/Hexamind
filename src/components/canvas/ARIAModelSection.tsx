@@ -1,212 +1,344 @@
 "use client";
 
-import { Canvas, useFrame, extend } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { Environment, MeshTransmissionMaterial } from "@react-three/drei";
-import { useRef, useEffect, useState, useMemo } from "react";
+import { useRef } from "react";
 import * as THREE from "three";
-import { motion, useInView } from "framer-motion";
+import {
+  motion,
+  useScroll,
+  useTransform,
+  useSpring,
+  type MotionValue,
+} from "framer-motion";
+import dynamic from "next/dynamic";
+import { AGENTS, type Agent } from "@/lib/agents";
+
+// Dynamically import the agent shape canvas to keep it CSR-only
+const AgentShapeCanvas = dynamic(() => import("./AgentShape"), { ssr: false });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Build the custom bipyramid geometry that matches the reference image.
-// Shape: an elongated double-ended crystal (bipyramid) with a 4-sided square
-// waist, tilted ~30° along the Z-axis so the apices read upper-right / lower-left.
+// ARIA Octahedron — symmetric glass prism with inner wireframe
 // ─────────────────────────────────────────────────────────────────────────────
-function buildCrystalGeometry(): THREE.BufferGeometry {
-  //   v0  — upper apex  (primary spike, upper-right direction)
-  //   v1  — lower apex  (primary spike, lower-left direction)
-  //   v2–v5 — belt ring (square cross-section at the crystal waist)
-  const v0 = new THREE.Vector3(2.0, 0.0, 0.0);   // upper apex (pre-tilt)
-  const v1 = new THREE.Vector3(-2.0, 0.0, 0.0);   // lower apex (pre-tilt)
-  // Offset the belt slightly from centre to give the shape its irregular
-  // "crystal" look rather than a perfectly symmetric diamond.
-  const v2 = new THREE.Vector3(-0.1, 0.75, 0.65);  // belt front-top
-  const v3 = new THREE.Vector3(0.45, 0.35, -0.65); // belt back-top
-  const v4 = new THREE.Vector3(0.1, -0.75, 0.65);  // belt front-bottom
-  const v5 = new THREE.Vector3(-0.45, -0.35, -0.65); // belt back-bottom
-
-  const positions = new Float32Array([
-    ...v0.toArray(),
-    ...v1.toArray(),
-    ...v2.toArray(),
-    ...v3.toArray(),
-    ...v4.toArray(),
-    ...v5.toArray(),
-  ]);
-
-  // 8 triangular faces — 4 on each pyramid half
-  // Winding is ordered so computed normals face outward.
-  const indices = new Uint16Array([
-    // Upper pyramid (apex = v0)
-    0, 2, 3,
-    0, 3, 4,
-    0, 4, 5,
-    0, 5, 2,
-    // Lower pyramid (apex = v1)
-    1, 3, 2,
-    1, 4, 3,
-    1, 5, 4,
-    1, 2, 5,
-  ]);
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geo.setIndex(new THREE.BufferAttribute(indices, 1));
-  geo.computeVertexNormals();
-  return geo;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// The rotating ARIA Crystal
-// ─────────────────────────────────────────────────────────────────────────────
-function ARIACrystal({ visible }: { visible: boolean }) {
-  const groupRef = useRef<THREE.Group>(null);
-  const meshRef = useRef<THREE.Mesh>(null);
-  const edgesRef = useRef<THREE.LineSegments>(null);
-
-  // Build geometry once
-  const crystalGeo = useMemo(() => buildCrystalGeometry(), []);
-
-  // Edge geometry for the wireframe overlay
-  const edgesGeo = useMemo(() => new THREE.EdgesGeometry(crystalGeo, 1), [crystalGeo]);
+function ARIAOctahedron() {
+  const outerRef = useRef<THREE.Mesh>(null);
+  const innerRef = useRef<THREE.Mesh>(null);
 
   useFrame((state, delta) => {
-    if (!visible || !groupRef.current) return;
-    // Slow continuous rotation — matches the constant-motion requirement
-    groupRef.current.rotation.y += delta * 0.22;
-    groupRef.current.rotation.x += delta * 0.08;
-    // Gentle vertical float
-    groupRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.7) * 0.14;
-    // Subtle breathing pulse on the edge opacity
-    if (edgesRef.current) {
-      const mat = edgesRef.current.material as THREE.LineBasicMaterial;
-      mat.opacity = 0.25 + Math.sin(state.clock.elapsedTime * 1.2) * 0.1;
+    if (outerRef.current) {
+      outerRef.current.rotation.y += delta * 0.28;
+      outerRef.current.rotation.x += delta * 0.1;
+      outerRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.75) * 0.18;
+    }
+    if (innerRef.current) {
+      innerRef.current.rotation.y -= delta * 0.42;
+      innerRef.current.rotation.z += delta * 0.14;
     }
   });
 
-  if (!visible) return null;
-
   return (
-    // Tilt the whole crystal ~30° so it reads upper-right / lower-left (matching reference)
-    <group ref={groupRef} rotation={[0, 0, Math.PI / 6]}>
-      {/* ── Dark glass solid ── */}
-      <mesh ref={meshRef} geometry={crystalGeo} castShadow receiveShadow>
+    <group>
+      {/* Glass outer shell */}
+      <mesh ref={outerRef} castShadow>
+        <octahedronGeometry args={[2.2, 0]} />
         <MeshTransmissionMaterial
           backside
-          backsideThickness={0.5}
-          thickness={0.6}
-          roughness={0.08}
-          transmission={0.92}
-          ior={1.5}
-          chromaticAberration={0.04}
-          anisotropy={0.15}
+          backsideThickness={0.6}
+          thickness={0.8}
+          roughness={0.04}
+          transmission={0.96}
+          ior={1.6}
+          chromaticAberration={0.09}
+          anisotropy={0.22}
           distortionScale={0.05}
-          temporalDistortion={0.02}
-          // Nearly-black dark tinted glass — the key to the dark glassmorphic look
-          color="#0d0f13"
-          attenuationColor="#383e4e"
-          attenuationDistance={1.5}
+          temporalDistortion={0.03}
+          color="#090b10"
+          attenuationColor="#4f46e5"
+          attenuationDistance={2.0}
         />
       </mesh>
-
-      {/* ── Wire edge overlay — thin, subtly glowing ── */}
-      <lineSegments ref={edgesRef} geometry={edgesGeo}>
-        <lineBasicMaterial
-          color="#b6bac5"
-          opacity={0.3}
+      {/* Counter-rotating inner wireframe for depth */}
+      <mesh ref={innerRef} scale={0.54}>
+        <icosahedronGeometry args={[2.2, 1]} />
+        <meshStandardMaterial
+          color="#818cf8"
+          wireframe
           transparent
-          linewidth={1}
+          opacity={0.18}
+          emissive="#818cf8"
+          emissiveIntensity={0.5}
         />
-      </lineSegments>
+      </mesh>
     </group>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Section wrapper — scroll-triggered entrance, used as Viewport 2 in /aria
+// Animated Agent Card — each one has its own scroll-triggered entrance
+// ─────────────────────────────────────────────────────────────────────────────
+function AnimatedAgentCard({
+  agent,
+  scrollYProgress,
+  range,
+  isLast,
+}: {
+  agent: Agent;
+  scrollYProgress: MotionValue<number>;
+  range: [number, number];
+  isLast: boolean;
+}) {
+  const opacity = useTransform(scrollYProgress, [range[0], range[1]], [0, 1]);
+  const y = useTransform(scrollYProgress, [range[0], range[1]], [48, 0]);
+  const ySpring = useSpring(y, { damping: 32, stiffness: 110 });
+
+  return (
+    <motion.div
+      className="flex items-center gap-5 group cursor-pointer pointer-events-auto select-none"
+      style={{ opacity, y: ySpring }}
+      whileHover={{ x: 6 }}
+      transition={{ duration: 0.18 }}
+      // TODO(backend): onClick → POST /api/session/start { agentId: agent.id }
+    >
+      {/* Order pip + connector line */}
+      <div className="flex flex-col items-center flex-shrink-0 self-stretch">
+        <span
+          className="font-sans text-[9px] font-semibold tabular-nums leading-none mb-1"
+          style={{ color: agent.accentColor }}
+        >
+          {String(agent.processingOrder).padStart(2, "0")}
+        </span>
+        {!isLast && (
+          <div
+            className="flex-1 w-px mt-1"
+            style={{
+              background: `linear-gradient(to bottom, ${agent.accentColor}40, transparent)`,
+            }}
+          />
+        )}
+      </div>
+
+      {/* 3D polygon */}
+      <div
+        className="flex-shrink-0 rounded-xl overflow-hidden"
+        style={{
+          width: 72,
+          height: 72,
+          background: `radial-gradient(circle, ${agent.glowColor} 0%, rgba(0,0,0,0) 70%)`,
+          border: `1px solid ${agent.accentColor}28`,
+          boxShadow: `0 0 22px ${agent.glowColor}`,
+        }}
+      >
+        <AgentShapeCanvas shape={agent.shape} accentColor={agent.accentColor} />
+      </div>
+
+      {/* Text block */}
+      <div className="flex flex-col gap-0.5">
+        <span
+          className="font-sans text-[8px] tracking-[0.38em] uppercase leading-none"
+          style={{ color: agent.accentColor }}
+        >
+          {agent.role}
+        </span>
+        <h3
+          className="font-serif text-lg text-white tracking-tight group-hover:text-lavender-gray transition-colors duration-300"
+          style={{ textShadow: `0 0 30px ${agent.accentColor}33` }}
+        >
+          {agent.codename}
+        </h3>
+        <p className="font-sans text-[11px] text-lavender-gray/55 leading-relaxed font-light max-w-[260px]">
+          {agent.purpose}
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Section — 400vh scroll container, sticky viewport inside
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ARIAModelSection() {
   const sectionRef = useRef<HTMLDivElement>(null);
-  const isInView = useInView(sectionRef, { once: false, amount: 0.35 });
-  const [crystalVisible, setCrystalVisible] = useState(false);
 
-  useEffect(() => {
-    setCrystalVisible(isInView);
-  }, [isInView]);
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start start", "end end"],
+  });
+
+  // ── Background transitions
+  const gridOpacity    = useTransform(scrollYProgress, [0, 0.18, 0.34], [1, 0.4, 0]);
+  const blackOpacity   = useTransform(scrollYProgress, [0.08, 0.36], [0, 0.93]);
+  const glowIntensity  = useTransform(scrollYProgress, [0.1, 0.5], [0.32, 0.85]);
+
+  // ── ARIA wordmark (behind prism, fades as agents emerge)
+  const wordmarkOpacity = useTransform(scrollYProgress, [0, 0.14, 0.28], [1, 0.9, 0]);
+  const wordmarkScale   = useTransform(scrollYProgress, [0, 0.28], [1, 0.93]);
+  const wordmarkY       = useTransform(scrollYProgress, [0, 0.28], [0, -12]);
+
+  // ── Prism: centres → lifts to upper third, slightly smaller
+  const prismYRaw    = useTransform(scrollYProgress, [0.25, 0.54], [0, -185]);
+  const prismScaleRaw = useTransform(scrollYProgress, [0, 0.12, 0.54], [1, 1.05, 0.68]);
+  const prismY       = useSpring(prismYRaw,    { damping: 28, stiffness: 88 });
+  const prismScale   = useSpring(prismScaleRaw, { damping: 28, stiffness: 88 });
+
+  // ── Bottom hint fades
+  const hintOpacity = useTransform(scrollYProgress, [0, 0.11, 0.22], [1, 0.5, 0]);
+
+  // ── Agents container: overall fade-in, then individual starters
+  const agentContainerOpacity = useTransform(scrollYProgress, [0.26, 0.36], [0, 1]);
+
+  const agentRanges: [number, number][] = [
+    [0.30, 0.40],
+    [0.42, 0.52],
+    [0.55, 0.64],
+    [0.67, 0.76],
+  ];
 
   return (
-    <div ref={sectionRef} className="relative w-full h-full bg-background overflow-hidden">
+    // 400vh tall — gives 300vh of scroll distance on a 100vh viewport
+    <div ref={sectionRef} className="relative" style={{ height: "400vh" }}>
 
-      {/* ── Ambient radial glow ── */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
+      {/* ── Sticky viewport ─────────────────────────────────────── */}
+      <div className="sticky top-0 w-full h-screen overflow-hidden">
+
+        {/* Z0 — dark base */}
+        <div className="absolute inset-0 bg-background z-0" />
+
+        {/* Z1 — dot grid (fades out) */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.4 }}
-          animate={isInView ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.4 }}
-          transition={{ duration: 1.8, ease: "easeOut" }}
-          className="w-[600px] h-[600px] rounded-full"
+          className="absolute inset-0 z-[1]"
           style={{
-            background:
-              "radial-gradient(circle, rgba(56,62,78,0.45) 0%, rgba(13,15,19,0) 65%)",
-            filter: "blur(50px)",
+            opacity: gridOpacity,
+            backgroundImage: `radial-gradient(circle at 1px 1px, rgba(182,186,197,0.04) 1px, transparent 0)`,
+            backgroundSize: "40px 40px",
           }}
         />
-      </div>
 
-      {/* ── 3D Canvas ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 80, filter: "blur(24px)" }}
-        animate={
-          isInView
-            ? { opacity: 1, y: 0, filter: "blur(0px)" }
-            : { opacity: 0, y: 80, filter: "blur(24px)" }
-        }
-        transition={{ duration: 1.6, ease: [0.16, 1, 0.3, 1] }}
-        className="absolute inset-0 z-10 bg-background"
-      >
-        <Canvas
-          shadows
-          gl={{ antialias: true, alpha: true }}
-          camera={{ position: [0, 0, 7], fov: 38 }}
+        {/* Z2 — deep-black overlay (fades in) */}
+        <motion.div
+          className="absolute inset-0 z-[2]"
+          style={{
+            opacity: blackOpacity,
+            background: "radial-gradient(ellipse at 50% 40%, #06060c 0%, #000000 100%)",
+          }}
+        />
+
+        {/* Z3 — indigo ambient glow (intensifies) */}
+        <div className="absolute inset-0 z-[3] flex items-center justify-center pointer-events-none">
+          <motion.div
+            className="rounded-full"
+            style={{
+              width: "70vw",
+              height: "70vw",
+              maxWidth: 860,
+              maxHeight: 860,
+              opacity: glowIntensity,
+              background:
+                "radial-gradient(circle, rgba(99,102,241,0.16) 0%, rgba(79,70,229,0.06) 45%, transparent 70%)",
+              filter: "blur(80px)",
+            }}
+          />
+        </div>
+
+        {/* Z10 — ARIA wordmark — ENTIRE wordmark behind the prism canvas */}
+        <motion.div
+          className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none select-none"
+          style={{ opacity: wordmarkOpacity, scale: wordmarkScale, y: wordmarkY }}
         >
-          {/* Very dim ambient — dark scene */}
-          <ambientLight intensity={0.15} />
-          {/* Main key light — cold white from upper-right (matching crystal orientation) */}
-          <directionalLight
-            position={[5, 5, 3]}
-            intensity={1.0}
-            color="#c8ccd6"
-          />
-          {/* Rim light — warm-indigo from lower-left to catch the waist edges */}
-          <directionalLight
-            position={[-5, -4, -2]}
-            intensity={0.6}
-            color="#383e4e"
-          />
-          {/* Subtle fill from the front */}
-          <pointLight position={[0, 0, 6]} intensity={0.3} color="#b6bac5" />
+          {/* TODO(backend): aria-live="polite" for real-time ARIA status from WebSocket */}
+          <span
+            className="font-serif font-bold leading-none"
+            aria-label="ARIA Intelligence System"
+            style={{
+              fontSize: "clamp(7rem, 20vw, 20rem)",
+              letterSpacing: "-0.04em",
+              background:
+                "linear-gradient(135deg, #b6bac5 0%, #818cf8 18%, #ffffff 32%, #a5b4fc 48%, #60a5fa 62%, #c7d2fe 78%, #b6bac5 100%)",
+              backgroundSize: "300% 300%",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+              animation: "aria-refraction 6s ease-in-out infinite",
+            }}
+          >
+            ARIA
+          </span>
+        </motion.div>
 
-          <ARIACrystal visible={crystalVisible} />
+        {/* Z20 — Prism canvas — ABOVE wordmark, floats without covering much of it */}
+        <motion.div
+          className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
+          style={{ y: prismY, scale: prismScale }}
+        >
+          <div style={{ width: "min(46vw, 46vh)", height: "min(46vw, 46vh)" }}>
+            <Canvas
+              shadows
+              gl={{ antialias: true, alpha: true }}
+              camera={{ position: [0, 0, 8], fov: 36 }}
+            >
+              <ambientLight intensity={0.1} />
+              <directionalLight position={[5, 6, 3]}  intensity={1.3} color="#c8ccd6" />
+              <directionalLight position={[-5, -4, -3]} intensity={0.9} color="#4f46e5" />
+              <pointLight position={[0, 0, 7]} intensity={0.5} color="#a5b4fc" />
+              <spotLight
+                position={[0, 10, 5]}
+                intensity={0.8}
+                angle={0.3}
+                penumbra={1}
+                color="#ffffff"
+              />
+              <ARIAOctahedron />
+              <Environment preset="night" />
+            </Canvas>
+          </div>
+        </motion.div>
 
-          <Environment preset="night" />
-        </Canvas>
-      </motion.div>
+        {/* Z25 — "Intelligence Core" subtitle + scroll hint — fades out */}
+        <motion.div
+          className="absolute bottom-10 left-0 right-0 z-[25] flex flex-col items-center gap-2 pointer-events-none text-center"
+          style={{ opacity: hintOpacity }}
+        >
+          <p className="font-sans text-[9px] tracking-[0.45em] uppercase text-lavender-gray/35">
+            ARIA // Intelligence Core
+          </p>
+          <p className="font-sans text-[10px] text-lavender-gray/20 tracking-[0.2em]">
+            Scroll to reveal the pipeline
+          </p>
+          <motion.div
+            animate={{ y: [0, 5, 0] }}
+            transition={{ duration: 1.8, repeat: Infinity }}
+            className="mt-3"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M6 1v10M6 11L2 7M6 11L10 7"
+                stroke="rgba(182,186,197,0.28)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </motion.div>
+        </motion.div>
 
-      {/* ── Label overlay — bottom ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
-        transition={{ duration: 1, delay: 0.7 }}
-        className="absolute bottom-10 left-0 right-0 z-20 flex flex-col items-center gap-2 text-center pointer-events-none"
-      >
-        <p className="font-sans text-[9px] tracking-[0.45em] uppercase text-lavender-gray/35">
-          ARIA // Intelligence Core
-        </p>
-        <h2 className="font-serif text-3xl md:text-4xl text-white/90 tracking-tight">
-          The <span className="italic text-lavender-gray">Prism</span> of Thought
-        </h2>
-        <p className="font-sans text-xs text-lavender-gray/45 max-w-xs leading-relaxed font-light mt-1">
-          Refracting every question through dual perspectives — Advocate&nbsp;&&nbsp;Skeptic — until truth crystallises.
-        </p>
-      </motion.div>
+        {/* Z30 — Agent cards — appear sequentially below the rising prism */}
+        <motion.div
+          className="absolute inset-0 z-30 flex flex-col items-center justify-end pb-10 pointer-events-none"
+          style={{ opacity: agentContainerOpacity }}
+        >
+          <div className="flex flex-col gap-6 w-full max-w-xl px-8">
+            {AGENTS.map((agent, i) => (
+              <AnimatedAgentCard
+                key={agent.id}
+                agent={agent}
+                scrollYProgress={scrollYProgress}
+                range={agentRanges[i]}
+                isLast={i === AGENTS.length - 1}
+              />
+            ))}
+          </div>
+        </motion.div>
+
+      </div>
     </div>
   );
 }
