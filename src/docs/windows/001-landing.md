@@ -4,19 +4,28 @@
 **Component File:** `src/app/page.tsx`
 
 ## Design Aesthetic
-- Inserts the user into the Hexamind experience with a "Google Flow" style immersion.
-- Features a high-quality abstract, deep blurry background (`/images/flow-bg.png`).
-- Employs severe "glassmorphism" (`backdrop-blur-3xl`, `bg-indigo-charcoal/20`, white border strokes).
-- Focuses purely on one CTA: **"Initiate ARIA"**.
+- Inspired by Google Flow / Google I/O landing pages: open, cinematic, text-first.
+- Background image (`/images/flow-bg.png`) is a dark abstract fluid render.
+- Text is NOT contained inside a glass box. Elements float independently on the image.
+- Mouse-tracking spotlight blur follows the cursor using `framer-motion` spring values to create a radial glow that feels physical.
+
+## Layout (top to bottom)
+- **Top-left**: `HEXAMIND // SYSTEM V1.0` label with pulsing dot indicator
+- **Top-right**: `ARIA OFFLINE` glassmorphic pill status
+- **Center**: Hero headline in two separate lines with distinct sizes and fonts:
+  - `Think` — large serif, white, full bleed
+  - `Beyond Limits.` — italic serif, lavender-gray, slightly smaller
+- **Below center**: Sub-tagline paragraph in light sans-serif
+- **CTA**: `Initiate ARIA` pill button with animated line, arrow, and ambient hover glow. Routes to `/aria`.
+- **Bottom-left**: `Est. 2026 — Hexamind Labs` metadata
+- **Bottom-right**: `Scroll after entry` with bouncing arrow
 
 ## Interactions
-- **Entrance:** The primary welcome module container fades and floats up (`framer-motion` `y: 30` to `y: 0` entrance).
-- **Hover States:** The glowing pill button CTA features an expanded white blurry drop-shadow and a subtle arrow shift upon hover.
-- **Exit / Routing:** Clicking the button triggers an exit via Next.js router. The `template.tsx` root wraps the layout, ensuring that route changes invoke a smooth fade and blur crossfade to the next window.
-
-## Purpose
-Sets the mood. Welcomes users to the premium, technical venture studio environment without overwhelming them with data or models immediately.
+- **Mouse spotlight**: `useMotionValue` + `useSpring` track cursor position. A 400px radial gradient follows with smooth spring physical lag.
+- **Entrance**: All elements stagger-animate in (opacity fade + y translation) with increasing delays.
+- **CTA hover**: Button expands ambient blur, line stretches, arrow translates right.
 
 ## Review Notes
-*(Leave notes here during UX reviews)*
-- Needs review on background image compression quality for mobile devices.
+- ✅ No single glass container — open layout matches Google Flow reference
+- ✅ Mouse blur spotlight active
+
