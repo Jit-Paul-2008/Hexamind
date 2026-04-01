@@ -17,9 +17,8 @@ import { AGENTS, type Agent } from "@/lib/agents";
 const AgentShapeCanvas = dynamic(() => import("./AgentShape"), { ssr: false });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ARIA Octahedron
-// FIX: Y-axis ONLY rotation — vertical apex stays pointing up/down at all times.
-// No X or Z rotation so the prism never tilts sideways.
+// ARIA Octahedron — vertical orientation, Y-axis rotation ONLY.
+// No X or Z rotation so the two apices always point straight up and down.
 // ─────────────────────────────────────────────────────────────────────────────
 function ARIAOctahedron() {
   const outerRef = useRef<THREE.Mesh>(null);
@@ -27,20 +26,16 @@ function ARIAOctahedron() {
 
   useFrame((state, delta) => {
     if (outerRef.current) {
-      // ONLY Y rotation — keeps the vertical orientation locked
-      outerRef.current.rotation.y += delta * 0.32;
-      // Gentle float stays purely vertical (Y position only)
-      outerRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.7) * 0.14;
+      outerRef.current.rotation.y += delta * 0.32;           // spin around vertical axis only
+      outerRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.7) * 0.14; // float
     }
     if (innerRef.current) {
-      // Counter-rotate inner wireframe on Y only for depth — no tilt
-      innerRef.current.rotation.y -= delta * 0.48;
+      innerRef.current.rotation.y -= delta * 0.50;           // counter-spin inner cage
     }
   });
 
   return (
     <group>
-      {/* Outer glass shell */}
       <mesh ref={outerRef} castShadow>
         <octahedronGeometry args={[2.2, 0]} />
         <MeshTransmissionMaterial
@@ -59,7 +54,6 @@ function ARIAOctahedron() {
           attenuationDistance={2.0}
         />
       </mesh>
-      {/* Counter-rotating inner wireframe — Y only */}
       <mesh ref={innerRef} scale={0.54}>
         <icosahedronGeometry args={[2.2, 1]} />
         <meshStandardMaterial
@@ -76,7 +70,9 @@ function ARIAOctahedron() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Single agent card — scroll-animated entrance, permanently stays visible
+// Agent card — each one enters with a fade+rise and then STAYS permanently.
+// useTransform clamps at its last output value by default.
+// No Y spring here — avoids flicker and "appear/disappear" behaviour.
 // ─────────────────────────────────────────────────────────────────────────────
 function AnimatedAgentCard({
   agent,
@@ -89,72 +85,76 @@ function AnimatedAgentCard({
   range: [number, number];
   isLast: boolean;
 }) {
-  // useTransform clamps at boundaries by default — once opacity hits 1 it STAYS at 1
+  // Clamps at 1 once past range[1] — card is permanently visible after appearing
   const opacity = useTransform(scrollYProgress, [range[0], range[1]], [0, 1]);
-  // Y: slides up into position then stays. Spring gives smooth entry.
-  const rawY = useTransform(scrollYProgress, [range[0], range[1]], [36, 0]);
-  const y    = useSpring(rawY, { damping: 38, stiffness: 130 });
+  // Slide in from below with NO spring so it doesn't re-animate on re-entry
+  const y       = useTransform(scrollYProgress, [range[0], range[1]], [32, 0]);
 
   return (
     <motion.div
       className="flex items-start gap-4 group cursor-pointer pointer-events-auto select-none"
       style={{ opacity, y }}
-      whileHover={{ x: 4 }}
+      whileHover={{ x: 5 }}
       transition={{ duration: 0.15 }}
-      // TODO(backend): onClick → POST /api/session/start { agentId: agent.id, processingOrder: agent.processingOrder }
+      // TODO(backend): onClick → POST /api/session/start { agentId: agent.id }
     >
-      {/* ── Timeline dot (sits on the vertical connector line) */}
-      <div className="relative flex flex-col items-center flex-shrink-0" style={{ width: 14, paddingTop: 6 }}>
+      {/* ── Timeline column: dot + connector segment to next agent ── */}
+      <div
+        className="relative flex flex-col items-center flex-shrink-0"
+        style={{ width: 14, paddingTop: 5 }}
+      >
+        {/* The coloured dot sits exactly on the continuous vertical line */}
         <div
-          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+          className="w-2.5 h-2.5 rounded-full flex-shrink-0 z-10 relative"
           style={{
             background: agent.accentColor,
-            boxShadow: `0 0 8px ${agent.accentColor}, 0 0 18px ${agent.accentColor}55`,
+            boxShadow: `0 0 8px ${agent.accentColor}, 0 0 16px ${agent.accentColor}66`,
           }}
         />
-        {/* Segment of vertical line below this dot — gradient toward next color */}
+        {/* Per-segment connector — provides gradients between agents */}
         {!isLast && (
           <div
             style={{
               width: 1,
-              height: 64,
-              marginTop: 4,
-              background: `linear-gradient(to bottom, ${agent.accentColor}60, transparent)`,
+              height: 62,
+              marginTop: 3,
+              background: `linear-gradient(to bottom, ${agent.accentColor}70, transparent)`,
+              flexShrink: 0,
             }}
           />
         )}
       </div>
 
-      {/* ── 3D polygon shape */}
+      {/* ── 3D polygon shape ── */}
       <div
         className="flex-shrink-0 rounded-xl overflow-hidden"
         style={{
-          width: 64,
-          height: 64,
+          width: 66,
+          height: 66,
           background: `radial-gradient(circle, ${agent.glowColor} 0%, rgba(0,0,0,0) 70%)`,
           border: `1px solid ${agent.accentColor}28`,
-          boxShadow: `0 0 16px ${agent.glowColor}`,
+          boxShadow: `0 0 18px ${agent.glowColor}`,
         }}
       >
         <AgentShapeCanvas shape={agent.shape} accentColor={agent.accentColor} />
       </div>
 
-      {/* ── Text */}
-      <div className="flex flex-col gap-0.5 pt-1">
+      {/* ── Text content ── */}
+      <div className="flex flex-col gap-1 pt-1">
         <span
-          className="font-sans text-[8px] tracking-[0.36em] uppercase leading-none mb-0.5"
+          className="font-sans text-[8px] tracking-[0.36em] uppercase leading-none"
           style={{ color: agent.accentColor }}
         >
           {String(agent.processingOrder).padStart(2, "0")} · {agent.role}
         </span>
         <h3
-          className="font-serif text-[1.1rem] leading-snug text-white tracking-tight 
-                     group-hover:text-lavender-gray transition-colors duration-300"
-          style={{ textShadow: `0 0 24px ${agent.accentColor}33` }}
+          className="font-serif text-xl leading-snug text-white tracking-tight
+                     group-hover:text-lavender-gray/80 transition-colors duration-300"
+          style={{ textShadow: `0 0 24px ${agent.accentColor}44` }}
         >
           {agent.codename}
         </h3>
-        <p className="font-sans text-[10.5px] text-lavender-gray/55 leading-relaxed font-light max-w-[230px]">
+        <p className="font-sans text-xs text-lavender-gray/65 leading-relaxed font-light max-w-[240px]">
           {agent.purpose}
         </p>
       </div>
@@ -163,16 +163,21 @@ function AnimatedAgentCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main Section — 500vh tall scroll container, sticky 100vh viewport inside.
-// Layout contract (scroll progress vs. events):
+//  Main component — 500vh scroll, sticky 100vh inner viewport.
 //
-//  0.00–0.12  Static hero — ARIA wordmark + prism centred, dot-grid bg
-//  0.08–0.35  Background fades to near-black, grid disappears
-//  0.00–0.30  ARIA wordmark fully fades to 0 (complete before agents)
-//  0.28–0.55  Prism moves DOWN slightly (+45px), scales to 0.68 (zoom-out)
-//  0.32–0.88  4 agents reveal sequentially — each has a wide 0.14 dwell window
-//             and STAYS visible once reached (useTransform clamp)
-//  0.88–1.00  Stable rest state — all agents visible, prism steady
+//  SCROLL TIMELINE (progress → screen scrolled at ~1000px viewport height):
+//
+//  0.00 – 0.07   Hero static                         (0 – 28px per vh unit)
+//  0.05 – 0.18   ① Background darkens, grid vanishes
+//  0.00 – 0.18   ② ARIA wordmark fades to 0           ← GONE by 18% scroll
+//  0.00 – 0.14   ③ Scroll-hint fades to 0
+//  0.14 – 0.42   ④ Prism drifts DOWN +45px, zooms to 0.68
+//  0.18 – 0.22   ⑤ Agent container fades in (fully visible at 22%)
+//  0.22 – 0.36   ⑥ Agent 1 (Advocate) enters, STAYS
+//  0.40 – 0.54   ⑦ Agent 2 (Skeptic)  enters, STAYS
+//  0.58 – 0.72   ⑧ Agent 3 (Synthesiser) enters, STAYS
+//  0.76 – 0.90   ⑨ Agent 4 (Oracle) enters, STAYS
+//  0.90 – 1.00   Rest state — all 4 visible, prism centred at bottom
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ARIAModelSection() {
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -182,52 +187,48 @@ export default function ARIAModelSection() {
     offset: ["start start", "end end"],
   });
 
-  // ── Background
-  const gridOpacity   = useTransform(scrollYProgress, [0, 0.18, 0.34], [1, 0.4, 0]);
-  const blackOpacity  = useTransform(scrollYProgress, [0.08, 0.35], [0, 0.94]);
-  const glowIntensity = useTransform(scrollYProgress, [0.10, 0.52], [0.30, 0.88]);
+  // ── Background ──────────────────────────────────────────────────────────────
+  const gridOpacity   = useTransform(scrollYProgress, [0,    0.06, 0.16], [1,    0.4, 0]);
+  const blackOpacity  = useTransform(scrollYProgress, [0.05, 0.18        ], [0,    0.95]);
+  const glowIntensity = useTransform(scrollYProgress, [0.08, 0.45        ], [0.28, 0.92]);
 
-  // ── ARIA wordmark — fades to 0 COMPLETELY before agents ever appear
-  const wordmarkOpacity = useTransform(scrollYProgress, [0, 0.16, 0.30], [1, 0.85, 0]);
-  const wordmarkScale   = useTransform(scrollYProgress, [0, 0.30], [1, 0.91]);
-  // Wordmark does NOT move — stays centred, only fades
-  const wordmarkY       = useTransform(scrollYProgress, [0, 0.30], [0, 0]);
+  // ── ARIA wordmark — fades COMPLETELY by 18% scroll (well before first agent) ──
+  const wordmarkOpacity = useTransform(scrollYProgress, [0, 0.07, 0.18], [1, 0.75, 0]);
+  const wordmarkScale   = useTransform(scrollYProgress, [0, 0.18       ], [1, 0.88  ]);
 
-  // ── Prism: stays horizontally centred (absolute inset-0 + flex never drifts X).
-  // FIX: moves DOWN slightly (+45px) — positive Y = downward in CSS.
-  // FIX: no upward/-185 movement that pushed it off-screen.
-  const prismYRaw     = useTransform(scrollYProgress, [0.28, 0.56], [0, 45]);
-  const prismScaleRaw = useTransform(scrollYProgress, [0, 0.12, 0.56], [1, 1.04, 0.68]);
-  const prismY        = useSpring(prismYRaw,     { damping: 32, stiffness: 92 });
-  const prismScale    = useSpring(prismScaleRaw, { damping: 32, stiffness: 92 });
+  // ── Scroll-hint at bottom — gone earlier than wordmark ──────────────────────
+  const hintOpacity = useTransform(scrollYProgress, [0, 0.05, 0.13], [1, 0.5, 0]);
 
-  // ── Scroll hint at bottom of hero state
-  const hintOpacity = useTransform(scrollYProgress, [0, 0.10, 0.20], [1, 0.5, 0]);
+  // ── Prism: moves DOWN and zooms out as agents enter.
+  //    Positive y = downward shift. Stays horizontally centred via flex. ──────
+  const prismYRaw     = useTransform(scrollYProgress, [0.14, 0.42], [0,   45]);
+  const prismScaleRaw = useTransform(scrollYProgress, [0,    0.10, 0.42], [1, 1.04, 0.68]);
+  const prismY        = useSpring(prismYRaw,     { damping: 32, stiffness: 90 });
+  const prismScale    = useSpring(prismScaleRaw, { damping: 32, stiffness: 90 });
 
-  // ── Agent container — fades in once, stays
-  const agentContainerOpacity = useTransform(scrollYProgress, [0.28, 0.38], [0, 1]);
+  // ── Agent container — fades in BEFORE any individual card starts appearing ──
+  const agentContainerOpacity = useTransform(scrollYProgress, [0.18, 0.23], [0, 1]);
 
-  // Each agent: wide dwell window so it stays visible long enough with scroll.
-  // Ranges are non-overlapping so each card appears in sequence.
-  // Framer-motion clamps at the final value → once visible, always visible.
+  // Per-agent ranges — 0.14 wide each, well separated, generous dwell time.
+  // Each range ends at a higher value than agents start, and since useTransform
+  // clamps, once a card hits opacity:1 it NEVER goes back to 0.
   const agentRanges: [number, number][] = [
-    [0.32, 0.44],   // Advocate
-    [0.47, 0.59],   // Skeptic
-    [0.62, 0.74],   // Synthesiser
-    [0.77, 0.89],   // Oracle
+    [0.22, 0.36],   // 01 Advocate
+    [0.40, 0.54],   // 02 Skeptic
+    [0.58, 0.72],   // 03 Synthesiser
+    [0.76, 0.90],   // 04 Oracle
   ];
 
   return (
-    // 500vh — gives 400vh of scroll travel (400/500 × viewport per step)
     <div ref={sectionRef} className="relative" style={{ height: "500vh" }}>
 
-      {/* ── Sticky viewport — 100vh, all layers absolutely positioned inside */}
+      {/* ─── Sticky 100vh viewport, all layers stack via absolute + z-index ─── */}
       <div className="sticky top-0 w-full h-screen overflow-hidden">
 
-        {/* Z0 — darkest base */}
+        {/* Z0 — base dark background */}
         <div className="absolute inset-0 bg-background z-0" />
 
-        {/* Z1 — dot grid, fades to 0 early */}
+        {/* Z1 — dot grid, fades early */}
         <motion.div
           className="absolute inset-0 z-[1]"
           style={{
@@ -237,7 +238,7 @@ export default function ARIAModelSection() {
           }}
         />
 
-        {/* Z2 — deep black overlay, fades in */}
+        {/* Z2 — deep black overlay, fades in during transition */}
         <motion.div
           className="absolute inset-0 z-[2]"
           style={{
@@ -246,15 +247,15 @@ export default function ARIAModelSection() {
           }}
         />
 
-        {/* Z3 — indigo ambient glow, intensifies as prism becomes the hero */}
+        {/* Z3 — indigo glow, strengthens as prism becomes the focus */}
         <div className="absolute inset-0 z-[3] flex items-center justify-center pointer-events-none">
           <motion.div
             className="rounded-full"
             style={{
               width: "65vw",
               height: "65vw",
-              maxWidth: 820,
-              maxHeight: 820,
+              maxWidth: 840,
+              maxHeight: 840,
               opacity: glowIntensity,
               background:
                 "radial-gradient(circle, rgba(99,102,241,0.16) 0%, rgba(79,70,229,0.06) 45%, transparent 70%)",
@@ -263,17 +264,18 @@ export default function ARIAModelSection() {
           />
         </div>
 
-        {/* ──────────────────────────────────────────────────────────────────
+        {/* ─────────────────────────────────────────────────────────────────────
             Z10 — ARIA wordmark
-            Entire text sits BELOW the prism canvas in z-order.
-            Stays centred (no X/Y drift on its own wrapper).
-            Fades to opacity:0 before agents appear — no overlap.
-        ────────────────────────────────────────────────────────────────── */}
+            - Entire wordmark is BEHIND the prism (z-10 < z-20)
+            - Fades to opacity:0 by scrollYProgress=0.18 — completely gone
+              before the first agent card ever appears at 0.22
+            - No horizontal movement — stays centred until gone
+        ───────────────────────────────────────────────────────────────────── */}
         <motion.div
           className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none select-none"
-          style={{ opacity: wordmarkOpacity, scale: wordmarkScale, y: wordmarkY }}
+          style={{ opacity: wordmarkOpacity, scale: wordmarkScale }}
         >
-          {/* TODO(backend): aria-live="polite" — display real-time ARIA system status from WebSocket */}
+          {/* TODO(backend): aria-live="polite" for WebSocket ARIA system status */}
           <span
             className="font-serif font-bold leading-none"
             aria-label="ARIA Intelligence System"
@@ -293,12 +295,12 @@ export default function ARIAModelSection() {
           </span>
         </motion.div>
 
-        {/* ──────────────────────────────────────────────────────────────────
+        {/* ─────────────────────────────────────────────────────────────────────
             Z20 — Prism canvas
-            Above wordmark. Uses `absolute inset-0 + flex items-center justify-center`
-            so the prism ONLY moves vertically (y transform) — zero horizontal drift.
-            Positive y = moves DOWN from its centred position.
-        ────────────────────────────────────────────────────────────────── */}
+            - Sits above wordmark
+            - ONLY moves vertically (y-transform on flex-centered container)
+            - Positive y → moves DOWN from centre  (no horizontal drift possible)
+        ───────────────────────────────────────────────────────────────────── */}
         <motion.div
           className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none"
           style={{ y: prismY, scale: prismScale }}
@@ -326,7 +328,10 @@ export default function ARIAModelSection() {
           </div>
         </motion.div>
 
-        {/* Z25 — scroll hint, fades out early */}
+        {/* ─────────────────────────────────────────────────────────────────────
+            Z25 — scroll-hint label
+            Completely hidden by 0.13 progress — NO overlap with agent layer
+        ───────────────────────────────────────────────────────────────────── */}
         <motion.div
           className="absolute bottom-10 left-0 right-0 z-[25] flex flex-col items-center gap-2 pointer-events-none text-center"
           style={{ opacity: hintOpacity }}
@@ -354,37 +359,40 @@ export default function ARIAModelSection() {
           </motion.div>
         </motion.div>
 
-        {/* ──────────────────────────────────────────────────────────────────
+        {/* ─────────────────────────────────────────────────────────────────────
             Z30 — Agent pipeline
-            Appears only AFTER wordmark is fully gone (opaque from 0.28+).
-            Anchored to the bottom of the viewport.
-            All 4 agents share one parent container with a SINGLE continuous
-            gradient line running through all their dots — they look connected.
-        ────────────────────────────────────────────────────────────────── */}
+            - Container appears AFTER wordmark is already 0
+            - Single continuous gradient line runs through ALL 4 dot positions,
+              aligned to x=7px (the centre of the 14px-wide dot column, 0px left-padding)
+            - Cards are ordered 1→4 top-to-bottom, container anchored to bottom-right
+            - backdrop-blur on each card makes text crisp over the dark background
+        ───────────────────────────────────────────────────────────────────── */}
         <motion.div
-          className="absolute bottom-6 left-0 right-0 z-30 flex justify-center pointer-events-none"
+          className="absolute bottom-8 right-8 z-30 pointer-events-none"
           style={{ opacity: agentContainerOpacity }}
         >
-          <div className="relative w-full max-w-md px-6">
-
-            {/* Single continuous pipeline line that runs through ALL 4 agent dots.
-                Positioned absolutely behind the cards.
-                left: 17px aligns with the centre of each 14px-wide dot column. */}
+          {/* Container: no horizontal padding so dot alignment maths are simple */}
+          <div className="relative w-80">
+            {/*
+              The single continuous pipeline line.
+              left: 7px = centre of dot column (dot is w-2.5=10px, column is 14px → offset 2px + radius 5px = 7px)
+              top: 5px = paddingTop of first dot column
+              bottom: 0
+            */}
             <div
-              className="absolute"
+              className="absolute pointer-events-none"
               style={{
-                left: 17,
-                top: 6,
-                bottom: 6,
+                left: 7,
+                top: 5,
+                bottom: 0,
                 width: 1,
                 background:
-                  "linear-gradient(to bottom, #818cf8 0%, #f87171 33%, #34d399 66%, #fbbf24 100%)",
-                opacity: 0.42,
+                  "linear-gradient(to bottom, #818cf8, #f87171 33%, #34d399 66%, #fbbf24)",
+                opacity: 0.5,
               }}
             />
 
-            {/* Agent cards stacked with gap-0 so the per-card connector lines
-                between dots form a seamless visual chain */}
+            {/* Agent cards — gap-0 so per-card connector lines form an unbroken chain */}
             <div className="flex flex-col gap-0">
               {AGENTS.map((agent, i) => (
                 <AnimatedAgentCard
