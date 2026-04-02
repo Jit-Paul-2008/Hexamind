@@ -23,6 +23,7 @@ export const INITIAL_NODES: Node[] = [
       label: "Advocate",
       role: "Constructive Reasoning",
       accentColor: "#818cf8",
+      panelSide: "right",
     },
   },
   // ── Skeptic — right branch
@@ -35,6 +36,7 @@ export const INITIAL_NODES: Node[] = [
       label: "Skeptic",
       role: "Adversarial Stress-Testing",
       accentColor: "#f87171",
+      panelSide: "left",
     },
   },
   // ── Synthesiser — merges branches
@@ -47,6 +49,7 @@ export const INITIAL_NODES: Node[] = [
       label: "Synthesiser",
       role: "Perspective Integration",
       accentColor: "#34d399",
+      panelSide: "right",
     },
   },
   // ── Oracle — final inference
@@ -59,6 +62,7 @@ export const INITIAL_NODES: Node[] = [
       label: "Oracle",
       role: "Predictive Inference",
       accentColor: "#fbbf24",
+      panelSide: "right",
     },
   },
   // ── Output node — bottom

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { motion } from "framer-motion";
 import { usePipelineStore } from "@/lib/store";
@@ -21,13 +22,37 @@ export default function AgentNode({ data }: NodeProps) {
   const label = (data as Record<string, unknown>).label as string;
   const role = (data as Record<string, unknown>).role as string;
   const accentColor = (data as Record<string, unknown>).accentColor as string;
+  const panelSide =
+    ((data as Record<string, unknown>).panelSide as "left" | "right") ||
+    "right";
 
   const status = usePipelineStore((s) => s.nodeStatuses[agentId] || "idle");
   const content = usePipelineStore(
     (s) => s.session?.outputs[agentId]?.content || ""
   );
+  const startedAt = usePipelineStore(
+    (s) => s.session?.outputs[agentId]?.startedAt || 0
+  );
+  const completedAt = usePipelineStore(
+    (s) => s.session?.outputs[agentId]?.completedAt || 0
+  );
+
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (status !== "active") {
+      return;
+    }
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [status]);
 
   const styles = STATUS_STYLES[status];
+  const elapsedMs = startedAt
+    ? (completedAt || now) - startedAt
+    : 0;
+  const elapsedSeconds = Math.max(0, elapsedMs / 1000);
+  const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
 
   return (
     <motion.div
@@ -37,6 +62,60 @@ export default function AgentNode({ data }: NodeProps) {
       className="relative"
       style={{ width: 260 }}
     >
+      {/* Side processing window */}
+      <div
+        className="absolute top-0 w-[260px] rounded-2xl border backdrop-blur-xl px-4 py-3 transition-all duration-300"
+        style={{
+          left: panelSide === "right" ? "calc(100% + 14px)" : "auto",
+          right: panelSide === "left" ? "calc(100% + 14px)" : "auto",
+          borderColor: `${accentColor}33`,
+          background:
+            status === "active"
+              ? `linear-gradient(180deg, rgba(${hexToRgb(accentColor)}, 0.12) 0%, rgba(10,11,15,0.78) 100%)`
+              : "rgba(10,11,15,0.72)",
+          boxShadow:
+            status === "active"
+              ? `0 0 18px ${accentColor}22`
+              : "none",
+        }}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <span
+            className="text-[8px] font-sans tracking-[0.22em] uppercase"
+            style={{ color: `${accentColor}bb` }}
+          >
+            {label} Window
+          </span>
+          <span className="text-[9px] text-white/45 font-mono">
+            {elapsedSeconds.toFixed(1)}s
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-2 text-[10px] font-sans text-white/60">
+          <div className="rounded-lg bg-white/5 px-2 py-1">
+            Status: {status}
+          </div>
+          <div className="rounded-lg bg-white/5 px-2 py-1 text-right">
+            {wordCount} words
+          </div>
+        </div>
+
+        <div className="min-h-[56px] max-h-[130px] overflow-y-auto rounded-lg bg-black/25 border border-white/10 px-2.5 py-2">
+          {status === "idle" ? (
+            <p className="text-[10px] text-white/35 italic font-sans">
+              Queueing input...
+            </p>
+          ) : (
+            <p className="text-[10px] text-white/75 font-sans leading-relaxed whitespace-pre-wrap">
+              {content || "Preparing response..."}
+              {status === "active" && (
+                <span className="inline-block w-1.5 h-3 ml-0.5 bg-white/50 animate-pulse" />
+              )}
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* Glow layer — only visible when active */}
       {styles.glow && (
         <div

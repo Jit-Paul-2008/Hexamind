@@ -40,6 +40,44 @@ npm install
 npm run dev
 ```
 
+## Quick Start
+
+If you want the easiest local check, do this:
+
+1. Open the repo folder.
+2. Copy this into a terminal and press Enter:
+
+```bash
+npm run dev:all
+```
+
+3. Open this in your browser after it starts:
+
+```text
+http://localhost:3000
+```
+
+If you want to use the free API later, put these values in the files below:
+
+```text
+frontend file: .env.local
+backend file: .env
+```
+
+Paste this into `.env.local`:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+Paste this into `.env` if you want Gemini:
+
+```bash
+HEXAMIND_MODEL_PROVIDER=gemini
+HEXAMIND_MODEL_NAME=gemini-1.5-flash
+GOOGLE_API_KEY=your_free_google_ai_studio_key
+```
+
 Frontend defaults to backend `http://localhost:8000`. Override with:
 
 ```bash

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -51,6 +52,9 @@ class PipelineService:
     async def stream_events(self, session_id: str):
         session = self._get_session(session_id)
         assembled: dict[str, str] = {}
+        start_delay = max(0, _env_ms("HEXAMIND_STREAM_START_DELAY_MS", 20))
+        chunk_delay = max(0, _env_ms("HEXAMIND_STREAM_CHUNK_DELAY_MS", 8))
+        step_delay = max(0, _env_ms("HEXAMIND_STREAM_STEP_DELAY_MS", 20))
 
         for agent in AGENTS:
             start_event = PipelineEvent(
@@ -61,7 +65,17 @@ class PipelineService:
                 "event": start_event.type.value,
                 "data": start_event.model_dump_json(),
             }
-            await asyncio.sleep(0.12)
+            await asyncio.sleep(start_delay / 1000)
+
+            warmup_event = PipelineEvent(
+                type=PipelineEventType.AGENT_CHUNK,
+                agentId=agent.id,
+                chunk="Analyzing request... ",
+            )
+            yield {
+                "event": warmup_event.type.value,
+                "data": warmup_event.model_dump_json(),
+            }
 
             content = await self._model_provider.build_agent_text(agent.id, session.query)
             words = content.split(" ")
@@ -78,7 +92,7 @@ class PipelineService:
                     "event": chunk_event.type.value,
                     "data": chunk_event.model_dump_json(),
                 }
-                await asyncio.sleep(0.025)
+                await asyncio.sleep(chunk_delay / 1000)
 
             assembled[agent.id] = full
             done_event = PipelineEvent(
@@ -90,7 +104,7 @@ class PipelineService:
                 "event": done_event.type.value,
                 "data": done_event.model_dump_json(),
             }
-            await asyncio.sleep(0.18)
+            await asyncio.sleep(step_delay / 1000)
 
         final_answer = await self._model_provider.compose_final_answer(
             session.query, assembled
@@ -151,3 +165,13 @@ class PipelineService:
 
 
 pipeline_service = PipelineService()
+
+
+def _env_ms(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default

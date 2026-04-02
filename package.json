@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:backend": "python3 -m uvicorn main:app --app-dir ai-service --host 127.0.0.1 --port 8000",
+    "dev:all": "node scripts/dev-all.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

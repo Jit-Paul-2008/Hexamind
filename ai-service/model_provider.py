@@ -58,6 +58,7 @@ class GeminiPipelineModelProvider:
             model=model_name,
             temperature=0.35,
         )
+        self._fallback = DeterministicPipelineModelProvider()
 
     async def build_agent_text(self, agent_id: str, query: str) -> str:
         prompts = {
@@ -80,25 +81,39 @@ class GeminiPipelineModelProvider:
             ),
         }
         instruction = prompts.get(agent_id, prompts["oracle"])
-        response = await self._model.ainvoke(
-            f"{instruction}\n\nQuestion: {query.strip()}"
-        )
-        content = getattr(response, "content", "")
-        return str(content).strip() or await DeterministicPipelineModelProvider().build_agent_text(agent_id, query)
+        try:
+            response = await self._model.ainvoke(
+                f"{instruction}\n\nQuestion: {query.strip()}"
+            )
+            content = getattr(response, "content", "")
+            resolved = str(content).strip()
+            if resolved:
+                return resolved
+        except Exception:
+            pass
+
+        return await self._fallback.build_agent_text(agent_id, query)
 
     async def compose_final_answer(self, query: str, outputs: dict[str, str]) -> str:
-        response = await self._model.ainvoke(
-            "You are the final synthesiser for a multi-agent research pipeline. "
-            "Using the agent outputs below, produce a concise final answer in 3-4 "
-            "sentences. Mention the strongest support, main risk, and a clear next step.\n\n"
-            f"Question: {query.strip()}\n\n"
-            f"Support: {outputs.get('advocate', '')}\n"
-            f"Risks: {outputs.get('skeptic', '')}\n"
-            f"Synthesis: {outputs.get('synthesiser', '')}\n"
-            f"Outlook: {outputs.get('oracle', '')}"
-        )
-        content = getattr(response, "content", "")
-        return str(content).strip() or await DeterministicPipelineModelProvider().compose_final_answer(query, outputs)
+        try:
+            response = await self._model.ainvoke(
+                "You are the final synthesiser for a multi-agent research pipeline. "
+                "Using the agent outputs below, produce a concise final answer in 3-4 "
+                "sentences. Mention the strongest support, main risk, and a clear next step.\n\n"
+                f"Question: {query.strip()}\n\n"
+                f"Support: {outputs.get('advocate', '')}\n"
+                f"Risks: {outputs.get('skeptic', '')}\n"
+                f"Synthesis: {outputs.get('synthesiser', '')}\n"
+                f"Outlook: {outputs.get('oracle', '')}"
+            )
+            content = getattr(response, "content", "")
+            resolved = str(content).strip()
+            if resolved:
+                return resolved
+        except Exception:
+            pass
+
+        return await self._fallback.compose_final_answer(query, outputs)
 
 
 def create_pipeline_model_provider() -> PipelineModelProvider:
