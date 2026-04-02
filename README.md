@@ -126,11 +126,16 @@ HEXAMIND_COST_MODE=free
 HEXAMIND_WEB_RESEARCH=1
 HEXAMIND_RESEARCH_MAX_SOURCES=10
 HEXAMIND_MAX_SOURCES_PER_DOMAIN=2
+HEXAMIND_AUTO_REGENERATE_ON_FAIL=1
 ```
 
 Workflow design reference:
 
 - `src/docs/aria-free-power-workflow.md`
+
+Quality API for each completed session:
+
+- `GET /api/pipeline/{sessionId}/quality`
 
 ## Quality Checks
 

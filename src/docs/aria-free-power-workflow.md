@@ -54,6 +54,7 @@ Use environment overrides per role:
   - claim-to-citation map is missing
   - key sections are missing
   - uncertainty is hidden instead of explicit
+- Fetch session quality diagnostics from `GET /api/pipeline/{sessionId}/quality`.
 
 5. Final synthesis
 - Produce a sectioned report with:
@@ -80,6 +81,7 @@ ARIA can outperform by combining adversarial multi-agent reasoning with hard evi
 - HEXAMIND_WEB_RESEARCH=1
 - HEXAMIND_RESEARCH_MAX_SOURCES=10
 - HEXAMIND_MAX_SOURCES_PER_DOMAIN=2
+- HEXAMIND_AUTO_REGENERATE_ON_FAIL=1
 - HEXAMIND_STREAM_CHUNK_DELAY_MS=4
 
 ### Profile: Free Fast Iteration

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agents import AGENTS
+from quality import analyze_pipeline_quality
 from research import ResearchContext
 from schemas import PipelineEvent, PipelineEventType
 from model_provider import PipelineModelProvider, create_pipeline_model_provider
@@ -32,6 +33,7 @@ class PipelineService:
         ).joinpath("pipeline-sessions.json")
         self._model_provider = model_provider or create_pipeline_model_provider()
         self._sessions: dict[str, PipelineSession] = self._load_sessions()
+        self._quality_reports: dict[str, dict[str, object]] = {}
 
     def start(self, query: str) -> str:
         session_id = f"session_{uuid.uuid4().hex[:10]}"
@@ -57,6 +59,35 @@ class PipelineService:
             "sessions": len(self._sessions),
             "webResearchEnabled": os.getenv("HEXAMIND_WEB_RESEARCH", "1").strip() not in {"0", "false", "no"},
             **diagnostics,
+        }
+
+    def get_quality_report(self, session_id: str) -> dict[str, object]:
+        if not self.has_session(session_id):
+            raise KeyError(session_id)
+
+        if session_id in self._quality_reports:
+            report = dict(self._quality_reports[session_id])
+            report["status"] = "ready"
+            report["sessionId"] = session_id
+            return report
+
+        return {
+            "sessionId": session_id,
+            "status": "pending",
+            "overallScore": 0.0,
+            "passing": False,
+            "regenerated": False,
+            "metrics": {
+                "citationCount": 0,
+                "sourceCount": 0,
+                "uniqueDomains": 0,
+                "averageCredibility": 0.0,
+                "contradictionCount": 0,
+                "hasClaimToCitationMap": False,
+                "hasUncertaintyDisclosure": False,
+            },
+            "contradictionFindings": [],
+            "notes": ["Pipeline has not produced a completed report yet."],
         }
 
     async def stream_events(self, session_id: str):
@@ -133,11 +164,44 @@ class PipelineService:
             assembled,
             research_context,
         )
+
+        quality_report = analyze_pipeline_quality(
+            query=session.query,
+            assembled=assembled,
+            final_answer=final_answer,
+            research=research_context,
+        )
+
+        regenerated = False
+        if _env_bool("HEXAMIND_AUTO_REGENERATE_ON_FAIL", True) and not bool(quality_report.get("passing", False)):
+            regenerated = True
+            strengthened_query = (
+                f"{session.query}\n\n"
+                "Regenerate with stronger grounding. Requirements: include a claim-to-citation map, "
+                "surface contradictions explicitly, include uncertainty disclosure, and use at least 4 unique source IDs when available."
+            )
+            final_answer = await self._model_provider.compose_final_answer(
+                strengthened_query,
+                assembled,
+                research_context,
+            )
+            quality_report = analyze_pipeline_quality(
+                query=session.query,
+                assembled=assembled,
+                final_answer=final_answer,
+                research=research_context,
+            )
+
+        quality_report["regenerated"] = regenerated
+
         final_event = PipelineEvent(
             type=PipelineEventType.PIPELINE_DONE,
             agentId="output",
             fullContent=final_answer,
         )
+
+        self._quality_reports[session_id] = quality_report
+
         yield {
             "event": final_event.type.value,
             "data": final_event.model_dump_json(),
@@ -199,3 +263,15 @@ def _env_ms(name: str, default: int) -> int:
         return int(value)
     except ValueError:
         return default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default

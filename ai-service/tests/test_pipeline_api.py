@@ -71,9 +71,22 @@ class PipelineApiTests(unittest.TestCase):
         self.assertEqual(final_event["agentId"], "output")
         self.assertIn("## Executive Summary", final_event["fullContent"])
 
+        quality_response = self.client.get(f"/api/pipeline/{session_id}/quality")
+        self.assertEqual(quality_response.status_code, 200)
+        quality_payload = quality_response.json()
+        self.assertEqual(quality_payload["sessionId"], session_id)
+        self.assertEqual(quality_payload["status"], "ready")
+        self.assertIn("overallScore", quality_payload)
+        self.assertIn("metrics", quality_payload)
+        self.assertIn("contradictionFindings", quality_payload)
+        self.assertIn("notes", quality_payload)
+
     def test_unknown_session_returns_404(self) -> None:
         response = self.client.get("/api/pipeline/does-not-exist/stream")
         self.assertEqual(response.status_code, 404)
+
+        quality_response = self.client.get("/api/pipeline/does-not-exist/quality")
+        self.assertEqual(quality_response.status_code, 404)
 
     @staticmethod
     def _collect_sse_frames(lines: object) -> list[dict[str, str]]:

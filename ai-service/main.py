@@ -56,3 +56,11 @@ def stream_pipeline(session_id: str):
     if not pipeline_service.has_session(session_id):
         raise HTTPException(status_code=404, detail="Unknown pipeline session")
     return EventSourceResponse(pipeline_service.stream_events(session_id))
+
+
+@app.get("/api/pipeline/{session_id}/quality")
+def pipeline_quality(session_id: str) -> dict[str, object]:
+    try:
+        return pipeline_service.get_quality_report(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Unknown pipeline session")
