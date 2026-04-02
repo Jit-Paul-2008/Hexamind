@@ -133,8 +133,15 @@ class InternetResearcher:
         self._max_hits_per_term = max(3, _env_int("HEXAMIND_RESEARCH_MAX_HITS_PER_TERM", 8))
         self._fetch_concurrency = max(1, _env_int("HEXAMIND_RESEARCH_FETCH_CONCURRENCY", 5))
         self._min_relevance_score = max(0.0, _env_float("HEXAMIND_RESEARCH_MIN_RELEVANCE", 0.24))
+        self._cache_ttl_seconds = max(120.0, _env_float("HEXAMIND_RESEARCH_CACHE_TTL_SECONDS", 1800.0))
+        self._research_cache: dict[str, tuple[float, ResearchContext]] = {}
 
     async def research(self, query: str) -> ResearchContext:
+        cache_key = self._cache_key(query)
+        cached = self._load_cached_research(cache_key)
+        if cached is not None:
+            return cached
+
         workflow_profile = build_workflow_profile(query)
         search_passes = self._build_search_passes(query, workflow_profile)
         search_terms = self._build_search_terms(query, workflow_profile, search_passes)
@@ -159,7 +166,7 @@ class InternetResearcher:
                 seen_urls.add(item.url)
             sources = _assign_source_ids(merged[: max(self._max_sources, workflow_profile.max_sources)])
 
-        return ResearchContext(
+        result = ResearchContext(
             query=query,
             workflow_profile=workflow_profile,
             search_terms=tuple(search_terms),
@@ -168,6 +175,8 @@ class InternetResearcher:
             generated_at=time.time(),
             contradictions=contradictions,
         )
+        self._store_cached_research(cache_key, result)
+        return result
 
     def _build_search_passes(self, query: str, workflow_profile: ResearchWorkflowProfile) -> list[str]:
         passes = list(workflow_profile.search_passes)
@@ -184,6 +193,22 @@ class InternetResearcher:
             seen.add(key)
             deduped.append(item)
         return deduped
+
+    def _cache_key(self, query: str) -> str:
+        return _clean_text(query).lower()
+
+    def _load_cached_research(self, cache_key: str) -> ResearchContext | None:
+        cached = self._research_cache.get(cache_key)
+        if not cached:
+            return None
+        cached_at, context = cached
+        if time.time() - cached_at > self._cache_ttl_seconds:
+            self._research_cache.pop(cache_key, None)
+            return None
+        return context
+
+    def _store_cached_research(self, cache_key: str, context: ResearchContext) -> None:
+        self._research_cache[cache_key] = (time.time(), context)
 
     async def _search_hits(
         self,

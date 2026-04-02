@@ -149,6 +149,80 @@ def _provider_backoff_seconds() -> float:
     return max(0.05, _env_float("HEXAMIND_PROVIDER_BACKOFF_SECONDS", 0.25))
 
 
+def _query_complexity_score(query: str) -> float:
+    words = re.findall(r"[a-zA-Z0-9]{3,}", query.lower())
+    unique_words = set(words)
+    score = min(1.0, (len(words) / 24.0) + (len(unique_words) / 18.0) * 0.35)
+    if any(token in query.lower() for token in ("compare", "versus", "vs", "tradeoff", "benchmark")):
+        score += 0.1
+    if any(token in query.lower() for token in ("policy", "medical", "clinical", "engineering", "architecture", "reliability")):
+        score += 0.08
+    return max(0.0, min(1.0, score))
+
+
+def _local_model_tier(query: str, research: ResearchContext | None) -> str:
+    complexity = research.workflow_profile.complexity_score if research else _query_complexity_score(query)
+    source_count = len(research.sources) if research else 0
+    contradiction_count = len(getattr(research, "contradictions", ())) if research else 0
+    if complexity >= 0.75 or source_count >= 6 or contradiction_count >= 2:
+        return "large"
+    if complexity >= 0.48 or source_count >= 3:
+        return "medium"
+    return "small"
+
+
+def _local_token_budget(stage: str, tier: str, research: ResearchContext | None) -> int:
+    budgets = {
+        "small": {"agent": 900, "final": 1500},
+        "medium": {"agent": 1200, "final": 1900},
+        "large": {"agent": 1500, "final": 2400},
+    }
+    stage_budget = budgets.get(tier, budgets["medium"]).get(stage, 1400)
+    if research and research.workflow_profile.complexity_score >= 0.7:
+        stage_budget += 150
+    return stage_budget
+
+
+def _local_context_budget(stage: str, tier: str, research: ResearchContext | None) -> int:
+    budgets = {
+        "small": {"agent": 2400, "final": 3200},
+        "medium": {"agent": 3600, "final": 5000},
+        "large": {"agent": 4800, "final": 6800},
+    }
+    budget = budgets.get(tier, budgets["medium"]).get(stage, 3600)
+    if research and research.workflow_profile.complexity_score >= 0.7:
+        budget += 400
+    return budget
+
+
+def _compressed_research_block(research: ResearchContext | None, char_budget: int) -> str:
+    block = format_research_context(research)
+    if len(block) <= char_budget:
+        return block
+    if not research or not research.sources:
+        return block[:char_budget].rstrip()
+
+    lines = block.splitlines()
+    prefix: list[str] = []
+    source_lines: list[str] = []
+    in_sources = False
+    for line in lines:
+        if not in_sources:
+            if line.startswith(("Query:", "Search terms:", "Subquestions:")):
+                prefix.append(line[:180].rstrip() + ("…" if len(line) > 180 else ""))
+            else:
+                prefix.append(line)
+            if line.strip() == "Source pack:":
+                in_sources = True
+            continue
+        source_lines.append(line)
+        if len("\n".join(prefix + source_lines)) >= char_budget:
+            break
+
+    compressed = "\n".join(prefix + source_lines)
+    return compressed[:char_budget].rstrip()
+
+
 async def _invoke_with_resilience(
     health: _ProviderHealthManager,
     stage: str,
@@ -934,6 +1008,11 @@ class LocalPipelineModelProvider:
             model_name=default_model,
             reason="Local runtime call failed",
         )
+        self._tier_models = {
+            "small": os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", default_model).strip() or default_model,
+            "medium": os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", default_model).strip() or default_model,
+            "large": os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", default_model).strip() or default_model,
+        }
         self._model_by_role = {
             "advocate": os.getenv("HEXAMIND_AGENT_MODEL_ADVOCATE", default_model).strip(),
             "skeptic": os.getenv("HEXAMIND_AGENT_MODEL_SKEPTIC", default_model).strip(),
@@ -995,8 +1074,10 @@ class LocalPipelineModelProvider:
             ),
         }
         system_prompt = prompts.get(agent_id, prompts["oracle"])
-        research_block = format_research_context(research)
-        model_name = self._model_by_role.get(agent_id, self._default_model)
+        tier = _local_model_tier(query, research)
+        research_block = _compressed_research_block(research, _local_context_budget("agent", tier, research))
+        model_name = self._resolve_local_model(agent_id, tier)
+        token_budget = _local_token_budget("agent", tier, research)
 
         if self._local_available:
             try:
@@ -1007,7 +1088,7 @@ class LocalPipelineModelProvider:
                         model=model_name,
                         system_prompt=system_prompt,
                         user_prompt=f"Question: {query.strip()}\n\nLive web research context:\n{research_block}",
-                        max_tokens=1400,
+                        max_tokens=token_budget,
                     ),
                     _stage_timeout_seconds("agent"),
                     lambda text: _is_agent_research_grade(text, minimum_length=280, research=research),
@@ -1027,8 +1108,10 @@ class LocalPipelineModelProvider:
         if not self._health.can_attempt():
             return await self._fallback.compose_final_answer(query, outputs, research)
 
-        research_block = format_research_context(research)
-        model_name = self._model_by_role.get("final", self._default_model)
+        tier = _local_model_tier(query, research)
+        research_block = _compressed_research_block(research, _local_context_budget("final", tier, research))
+        model_name = self._resolve_local_model("final", tier)
+        token_budget = _local_token_budget("final", tier, research)
 
         if self._local_available:
             try:
@@ -1052,7 +1135,7 @@ class LocalPipelineModelProvider:
                             f"Oracle output:\n{outputs.get('oracle', '')}\n\n"
                             f"Live web research context:\n{research_block}"
                         ),
-                        max_tokens=2200,
+                        max_tokens=token_budget,
                     ),
                     _stage_timeout_seconds("final"),
                     lambda text: _is_final_research_grade(text, minimum_length=920, research=research),
@@ -1120,6 +1203,12 @@ class LocalPipelineModelProvider:
         self._fallback_count += 1
         message = f"{type(exc).__name__}: {exc}".strip()
         self._last_error = message[:240]
+
+    def _resolve_local_model(self, agent_id: str, tier: str) -> str:
+        role_model = self._model_by_role.get(agent_id, self._default_model)
+        if role_model != self._default_model:
+            return role_model
+        return self._tier_models.get(tier, self._default_model)
 
 
 def _citation_count(text: str) -> int:
