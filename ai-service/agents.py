@@ -17,8 +17,8 @@ AGENTS: tuple[AgentConfig, ...] = (
     AgentConfig(
         id="advocate",
         codename="Advocate",
-        role="Constructive Reasoning",
-        purpose="Builds the strongest possible case for a hypothesis.",
+        role="Opportunity Thesis and Value Realization",
+        purpose="Builds the strongest evidence-based upside case and execution path.",
         accent_color="#818cf8",
         glow_color="rgba(99, 102, 241, 0.28)",
         shape="tetrahedron",
@@ -27,8 +27,8 @@ AGENTS: tuple[AgentConfig, ...] = (
     AgentConfig(
         id="skeptic",
         codename="Skeptic",
-        role="Adversarial Stress-Testing",
-        purpose="Challenges assumptions and surfaces risks.",
+        role="Risk Decomposition and Failure Analysis",
+        purpose="Challenges assumptions, identifies failure modes, and quantifies downside exposure.",
         accent_color="#f87171",
         glow_color="rgba(239, 68, 68, 0.28)",
         shape="icosahedron",
@@ -37,8 +37,8 @@ AGENTS: tuple[AgentConfig, ...] = (
     AgentConfig(
         id="synthesiser",
         codename="Synthesiser",
-        role="Perspective Integration",
-        purpose="Combines competing views into a balanced conclusion.",
+        role="Tradeoff Integration and Decision Framing",
+        purpose="Integrates competing perspectives into a decision-ready recommendation.",
         accent_color="#34d399",
         glow_color="rgba(16, 185, 129, 0.28)",
         shape="dodecahedron",
@@ -47,8 +47,8 @@ AGENTS: tuple[AgentConfig, ...] = (
     AgentConfig(
         id="oracle",
         codename="Oracle",
-        role="Predictive Inference",
-        purpose="Projects likely outcomes and next actions.",
+        role="Scenario Forecasting and Operating Outlook",
+        purpose="Forecasts near-term outcomes with scenario ranges, triggers, and confidence levels.",
         accent_color="#fbbf24",
         glow_color="rgba(245, 158, 11, 0.28)",
         shape="box",

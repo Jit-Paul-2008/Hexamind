@@ -65,7 +65,7 @@ class PipelineApiTests(unittest.TestCase):
         self.assertEqual([event["agentId"] for event in start_events], [agent.id for agent in AGENTS])
         self.assertEqual([event["agentId"] for event in done_events], [agent.id for agent in AGENTS])
         self.assertEqual(final_event["agentId"], "output")
-        self.assertIn("Final synthesis for 'How should we ship the MVP?':", final_event["fullContent"])
+        self.assertIn("## Executive Summary", final_event["fullContent"])
 
     def test_unknown_session_returns_404(self) -> None:
         response = self.client.get("/api/pipeline/does-not-exist/stream")

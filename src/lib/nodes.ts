@@ -10,7 +10,7 @@ export const INITIAL_NODES: Node[] = [
   {
     id: "input",
     type: "inputNode",
-    position: { x: 350, y: 0 },
+    position: { x: 520, y: 20 },
     data: { label: "Input" },
   },
   // ── Advocate — left branch
@@ -21,55 +21,91 @@ export const INITIAL_NODES: Node[] = [
     data: {
       agentId: "advocate",
       label: "Advocate",
-      role: "Constructive Reasoning",
+      role: "Opportunity Thesis and Upside Proof",
       accentColor: "#818cf8",
-      panelSide: "right",
+    },
+  },
+  {
+    id: "advocate-processing",
+    type: "processingNode",
+    position: { x: 380, y: 180 },
+    data: {
+      agentId: "advocate",
+      label: "Advocate",
+      accentColor: "#818cf8",
     },
   },
   // ── Skeptic — right branch
   {
     id: "skeptic",
     type: "agentNode",
-    position: { x: 580, y: 180 },
+    position: { x: 920, y: 180 },
     data: {
       agentId: "skeptic",
       label: "Skeptic",
-      role: "Adversarial Stress-Testing",
+      role: "Risk Decomposition and Failure Modes",
       accentColor: "#f87171",
-      panelSide: "left",
+    },
+  },
+  {
+    id: "skeptic-processing",
+    type: "processingNode",
+    position: { x: 1220, y: 180 },
+    data: {
+      agentId: "skeptic",
+      label: "Skeptic",
+      accentColor: "#f87171",
     },
   },
   // ── Synthesiser — merges branches
   {
     id: "synthesiser",
     type: "agentNode",
-    position: { x: 330, y: 380 },
+    position: { x: 500, y: 430 },
     data: {
       agentId: "synthesiser",
       label: "Synthesiser",
-      role: "Perspective Integration",
+      role: "Decision Integration and Tradeoff Resolution",
       accentColor: "#34d399",
-      panelSide: "right",
+    },
+  },
+  {
+    id: "synthesiser-processing",
+    type: "processingNode",
+    position: { x: 800, y: 430 },
+    data: {
+      agentId: "synthesiser",
+      label: "Synthesiser",
+      accentColor: "#34d399",
     },
   },
   // ── Oracle — final inference
   {
     id: "oracle",
     type: "agentNode",
-    position: { x: 330, y: 560 },
+    position: { x: 500, y: 680 },
     data: {
       agentId: "oracle",
       label: "Oracle",
-      role: "Predictive Inference",
+      role: "Scenario Forecasting and Execution Outlook",
       accentColor: "#fbbf24",
-      panelSide: "right",
+    },
+  },
+  {
+    id: "oracle-processing",
+    type: "processingNode",
+    position: { x: 800, y: 680 },
+    data: {
+      agentId: "oracle",
+      label: "Oracle",
+      accentColor: "#fbbf24",
     },
   },
   // ── Output node — bottom
   {
     id: "output",
     type: "outputNode",
-    position: { x: 330, y: 740 },
+    position: { x: 500, y: 930 },
     data: { label: "Output" },
   },
 ];

@@ -25,35 +25,92 @@ class DeterministicPipelineModelProvider:
     async def build_agent_text(self, agent_id: str, query: str) -> str:
         q = query.strip()
         if agent_id == "advocate":
-            return (
-                f"Strongest case for '{q}': measurable upside exists if scope is narrow, "
-                "constraints are explicit, and early metrics are tracked from day one."
-            )
+            return self._structured_advocate(q)
         if agent_id == "skeptic":
-            return (
-                f"Primary risks for '{q}': noisy assumptions, hidden dependency costs, "
-                "and unclear ownership can break delivery quality and reliability."
-            )
+            return self._structured_skeptic(q)
         if agent_id == "synthesiser":
-            return (
-                f"Balanced synthesis for '{q}': proceed in phased slices with guardrails, "
-                "validate each increment, and stop expansion if confidence regresses."
-            )
-        return (
-            f"Forecast for '{q}': likely positive outcome under controlled rollout, "
-            "with biggest gains from fast feedback loops and strict review checkpoints."
-        )
+            return self._structured_synthesiser(q)
+        return self._structured_oracle(q)
 
     async def compose_final_answer(self, query: str, outputs: dict[str, str]) -> str:
-        advocate = outputs.get("advocate", "")
-        skeptic = outputs.get("skeptic", "")
-        synthesis = outputs.get("synthesiser", "")
-        oracle = outputs.get("oracle", "")
+        q = query.strip()
         return (
-            f"Final synthesis for '{query}': {synthesis} "
-            f"Support: {advocate} "
-            f"Risks: {skeptic} "
-            f"Outlook: {oracle}"
+            "## Executive Summary\n"
+            f"The decision on '{q}' should proceed through a staged rollout tied to measurable outcomes and explicit risk controls.\n\n"
+            "## Evidence Snapshot\n"
+            "- Opportunity case indicates upside when implementation scope is constrained and ownership is clear.\n"
+            "- Risk analysis highlights dependency volatility, quality drift, and adoption uncertainty as key threats.\n"
+            "- Integrated view supports controlled expansion only after milestone validation.\n\n"
+            "## Decision Recommendation\n"
+            "Proceed with a gated pilot, define kill criteria in advance, and require metric improvement before broad rollout.\n\n"
+            "## 30-Day Action Plan\n"
+            "1. Establish baseline metrics, owners, and weekly review cadence.\n"
+            "2. Run a narrow pilot with explicit acceptance thresholds.\n"
+            "3. Execute risk mitigations for top three failure modes before scaling.\n\n"
+            "## Confidence and Open Questions\n"
+            "Confidence: Moderate. Remaining uncertainty comes from dependency stability and user behavior variance."
+        )
+
+    def _structured_advocate(self, query: str) -> str:
+        return (
+            "## Opportunity Thesis\n"
+            f"Question: {query}\n\n"
+            "## Strategic Upside\n"
+            "- Potential to improve cycle time and decision quality if rollout is scoped.\n"
+            "- Creates clearer accountability through explicit ownership and milestone tracking.\n"
+            "- Enables compounding improvements via fast feedback loops.\n\n"
+            "## Supporting Logic\n"
+            "- Value is highest when initial use case is narrow and metrics are unambiguous.\n"
+            "- Early instrumentation reduces rework and surfaces blockers quickly.\n\n"
+            "## Actionable Next Step\n"
+            "Launch a pilot with one constrained workflow and pre-define success thresholds."
+        )
+
+    def _structured_skeptic(self, query: str) -> str:
+        return (
+            "## Risk Thesis\n"
+            f"Question: {query}\n\n"
+            "## Primary Failure Modes\n"
+            "- Hidden integration complexity can erase projected gains.\n"
+            "- Ambiguous ownership can cause quality regressions and missed deadlines.\n"
+            "- Weak measurement design can produce false confidence.\n\n"
+            "## Risk Severity\n"
+            "- Execution risk: High if dependencies are not controlled.\n"
+            "- Adoption risk: Medium if change management is underfunded.\n"
+            "- Reliability risk: Medium to High without clear operational guardrails.\n\n"
+            "## Mitigation Requirement\n"
+            "Define risk owners, trigger thresholds, and contingency actions before scale-up."
+        )
+
+    def _structured_synthesiser(self, query: str) -> str:
+        return (
+            "## Integrated Assessment\n"
+            f"Question: {query}\n\n"
+            "## Tradeoff Resolution\n"
+            "- Upside is meaningful only when execution discipline is high.\n"
+            "- Major risks are manageable with staged deployment and strict governance.\n"
+            "- Recommendation depends on measurable checkpoint performance, not narrative confidence.\n\n"
+            "## Decision Rule\n"
+            "Proceed if pilot metrics exceed baseline and no critical risk trigger fires for two review cycles.\n\n"
+            "## Guardrails\n"
+            "- Maintain scope limits until stability and ROI are demonstrated.\n"
+            "- Stop expansion immediately on quality or reliability regression."
+        )
+
+    def _structured_oracle(self, query: str) -> str:
+        return (
+            "## Scenario Outlook\n"
+            f"Question: {query}\n\n"
+            "## Most Likely Outcome (60%)\n"
+            "Measured gains appear in the pilot phase, followed by cautious expansion.\n\n"
+            "## Upside Scenario (25%)\n"
+            "Early metric outperformance enables faster scale with manageable operational load.\n\n"
+            "## Downside Scenario (15%)\n"
+            "Dependency failures and weak adoption force rollback to a narrower operating model.\n\n"
+            "## Leading Indicators to Track\n"
+            "- Cycle-time improvement vs baseline\n"
+            "- Defect/reliability trend\n"
+            "- User adoption and retention signal"
         )
 
     def diagnostics(self) -> dict[str, str | int | bool]:
@@ -87,21 +144,31 @@ class GeminiPipelineModelProvider:
     async def build_agent_text(self, agent_id: str, query: str) -> str:
         prompts = {
             "advocate": (
-                "You are the Advocate agent. Build the strongest possible case for the "
-                "question below in 2 short sentences. Emphasize concrete upside and "
-                "practical execution."
+                "You are the Advocate agent for a professional research workflow. "
+                "Produce concise markdown with EXACT sections: "
+                "'## Opportunity Thesis', '## Strategic Upside', '## Supporting Logic', "
+                "'## Actionable Next Step'. Include specific, execution-oriented claims "
+                "and avoid generic language."
             ),
             "skeptic": (
-                "You are the Skeptic agent. Challenge the question below in 2 short "
-                "sentences. Emphasize risks, hidden costs, and failure modes."
+                "You are the Skeptic agent for a professional research workflow. "
+                "Produce concise markdown with EXACT sections: "
+                "'## Risk Thesis', '## Primary Failure Modes', '## Risk Severity', "
+                "'## Mitigation Requirement'. Quantify risk level where possible and "
+                "avoid generic language."
             ),
             "synthesiser": (
-                "You are the Synthesiser agent. Integrate the arguments in 2 short "
-                "sentences. Give a balanced recommendation with guardrails."
+                "You are the Synthesiser agent for a professional research workflow. "
+                "Produce concise markdown with EXACT sections: "
+                "'## Integrated Assessment', '## Tradeoff Resolution', '## Decision Rule', "
+                "'## Guardrails'. Resolve tradeoffs explicitly and define a clear go/no-go rule."
             ),
             "oracle": (
-                "You are the Oracle agent. Predict the likely outcome in 2 short "
-                "sentences. Focus on rollout risk and expected impact."
+                "You are the Oracle agent for a professional research workflow. "
+                "Produce concise markdown with EXACT sections: "
+                "'## Scenario Outlook', '## Most Likely Outcome (60%)', "
+                "'## Upside Scenario (25%)', '## Downside Scenario (15%)', "
+                "'## Leading Indicators to Track'."
             ),
         }
         instruction = prompts.get(agent_id, prompts["oracle"])
@@ -121,9 +188,11 @@ class GeminiPipelineModelProvider:
     async def compose_final_answer(self, query: str, outputs: dict[str, str]) -> str:
         try:
             response = await self._model.ainvoke(
-                "You are the final synthesiser for a multi-agent research pipeline. "
-                "Using the agent outputs below, produce a concise final answer in 3-4 "
-                "sentences. Mention the strongest support, main risk, and a clear next step.\n\n"
+                "You are the final synthesiser for a professional multi-agent research pipeline. "
+                "Return concise markdown with EXACT sections: "
+                "'## Executive Summary', '## Evidence Snapshot', '## Decision Recommendation', "
+                "'## 30-Day Action Plan', '## Confidence and Open Questions'. "
+                "Base your answer on the supplied outputs and avoid generic wording.\n\n"
                 f"Question: {query.strip()}\n\n"
                 f"Support: {outputs.get('advocate', '')}\n"
                 f"Risks: {outputs.get('skeptic', '')}\n"

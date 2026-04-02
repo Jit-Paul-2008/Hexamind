@@ -51,4 +51,33 @@ export const INITIAL_EDGES: Edge[] = [
     type: "animatedEdge",
     data: { color: "#e2e8f0" },
   },
+  // Agent nodes to their draggable processing windows
+  {
+    id: "advocate-advocate-processing",
+    source: "advocate",
+    target: "advocate-processing",
+    type: "animatedEdge",
+    data: { color: "#818cf8" },
+  },
+  {
+    id: "skeptic-skeptic-processing",
+    source: "skeptic",
+    target: "skeptic-processing",
+    type: "animatedEdge",
+    data: { color: "#f87171" },
+  },
+  {
+    id: "synthesiser-synthesiser-processing",
+    source: "synthesiser",
+    target: "synthesiser-processing",
+    type: "animatedEdge",
+    data: { color: "#34d399" },
+  },
+  {
+    id: "oracle-oracle-processing",
+    source: "oracle",
+    target: "oracle-processing",
+    type: "animatedEdge",
+    data: { color: "#fbbf24" },
+  },
 ];

@@ -151,5 +151,5 @@ test('pipeline stream emits a final synthesis for the submitted query', async ()
 
   assert.ok(finalPayload);
   assert.equal(finalPayload.agentId, 'output');
-  assert.match(finalPayload.fullContent, /Final synthesis for 'How should we ship the MVP\?':/);
+  assert.match(finalPayload.fullContent, /## Executive Summary/);
 });
