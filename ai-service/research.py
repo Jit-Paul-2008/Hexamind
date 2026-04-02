@@ -12,6 +12,8 @@ from urllib.parse import parse_qs, unquote, urljoin, urlparse
 
 import httpx
 
+from workflow import ResearchWorkflowProfile, build_workflow_profile
+
 
 @dataclass(frozen=True)
 class ResearchSource:
@@ -28,6 +30,7 @@ class ResearchSource:
 @dataclass(frozen=True)
 class ResearchContext:
     query: str
+    workflow_profile: ResearchWorkflowProfile
     search_terms: tuple[str, ...]
     sources: tuple[ResearchSource, ...]
     generated_at: float
@@ -127,26 +130,40 @@ class InternetResearcher:
         self._min_relevance_score = max(0.0, _env_float("HEXAMIND_RESEARCH_MIN_RELEVANCE", 0.24))
 
     async def research(self, query: str) -> ResearchContext:
-        search_terms = self._build_search_terms(query)
-        hits = await self._search_hits(query, search_terms)
-        candidates = await self._build_candidates(query, hits)
-        sources = _select_sources_with_diversity(candidates, self._max_sources, self._max_sources_per_domain)
+        workflow_profile = build_workflow_profile(query)
+        search_terms = self._build_search_terms(query, workflow_profile)
+        hits = await self._search_hits(query, search_terms, workflow_profile)
+        candidates = await self._build_candidates(query, hits, workflow_profile)
+        sources = _select_sources_with_diversity(
+            candidates,
+            max(self._max_sources, workflow_profile.max_sources),
+            max(self._max_sources_per_domain, workflow_profile.required_source_mix),
+            workflow_profile,
+        )
 
         return ResearchContext(
             query=query,
+            workflow_profile=workflow_profile,
             search_terms=tuple(search_terms),
             sources=tuple(sources),
             generated_at=time.time(),
         )
 
-    async def _search_hits(self, query: str, search_terms: Iterable[str]) -> list[SearchHit]:
+    async def _search_hits(
+        self,
+        query: str,
+        search_terms: Iterable[str],
+        workflow_profile: ResearchWorkflowProfile,
+    ) -> list[SearchHit]:
         results: list[SearchHit] = []
+        max_terms = max(self._max_terms, workflow_profile.max_terms)
+        min_relevance_score = min(self._min_relevance_score, workflow_profile.min_relevance)
         async with httpx.AsyncClient(
             timeout=self._timeout_seconds,
             follow_redirects=True,
             headers={"User-Agent": "HexamindResearch/1.0 (+https://example.com)"},
         ) as client:
-            for term in list(search_terms)[: self._max_terms]:
+            for term in list(search_terms)[: max_terms]:
                 try:
                     response = await client.get(
                         "https://html.duckduckgo.com/html/",
@@ -158,9 +175,9 @@ class InternetResearcher:
 
                 parser = _DuckDuckGoResultParser()
                 parser.feed(response.text)
-                for hit in parser.results[: self._max_hits_per_term]:
+                for hit in parser.results[: max(self._max_hits_per_term, workflow_profile.max_hits_per_term)]:
                     score = _hit_relevance(query, term, hit.title, hit.snippet, hit.url)
-                    if score < self._min_relevance_score:
+                    if score < min_relevance_score:
                         continue
                     results.append(
                         SearchHit(
@@ -171,7 +188,7 @@ class InternetResearcher:
                         )
                     )
 
-                if len(results) >= self._max_sources * 12:
+                if len(results) >= max(self._max_sources, workflow_profile.max_sources) * 12:
                     break
 
         unique: list[SearchHit] = []
@@ -192,11 +209,16 @@ class InternetResearcher:
 
         return unique
 
-    async def _build_candidates(self, query: str, hits: list[SearchHit]) -> list[tuple[float, ResearchSource]]:
+    async def _build_candidates(
+        self,
+        query: str,
+        hits: list[SearchHit],
+        workflow_profile: ResearchWorkflowProfile,
+    ) -> list[tuple[float, ResearchSource]]:
         if not hits:
             return []
 
-        semaphore = asyncio.Semaphore(self._fetch_concurrency)
+        semaphore = asyncio.Semaphore(max(self._fetch_concurrency, workflow_profile.fetch_concurrency))
 
         async with httpx.AsyncClient(
             timeout=self._timeout_seconds,
@@ -204,8 +226,8 @@ class InternetResearcher:
             headers={"User-Agent": "HexamindResearch/1.0 (+https://example.com)"},
         ) as client:
             tasks = [
-                self._hydrate_candidate(semaphore, client, query, hit)
-                for hit in hits[: self._max_sources * 16]
+                self._hydrate_candidate(semaphore, client, query, hit, workflow_profile)
+                for hit in hits[: max(self._max_sources, workflow_profile.max_sources) * 16]
             ]
             hydrated = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -222,6 +244,7 @@ class InternetResearcher:
         client: httpx.AsyncClient,
         query: str,
         hit: SearchHit,
+        workflow_profile: ResearchWorkflowProfile,
     ) -> tuple[float, ResearchSource] | None:
         canonical_url = _canonicalize_url(hit.url)
         domain = urlparse(canonical_url).netloc or canonical_url
@@ -248,6 +271,10 @@ class InternetResearcher:
             credibility_score=credibility_score,
         )
         retrieval_score = _retrieval_score(hit.relevance_score, credibility_score, excerpt)
+        if workflow_profile.requires_primary_sources and authority == "primary":
+            retrieval_score += 0.12
+        if workflow_profile.audience in {"phd", "professor"} and authority == "high":
+            retrieval_score += 0.06
         return retrieval_score, source
 
     async def _fetch_page_text(self, client: httpx.AsyncClient, url: str) -> str:
@@ -265,29 +292,13 @@ class InternetResearcher:
         parser.feed(response.text)
         return parser.text()
 
-    def _build_search_terms(self, query: str) -> list[str]:
+    def _build_search_terms(self, query: str, workflow_profile: ResearchWorkflowProfile) -> list[str]:
         base = _clean_text(query)
-        core_terms = _top_query_terms(base, 5)
+        core_terms = _top_query_terms(base, max(5, workflow_profile.max_terms // 2))
         core_joined = " ".join(core_terms)
-        terms = [
-            base,
-            f"{base} latest evidence",
-            f"{base} analysis research",
-            f"{base} official documentation",
-            f"{base} benchmark evaluation",
-            f"{base} failure modes limitations",
-            f"{base} implementation guide",
-            f"{base} peer reviewed evidence",
-            f"{base} methodology",
-            f"{base} empirical results",
-            f"{base} official policy",
+        terms = list(workflow_profile.search_intents) + [
             f"{core_joined} systematic review",
             f"{core_joined} case study",
-            f"{base} site:.gov",
-            f"{base} site:.edu",
-            f"{base} site:arxiv.org",
-            f"{base} site:nature.com",
-            f"{base} site:ieee.org",
         ]
         seen: set[str] = set()
         deduped: list[str] = []
@@ -306,7 +317,11 @@ def format_research_context(context: ResearchContext | None) -> str:
 
     lines = [
         f"Query: {context.query}",
+        f"Audience profile: {context.workflow_profile.audience}",
+        f"Depth profile: {context.workflow_profile.depth_label}",
+        f"Topic complexity: {context.workflow_profile.complexity_score:.2f}",
         f"Search terms: {', '.join(context.search_terms)}",
+        f"Subquestions: {' | '.join(context.workflow_profile.subquestions)}",
         "",
         "Source pack:",
     ]
@@ -328,7 +343,10 @@ def source_inventory_markdown(context: ResearchContext | None) -> str:
     if not context or not context.sources:
         return "| ID | Title | Domain | Authority | Credibility | URL |\n| --- | --- | --- | --- | --- | --- |\n| - | No live sources retrieved | - | - | - | - |"
 
-    rows = ["| ID | Title | Domain | Authority | Credibility | URL |", "| --- | --- | --- | --- | --- | --- |"]
+    rows = [
+        "| ID | Title | Domain | Authority | Credibility | URL |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
     for source in context.sources:
         rows.append(
             f"| {source.id} | {source.title.replace('|', '/') } | {source.domain} | {source.authority} | {source.credibility_score:.2f} | {source.url} |"
@@ -477,20 +495,40 @@ def _select_sources_with_diversity(
     candidates: list[tuple[float, ResearchSource]],
     max_sources: int,
     max_sources_per_domain: int,
+    workflow_profile: ResearchWorkflowProfile,
 ) -> list[ResearchSource]:
     if not candidates:
         return []
 
     selected: list[ResearchSource] = []
     domain_counts: dict[str, int] = {}
+    covered_domains: set[str] = set()
+
+    required_unique_domains = max(1, workflow_profile.required_source_mix)
+
+    def can_take(source: ResearchSource) -> bool:
+        return domain_counts.get(source.domain, 0) < max_sources_per_domain
 
     for _, source in candidates:
-        if domain_counts.get(source.domain, 0) >= max_sources_per_domain:
+        if source.domain in covered_domains:
+            continue
+        if not can_take(source):
             continue
         selected.append(source)
         domain_counts[source.domain] = domain_counts.get(source.domain, 0) + 1
+        covered_domains.add(source.domain)
+        if len(covered_domains) >= required_unique_domains or len(selected) >= max_sources:
+            break
+
+    for _, source in candidates:
         if len(selected) >= max_sources:
             break
+        if source in selected:
+            continue
+        if not can_take(source):
+            continue
+        selected.append(source)
+        domain_counts[source.domain] = domain_counts.get(source.domain, 0) + 1
 
     result: list[ResearchSource] = []
     for idx, source in enumerate(selected, start=1):

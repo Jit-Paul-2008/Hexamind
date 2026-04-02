@@ -27,6 +27,14 @@ Use environment overrides per role:
 - HEXAMIND_AGENT_MODEL_ORACLE
 - HEXAMIND_AGENT_MODEL_FINAL
 
+Audience-aware workflow:
+
+- HEXAMIND_RESEARCH_AUDIENCE=auto | grad | phd | professor
+- auto mode infers depth from query complexity and risk.
+- grad mode favors clearer explanation and lower overhead.
+- phd mode maximizes rigor and contradiction handling.
+- professor mode maximizes source authority, theoretical depth, and assumption stress-testing.
+
 ## Pipeline Blueprint
 
 1. Query decomposition
@@ -38,7 +46,9 @@ Use environment overrides per role:
   - limitations and failures
 
 2. Retrieval pass
-- Pull 8+ sources with domain diversity limits.
+- Pull sources using adaptive depth profiles.
+- Grad queries stay focused and explanatory.
+- PhD/professor queries increase source breadth, primary-source preference, and contradiction scrutiny.
 - Cap repeated domains to avoid source monoculture.
 - Compute source credibility scores.
 
