@@ -54,6 +54,7 @@ before(async () => {
       env: {
         ...process.env,
         PYTHONUNBUFFERED: '1',
+        HEXAMIND_WEB_RESEARCH: '0',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },

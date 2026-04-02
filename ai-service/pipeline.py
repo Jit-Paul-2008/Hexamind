@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from agents import AGENTS
+from research import ResearchContext
 from schemas import PipelineEvent, PipelineEventType
 from model_provider import PipelineModelProvider, create_pipeline_model_provider
 
@@ -54,15 +55,18 @@ class PipelineService:
         return {
             "status": "ok",
             "sessions": len(self._sessions),
+            "webResearchEnabled": os.getenv("HEXAMIND_WEB_RESEARCH", "1").strip() not in {"0", "false", "no"},
             **diagnostics,
         }
 
     async def stream_events(self, session_id: str):
         session = self._get_session(session_id)
         assembled: dict[str, str] = {}
+        research_task = asyncio.create_task(self._model_provider.build_research_context(session.query))
         start_delay = max(0, _env_ms("HEXAMIND_STREAM_START_DELAY_MS", 20))
         chunk_delay = max(0, _env_ms("HEXAMIND_STREAM_CHUNK_DELAY_MS", 8))
         step_delay = max(0, _env_ms("HEXAMIND_STREAM_STEP_DELAY_MS", 20))
+        research_context: ResearchContext | None = None
 
         for agent in AGENTS:
             start_event = PipelineEvent(
@@ -85,7 +89,17 @@ class PipelineService:
                 "data": warmup_event.model_dump_json(),
             }
 
-            content = await self._model_provider.build_agent_text(agent.id, session.query)
+            if research_context is None:
+                try:
+                    research_context = await research_task
+                except Exception:
+                    research_context = None
+
+            content = await self._model_provider.build_agent_text(
+                agent.id,
+                session.query,
+                research_context,
+            )
             words = content.split(" ")
             full = ""
             for idx, word in enumerate(words):
@@ -115,7 +129,9 @@ class PipelineService:
             await asyncio.sleep(step_delay / 1000)
 
         final_answer = await self._model_provider.compose_final_answer(
-            session.query, assembled
+            session.query,
+            assembled,
+            research_context,
         )
         final_event = PipelineEvent(
             type=PipelineEventType.PIPELINE_DONE,

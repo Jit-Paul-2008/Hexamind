@@ -105,7 +105,7 @@ export const INITIAL_NODES: Node[] = [
   {
     id: "output",
     type: "outputNode",
-    position: { x: 500, y: 930 },
+    position: { x: 280, y: 1120 },
     data: { label: "Output" },
   },
 ];

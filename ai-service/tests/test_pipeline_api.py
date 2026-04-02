@@ -11,6 +11,10 @@ SERVICE_DIR = ROOT / "ai-service"
 if str(SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(SERVICE_DIR))
 
+import os
+
+os.environ["HEXAMIND_WEB_RESEARCH"] = "0"
+
 from fastapi.testclient import TestClient
 
 from agents import AGENTS

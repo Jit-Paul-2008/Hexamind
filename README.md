@@ -76,6 +76,7 @@ Paste this into `.env` if you want Gemini:
 HEXAMIND_MODEL_PROVIDER=gemini
 HEXAMIND_MODEL_NAME=gemini-2.0-flash
 GOOGLE_API_KEY=your_free_google_ai_studio_key
+HEXAMIND_WEB_RESEARCH=1
 ```
 
 Frontend defaults to backend `http://localhost:8000`. Override with:
@@ -99,6 +100,7 @@ Example root `.env` for the free Gemini path:
 HEXAMIND_MODEL_PROVIDER=gemini
 HEXAMIND_MODEL_NAME=gemini-2.0-flash
 GOOGLE_API_KEY=your_free_google_ai_studio_key
+HEXAMIND_WEB_RESEARCH=1
 ```
 
 ## Quality Checks
