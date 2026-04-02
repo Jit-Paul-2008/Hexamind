@@ -103,6 +103,22 @@ GOOGLE_API_KEY=your_free_google_ai_studio_key
 HEXAMIND_WEB_RESEARCH=1
 ```
 
+Example root `.env` for ARIA deep-research mode with per-agent model routing:
+
+```bash
+HEXAMIND_MODEL_PROVIDER=openrouter
+OPENROUTER_API_KEY=your_openrouter_key
+HEXAMIND_MODEL_NAME=openai/gpt-4.1-mini
+HEXAMIND_WEB_RESEARCH=1
+
+# Optional role-specific overrides
+HEXAMIND_AGENT_MODEL_ADVOCATE=google/gemini-2.5-flash-preview
+HEXAMIND_AGENT_MODEL_SKEPTIC=anthropic/claude-3.7-sonnet
+HEXAMIND_AGENT_MODEL_SYNTHESIS=openai/gpt-4.1
+HEXAMIND_AGENT_MODEL_ORACLE=openai/o3-mini
+HEXAMIND_AGENT_MODEL_FINAL=openai/gpt-4.1
+```
+
 ## Quality Checks
 
 ```bash

@@ -13,7 +13,8 @@
 1. Run local stack and verify health payload includes webResearchEnabled true.
 2. Run one live query and confirm source inventory contains real urls.
 3. Validate that evidence snapshot lines contain substantive findings.
-4. Prioritize export track implementation in this order: docx, pptx, audio.
+4. Pause export tracks (docx, pptx, audio) and lock focus on research quality.
+5. Validate claim-to-citation density for each agent output and final synthesis.
 
 ## Planned Implementation Track
 
@@ -23,46 +24,42 @@
 2. Add source credibility scoring and confidence calibration.
 3. Add regeneration gate when citation count is below threshold.
 
-### Track B: Downloadable Outputs
+### Track B: ARIA Deep-Research Upgrade (Primary Focus)
 
-1. DOCX export service
-- Input: synthesis markdown + metadata
-- Output: .docx file
-- Include sections, numbered headings, bullets, source inventory table
+1. Agent-specialized model routing
+- Route each role to best-fit models via configurable API model map.
+- Advocate: high-recall exploration model.
+- Skeptic: high-precision reasoning model.
+- Synthesiser: long-context integration model.
+- Oracle: forecasting-oriented reasoning model.
 
-2. PPTX export service
-- Input: synthesis markdown + metadata
-- Output: .pptx file
-- Slide layout:
-  - Title slide
-  - Executive summary
-  - Key findings
-  - Comparative analysis
-  - Recommendation and action plan
-  - Sources and confidence
+2. Grounding hard gates
+- Enforce minimum citation density in each major section.
+- Reject or regenerate drafts when source support is shallow.
+- Surface explicit evidence gaps instead of speculative prose.
 
-3. Audio export service
-- Input: synthesized report text + voice settings
-- Output: .mp3 or .wav
-- Include optional short intro and section pauses
+3. Retrieval and contradiction checks
+- Expand source diversity by domain and authority tier.
+- Detect source disagreement and render explicit contradiction notes.
+- Add confidence calibration based on source quality and agreement.
 
-### Track C: Frontend UX
+### Track C: Frontend UX for Research Fidelity
 
-1. Add export toolbar in output window: Download DOCX, Download PPTX, Download Audio.
-2. Add export progress and error states.
-3. Add file size and generation time hints.
+1. Add evidence quality widget: citation count, authority mix, contradiction count.
+2. Show per-claim source tags inline in synthesis sections.
+3. Add regeneration reason banners when quality gates fail.
 
 ## Suggested API Endpoints
 
-- POST /api/export/docx
-- POST /api/export/pptx
-- POST /api/export/audio
-- GET /api/export/{jobId}/status
-- GET /api/export/{jobId}/download
+- GET /health
+- POST /api/pipeline/start
+- GET /api/pipeline/{sessionId}/stream
+- GET /api/pipeline/{sessionId}/quality
+- POST /api/pipeline/{sessionId}/regenerate
 
 ## Risks to Address
 
-- Long export runtime for large reports.
-- Audio generation cost and latency.
 - Citation drift when regenerating final synthesis.
-- Security checks for remote source content before export.
+- Prompt-injection or low-trust content in remote pages.
+- Model-routing cost spikes across multi-agent calls.
+- Source overfitting (too many claims from one domain).

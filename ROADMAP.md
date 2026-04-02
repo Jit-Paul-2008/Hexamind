@@ -19,27 +19,30 @@
 4. Add report mode selector: quick brief, technical report, thesis report.
 5. Add post-generation quality gate to reject shallow outputs and trigger regeneration.
 
-## Export and Download Features
+## Export and Download Features (Paused)
 
-### Phase 1: Document Export
+1. DOCX, PPTX, PDF, and Audio exports are intentionally paused until research-grade output quality is consistently met.
+2. Export work resumes only after citation density, contradiction handling, and confidence calibration pass acceptance targets.
 
-1. Add backend export endpoint for DOCX report generation from markdown synthesis.
-2. Add backend export endpoint for PPTX deck generation using report sections as slides.
-3. Add frontend download actions in output panel for DOCX and PPTX.
-4. Include report metadata in exported files: query, timestamp, source inventory, confidence statement.
+## ARIA Deep-Research Acceleration (Active)
 
-### Phase 2: Audio Export
+### Phase 1: Agent-Specialized Model Routing
 
-1. Add text-to-speech export endpoint to convert synthesis report into narration audio.
-2. Support mp3 and wav output targets.
-3. Add voice profile selector and narration speed controls.
-4. Add frontend audio preview and download button.
+1. Route each agent to best-fit model/API via environment-configured map.
+2. Keep deterministic fallback for reliability, but require research gates for production mode.
+3. Track per-agent latency and fallback rates in diagnostics.
 
-### Phase 3: Packaging and Shareability
+### Phase 2: Grounding and Evidence Integrity
 
-1. One-click export bundle: zip containing markdown, docx, pptx, and audio.
-2. Add export history for recent sessions.
-3. Add signed download links for deployed mode.
+1. Enforce minimum citations per section and per final report.
+2. Add contradiction detector across source excerpts and present disputes explicitly.
+3. Add source diversity requirement so final claims do not depend on a single domain.
+
+### Phase 3: Research-Quality UX
+
+1. Add evidence quality panel in output view (authority mix, citation count, contradiction count).
+2. Show citation tags inline for major claims.
+3. Add transparent regeneration reason when quality gates reject a draft.
 
 ## Research-Model Hardening
 
