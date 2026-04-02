@@ -48,6 +48,7 @@ class PipelineService:
         self._agent_timeout_seconds = max(1.0, _env_float("HEXAMIND_AGENT_TIMEOUT_SECONDS", 30.0))
         self._final_timeout_seconds = max(1.0, _env_float("HEXAMIND_FINAL_TIMEOUT_SECONDS", 40.0))
         self._require_research_sources = _env_bool("HEXAMIND_REQUIRE_RESEARCH_SOURCES", False)
+        self._hard_fail_on_no_sources = _env_bool("HEXAMIND_HARD_FAIL_ON_NO_SOURCES", False)
 
     def start(self, query: str) -> str:
         session_id = f"session_{uuid.uuid4().hex[:10]}"
@@ -73,6 +74,7 @@ class PipelineService:
             "sessions": len(self._sessions),
             "webResearchEnabled": os.getenv("HEXAMIND_WEB_RESEARCH", "1").strip() not in {"0", "false", "no"},
             "requireResearchSources": self._require_research_sources,
+            "hardFailOnNoSources": self._hard_fail_on_no_sources,
             "maxConcurrentStreams": self._max_concurrent_streams,
             "activeStreams": self._active_streams,
             "queueWaitTimeoutSeconds": int(self._queue_wait_timeout_seconds),
@@ -134,6 +136,7 @@ class PipelineService:
         chunk_delay = max(0, _env_ms("HEXAMIND_STREAM_CHUNK_DELAY_MS", 8))
         step_delay = max(0, _env_ms("HEXAMIND_STREAM_STEP_DELAY_MS", 20))
         research_context: ResearchContext | None = None
+        retrieval_warning = ""
 
         queue_wait_started = time.perf_counter()
         await asyncio.wait_for(self._stream_semaphore.acquire(), timeout=self._queue_wait_timeout_seconds)
@@ -184,9 +187,9 @@ class PipelineService:
                         research_task = None
 
                 if self._require_research_sources and (research_context is None or not research_context.sources):
-                    raise RuntimeError(
-                        retrieval_error or "No research sources were retrieved. Check Tavily settings and query scope."
-                    )
+                    retrieval_warning = retrieval_error or "No research sources were retrieved. Check Tavily settings and query scope."
+                    if self._hard_fail_on_no_sources:
+                        raise RuntimeError(retrieval_warning)
 
                 try:
                     agent_started = time.perf_counter()
@@ -274,6 +277,13 @@ class PipelineService:
                 final_answer=final_answer,
                 research=research_context,
             )
+            if retrieval_warning:
+                notes = list(quality_report.get("notes", []))
+                notes.append(
+                    "Research retrieval returned no live sources; report completed in degraded mode with explicit uncertainty."
+                )
+                notes.append(f"Retrieval detail: {retrieval_warning}")
+                quality_report["notes"] = notes
             timings["qualitySeconds"] += time.perf_counter() - quality_started
 
             regenerated = False

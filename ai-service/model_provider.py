@@ -1090,6 +1090,216 @@ class OpenRouterPipelineModelProvider:
         self._last_error = message[:240]
 
 
+class GroqPipelineModelProvider:
+    def __init__(self, default_model: str) -> None:
+        api_key = os.getenv("GROQ_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("GROQ_API_KEY is required for provider=groq")
+
+        self._default_model = default_model
+        self._fallback_count = 0
+        self._last_error = ""
+        self._health = _ProviderHealthManager(
+            provider_name="groq",
+            retry_budget=_provider_retry_budget(),
+            failure_threshold=_provider_failure_threshold(),
+            cooldown_seconds=_provider_cooldown_seconds(),
+            backoff_seconds=_provider_backoff_seconds(),
+        )
+        self._base_url = "https://api.groq.com/openai/v1".rstrip("/")
+        self._timeout_seconds = float(os.getenv("GROQ_TIMEOUT_SECONDS", "30"))
+        self._headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        self._researcher = _create_researcher()
+        self._fallback = DeterministicPipelineModelProvider(
+            configured_provider="groq",
+            model_name=default_model,
+            reason="Groq runtime call failed",
+        )
+        self._model_by_role = {
+            "advocate": os.getenv("HEXAMIND_AGENT_MODEL_ADVOCATE", default_model).strip(),
+            "skeptic": os.getenv("HEXAMIND_AGENT_MODEL_SKEPTIC", default_model).strip(),
+            "synthesiser": os.getenv("HEXAMIND_AGENT_MODEL_SYNTHESIS", default_model).strip(),
+            "oracle": os.getenv("HEXAMIND_AGENT_MODEL_ORACLE", default_model).strip(),
+            "final": os.getenv("HEXAMIND_AGENT_MODEL_FINAL", default_model).strip(),
+        }
+
+    async def build_research_context(self, query: str) -> ResearchContext | None:
+        if not _web_research_enabled():
+            return None
+        if not self._health.can_attempt():
+            return None
+        try:
+            return await _invoke_with_resilience(
+                self._health,
+                "retrieval",
+                lambda: self._researcher.research(query),
+                _stage_timeout_seconds("retrieval"),
+            )
+        except Exception as exc:
+            self._register_fallback(exc)
+            return None
+
+    async def build_agent_text(
+        self,
+        agent_id: str,
+        query: str,
+        research: ResearchContext | None = None,
+    ) -> str:
+        if not self._health.can_attempt():
+            return await self._fallback.build_agent_text(agent_id, query, research)
+
+        prompts = {
+            "advocate": (
+                "You are Advocate in ARIA deep-research mode using Groq. Output markdown with EXACT sections: "
+                "'## Opportunity Thesis', '## Strategic Upside', '## Supporting Logic', "
+                "'## Actionable Next Step', '## Citations Used'. Every non-trivial claim must include [Sx]."
+            ),
+            "skeptic": (
+                "You are Skeptic in ARIA deep-research mode using Groq. Output markdown with EXACT sections: "
+                "'## Risk Thesis', '## Primary Failure Modes', '## Risk Severity', "
+                "'## Mitigation Requirement', '## Citations Used'. Every major risk must include [Sx]."
+            ),
+            "synthesiser": (
+                "You are Synthesiser in ARIA deep-research mode using Groq. Output markdown with EXACT sections: "
+                "'## Integrated Assessment', '## Tradeoff Resolution', '## Decision Rule', "
+                "'## Guardrails', '## Contradictions Observed', '## Citations Used'. "
+                "Mention source disagreements explicitly."
+            ),
+            "oracle": (
+                "You are Oracle in ARIA deep-research mode using Groq. Output markdown with EXACT sections: "
+                "'## Scenario Outlook', '## Most Likely Outcome (60%)', '## Upside Scenario (25%)', "
+                "'## Downside Scenario (15%)', '## Leading Indicators to Track', '## Citations Used'. "
+                "Ground forecasts with [Sx] citations."
+            ),
+        }
+        system_prompt = prompts.get(agent_id, prompts["oracle"])
+        research_block = format_research_context(research)
+        model_name = self._model_by_role.get(agent_id, self._default_model)
+
+        try:
+            resolved = await _invoke_with_resilience(
+                self._health,
+                f"agent:{agent_id}",
+                lambda: self._chat(
+                    model=model_name,
+                    system_prompt=system_prompt,
+                    user_prompt=f"Question: {query.strip()}\n\nLive web research context:\n{research_block}",
+                ),
+                _stage_timeout_seconds("agent"),
+                lambda text: _is_agent_research_grade(text, minimum_length=280, research=research),
+            )
+            return resolved
+        except Exception as exc:
+            self._register_fallback(exc)
+
+        return await self._fallback.build_agent_text(agent_id, query, research)
+
+    async def compose_final_answer(
+        self,
+        query: str,
+        outputs: dict[str, str],
+        research: ResearchContext | None = None,
+    ) -> str:
+        if not self._health.can_attempt():
+            return await self._fallback.compose_final_answer(query, outputs, research)
+
+        research_block = format_research_context(research)
+        model_name = self._model_by_role.get("final", self._default_model)
+
+        try:
+            resolved = await _invoke_with_resilience(
+                self._health,
+                "final",
+                lambda: self._chat(
+                    model=model_name,
+                    system_prompt=(
+                        "You are ARIA final synthesiser in deep-research mode with Groq. Return markdown with EXACT sections: "
+                        "'## Executive Summary', '## Research Scope', '## Evidence Snapshot', "
+                        "'## Analytical Breakdown', '## Decision Recommendation', '## Action Plan', "
+                        "'## Confidence and Open Questions', '## Source Inventory'. Under '## Analytical Breakdown' "
+                        "include a dynamic '### Report Plan', '### Claim Graph', and '### Contradictions and Uncertainty'. "
+                        "Every key claim must cite [Sx]. If evidence is weak, state the evidence gap explicitly."
+                    ),
+                    user_prompt=(
+                        f"Question: {query.strip()}\n\n"
+                        f"Advocate output:\n{outputs.get('advocate', '')}\n\n"
+                        f"Skeptic output:\n{outputs.get('skeptic', '')}\n\n"
+                        f"Synthesiser output:\n{outputs.get('synthesiser', '')}\n\n"
+                        f"Oracle output:\n{outputs.get('oracle', '')}\n\n"
+                        f"Live web research context:\n{research_block}"
+                    ),
+                ),
+                _stage_timeout_seconds("final"),
+                lambda text: _is_final_research_grade(text, minimum_length=920, research=research),
+            )
+            return resolved
+        except Exception as exc:
+            self._register_fallback(exc)
+
+        return await self._fallback.compose_final_answer(query, outputs, research)
+
+    def diagnostics(self) -> dict[str, str | int | bool]:
+        breaker_state = self._health.snapshot()
+        registry = prompt_registry_snapshot(
+            [
+                prompt_fingerprint("advocate", _provider_agent_prompt("groq", "advocate")),
+                prompt_fingerprint("skeptic", _provider_agent_prompt("groq", "skeptic")),
+                prompt_fingerprint("synthesiser", _provider_agent_prompt("groq", "synthesiser")),
+                prompt_fingerprint("oracle", _provider_agent_prompt("groq", "oracle")),
+                prompt_fingerprint("final", _provider_final_prompt("groq")),
+            ]
+        )
+        return {
+            "configuredProvider": "groq",
+            "activeProvider": "deterministic-fallback" if self._health.is_open() else "groq",
+            "modelName": self._default_model,
+            "isFallback": self._fallback_count > 0,
+            "fallbackCount": self._fallback_count,
+            "lastError": self._last_error,
+            "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
+            "promptRegistryVersion": registry["registryVersion"],
+            "promptRegistrySize": len(registry["prompts"]),
+            **breaker_state,
+        }
+
+    async def _chat(self, model: str, system_prompt: str, user_prompt: str) -> str:
+        payload = {
+            "model": model,
+            "temperature": 0.2,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+            response = await client.post(
+                f"{self._base_url}/chat/completions",
+                headers=self._headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            body = response.json()
+
+        choices = body.get("choices") or []
+        if not choices:
+            raise RuntimeError("Groq response missing choices")
+
+        message = choices[0].get("message") or {}
+        content = message.get("content", "")
+        if isinstance(content, list):
+            parts = [part.get("text", "") for part in content if isinstance(part, dict)]
+            return "\n".join(part for part in parts if part).strip()
+        return str(content).strip()
+
+    def _register_fallback(self, exc: Exception) -> None:
+        self._fallback_count += 1
+        message = f"{type(exc).__name__}: {exc}".strip()
+        self._last_error = message[:240]
+
+
 class LocalPipelineModelProvider:
     def __init__(self, default_model: str) -> None:
         self._default_model = default_model
@@ -1188,6 +1398,11 @@ class LocalPipelineModelProvider:
         }
         system_prompt = prompts.get(agent_id, prompts["oracle"])
         tier = _local_model_tier(query, research)
+        min_length_by_tier = {
+            "small": 190,
+            "medium": 230,
+            "large": 280,
+        }
         research_block = _compressed_research_block(research, _local_context_budget("agent", tier, research))
         model_name = self._resolve_local_model(agent_id, tier)
         token_budget = _local_token_budget("agent", tier, research)
@@ -1204,7 +1419,11 @@ class LocalPipelineModelProvider:
                         max_tokens=token_budget,
                     ),
                     _stage_timeout_seconds("agent"),
-                    lambda text: _is_agent_research_grade(text, minimum_length=280, research=research),
+                    lambda text: _is_agent_research_grade(
+                        text,
+                        minimum_length=min_length_by_tier.get(tier, 230),
+                        research=research,
+                    ),
                 )
                 return resolved
             except Exception as exc:
@@ -1232,6 +1451,11 @@ class LocalPipelineModelProvider:
             return await self._fallback.compose_final_answer(query, outputs, research)
 
         tier = _local_model_tier(query, research)
+        min_length_by_tier = {
+            "small": 620,
+            "medium": 760,
+            "large": 920,
+        }
         research_block = _compressed_research_block(research, _local_context_budget("final", tier, research))
         model_name = self._resolve_local_model("final", tier)
         token_budget = _local_token_budget("final", tier, research)
@@ -1261,7 +1485,11 @@ class LocalPipelineModelProvider:
                         max_tokens=token_budget,
                     ),
                     _stage_timeout_seconds("final"),
-                    lambda text: _is_final_research_grade(text, minimum_length=920, research=research),
+                    lambda text: _is_final_research_grade(
+                        text,
+                        minimum_length=min_length_by_tier.get(tier, 760),
+                        research=research,
+                    ),
                 )
                 return resolved
             except Exception as exc:
@@ -1367,10 +1595,13 @@ def _is_agent_research_grade(
 ) -> bool:
     if len(text) < minimum_length:
         return False
-    if "## " not in text or "## Citations Used" not in text:
+    heading_count = text.count("## ")
+    has_citation_section = "## Citations Used" in text or "## Source Inventory" in text
+    if heading_count < 3:
         return False
     if research and research.sources:
-        return _citation_count(text) >= min(2, len(research.sources))
+        citations = _citation_count(text)
+        return citations >= min(2, len(research.sources)) and has_citation_section
     return True
 
 
@@ -1389,7 +1620,12 @@ def _is_final_research_grade(
         return False
     if not all(section in text for section in required_sections):
         return False
-    if "Claim-to-Citation Map" not in text:
+    has_claim_mapping = (
+        "Claim-to-Citation Map" in text
+        or "### Claim Graph" in text
+        or "## Claim Graph" in text
+    )
+    if not has_claim_mapping:
         return False
     if research and research.sources:
         return _citation_count(text) >= min(4, len(research.sources))
@@ -1410,6 +1646,8 @@ def _default_model_for_provider(provider_name: str) -> str:
     if provider_name in {"openrouter", "router"}:
         # Free-tier oriented default. Override per role with HEXAMIND_AGENT_MODEL_* env vars.
         return "google/gemini-2.0-flash-exp:free"
+    if provider_name in {"groq"}:
+        return "mixtral-8x7b-32768"  # Groq's fast, open-weight flagship
     if provider_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
         return os.getenv("HEXAMIND_LOCAL_MODEL", "llama3.1:8b")
     return "deterministic"
@@ -1454,6 +1692,16 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
                 configured_provider="openrouter",
                 model_name=model_name,
                 reason=f"OpenRouter init failed: {type(exc).__name__}",
+            )
+    if provider_name in {"groq"}:
+        model_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(provider_name))
+        try:
+            return GroqPipelineModelProvider(model_name)
+        except Exception as exc:
+            return DeterministicPipelineModelProvider(
+                configured_provider="groq",
+                model_name=model_name,
+                reason=f"Groq init failed: {type(exc).__name__}",
             )
 
     return DeterministicPipelineModelProvider(
