@@ -47,6 +47,7 @@ class PipelineService:
         self._retrieval_timeout_seconds = max(1.0, _env_float("HEXAMIND_RETRIEVAL_TIMEOUT_SECONDS", 18.0))
         self._agent_timeout_seconds = max(1.0, _env_float("HEXAMIND_AGENT_TIMEOUT_SECONDS", 30.0))
         self._final_timeout_seconds = max(1.0, _env_float("HEXAMIND_FINAL_TIMEOUT_SECONDS", 40.0))
+        self._require_research_sources = _env_bool("HEXAMIND_REQUIRE_RESEARCH_SOURCES", False)
 
     def start(self, query: str) -> str:
         session_id = f"session_{uuid.uuid4().hex[:10]}"
@@ -71,6 +72,7 @@ class PipelineService:
             "status": "ok",
             "sessions": len(self._sessions),
             "webResearchEnabled": os.getenv("HEXAMIND_WEB_RESEARCH", "1").strip() not in {"0", "false", "no"},
+            "requireResearchSources": self._require_research_sources,
             "maxConcurrentStreams": self._max_concurrent_streams,
             "activeStreams": self._active_streams,
             "queueWaitTimeoutSeconds": int(self._queue_wait_timeout_seconds),
@@ -148,6 +150,7 @@ class PipelineService:
 
         try:
             research_task = asyncio.create_task(self._model_provider.build_research_context(session.query))
+            retrieval_error = ""
 
             for agent in AGENTS:
                 start_event = PipelineEvent(
@@ -175,9 +178,15 @@ class PipelineService:
                         retrieval_started = time.perf_counter()
                         research_context = await asyncio.wait_for(research_task, timeout=self._retrieval_timeout_seconds)
                         timings["retrievalSeconds"] += time.perf_counter() - retrieval_started
-                    except Exception:
+                    except Exception as exc:
+                        retrieval_error = f"{type(exc).__name__}: {exc}".strip()
                         research_context = None
                         research_task = None
+
+                if self._require_research_sources and (research_context is None or not research_context.sources):
+                    raise RuntimeError(
+                        retrieval_error or "No research sources were retrieved. Check Tavily settings and query scope."
+                    )
 
                 try:
                     agent_started = time.perf_counter()
@@ -339,6 +348,44 @@ class PipelineService:
                 "data": final_event.model_dump_json(),
             }
             await asyncio.sleep(0)
+        except Exception as exc:
+            failure_message = (
+                "## Pipeline Aborted\n"
+                "The run was stopped because required research sources were not retrieved.\n\n"
+                f"Reason: {type(exc).__name__}: {exc}"
+            )
+            quality_report = analyze_pipeline_quality(
+                query=session.query,
+                assembled=assembled,
+                final_answer=failure_message,
+                research=research_context,
+            )
+            notes = list(quality_report.get("notes", []))
+            notes.append("Pipeline stopped before synthesis because research-source requirement was enabled.")
+            quality_report["notes"] = notes
+            quality_report["runMetadata"] = self._build_run_metadata(
+                session=session,
+                timings=timings,
+                research=research_context,
+                final_answer=failure_message,
+                assembled=assembled,
+                provider_state=self._model_provider.diagnostics(),
+                started_at=started_at,
+            )
+            quality_report["regenerated"] = False
+            self._quality_reports[session_id] = quality_report
+            self._final_reports[session_id] = failure_message
+
+            final_event = PipelineEvent(
+                type=PipelineEventType.PIPELINE_DONE,
+                agentId="output",
+                fullContent=failure_message,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            yield {
+                "event": final_event.type.value,
+                "data": final_event.model_dump_json(),
+            }
         finally:
             self._active_streams = max(0, self._active_streams - 1)
             self._stream_semaphore.release()

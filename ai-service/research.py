@@ -126,15 +126,21 @@ class _VisibleTextExtractor(HTMLParser):
 class InternetResearcher:
     def __init__(self, timeout_seconds: float = 12.0, max_sources: int = 8) -> None:
         self._timeout_seconds = timeout_seconds
+        self._tavily_api_key = os.getenv("TAVILY_API_KEY", "").strip()
+        self._search_provider = _research_provider(self._tavily_api_key)
         configured_max_sources = _env_int("HEXAMIND_RESEARCH_MAX_SOURCES", max_sources)
         self._max_sources = max(1, configured_max_sources)
         self._max_sources_per_domain = max(1, _env_int("HEXAMIND_MAX_SOURCES_PER_DOMAIN", 2))
         self._max_terms = max(3, _env_int("HEXAMIND_RESEARCH_MAX_TERMS", 10))
         self._max_hits_per_term = max(3, _env_int("HEXAMIND_RESEARCH_MAX_HITS_PER_TERM", 8))
+        self._tavily_max_calls = max(1, _env_int("HEXAMIND_TAVILY_MAX_CALLS", 10))
         self._fetch_concurrency = max(1, _env_int("HEXAMIND_RESEARCH_FETCH_CONCURRENCY", 5))
         self._min_relevance_score = max(0.0, _env_float("HEXAMIND_RESEARCH_MIN_RELEVANCE", 0.24))
         self._cache_ttl_seconds = max(120.0, _env_float("HEXAMIND_RESEARCH_CACHE_TTL_SECONDS", 1800.0))
         self._research_cache: dict[str, tuple[float, ResearchContext]] = {}
+        self._require_sources = _env_bool("HEXAMIND_REQUIRE_RESEARCH_SOURCES", False)
+        if self._search_provider == "tavily" and not self._tavily_api_key:
+            raise RuntimeError("Tavily provider is enabled but TAVILY_API_KEY is missing.")
 
     async def research(self, query: str) -> ResearchContext:
         cache_key = self._cache_key(query)
@@ -155,7 +161,7 @@ class InternetResearcher:
         )
         contradictions = tuple(_detect_source_contradictions(query, sources))
 
-        if len(sources) < 2:
+        if len(sources) < 2 and self._search_provider != "tavily":
             fallback = await self._wikipedia_fallback_sources(query, workflow_profile)
             merged = list(sources)
             seen_urls = {item.url for item in merged}
@@ -175,6 +181,8 @@ class InternetResearcher:
             generated_at=time.time(),
             contradictions=contradictions,
         )
+        if self._require_sources and not result.sources:
+            raise RuntimeError("No research sources were retrieved.")
         self._store_cached_research(cache_key, result)
         return result
 
@@ -215,6 +223,17 @@ class InternetResearcher:
         self._research_cache[cache_key] = (time.time(), context)
 
     async def _search_hits(
+        self,
+        query: str,
+        search_terms: Iterable[str],
+        workflow_profile: ResearchWorkflowProfile,
+        search_passes: Iterable[str],
+    ) -> list[SearchHit]:
+        if self._search_provider == "tavily":
+            return await self._search_hits_tavily(query, search_terms, workflow_profile, search_passes)
+        return await self._search_hits_duckduckgo(query, search_terms, workflow_profile, search_passes)
+
+    async def _search_hits_duckduckgo(
         self,
         query: str,
         search_terms: Iterable[str],
@@ -263,6 +282,84 @@ class InternetResearcher:
 
                     if len(results) >= max(self._max_sources, workflow_profile.max_sources) * 12:
                         break
+
+        return _dedupe_hits(results)
+
+    async def _search_hits_tavily(
+        self,
+        query: str,
+        search_terms: Iterable[str],
+        workflow_profile: ResearchWorkflowProfile,
+        search_passes: Iterable[str],
+    ) -> list[SearchHit]:
+        if not self._tavily_api_key:
+            return []
+
+        results: list[SearchHit] = []
+        max_terms = max(self._max_terms, workflow_profile.max_terms)
+        max_hits = max(self._max_hits_per_term, workflow_profile.max_hits_per_term)
+        min_relevance_score = min(self._min_relevance_score, workflow_profile.min_relevance)
+        ordered_terms = list(search_terms)[:max_terms]
+        passes = list(search_passes) or ["evidence"]
+        max_calls = max(1, min(self._tavily_max_calls, len(ordered_terms) * max(1, len(passes))))
+        calls_made = 0
+
+        async with httpx.AsyncClient(timeout=self._timeout_seconds, follow_redirects=True) as client:
+            for pass_name in passes:
+                for term in ordered_terms:
+                    if calls_made >= max_calls:
+                        break
+                    if not _term_matches_pass(term, pass_name):
+                        continue
+
+                    payload = {
+                        "api_key": self._tavily_api_key,
+                        "query": f"{term} ({pass_name} evidence)",
+                        "search_depth": "advanced",
+                        "max_results": max_hits,
+                        "include_raw_content": True,
+                        "include_images": False,
+                        "include_answer": False,
+                    }
+
+                    try:
+                        response = await client.post("https://api.tavily.com/search", json=payload)
+                        response.raise_for_status()
+                        body = response.json()
+                    except Exception:
+                        calls_made += 1
+                        continue
+
+                    for item in body.get("results", []):
+                        if not isinstance(item, dict):
+                            continue
+                        title = _clean_text(str(item.get("title", "")))
+                        url = _canonicalize_url(str(item.get("url", "")))
+                        raw_content = _clean_text(str(item.get("raw_content", "")))
+                        content = _clean_text(str(item.get("content", "")))
+                        snippet = _trim_text(content or raw_content, 220)
+                        if not title or not url:
+                            continue
+                        score = float(item.get("score") or 0.0)
+                        if score <= 0.0:
+                            score = _hit_relevance(query, term, title, snippet, url)
+                        score *= _pass_weight(pass_name)
+                        if score < min_relevance_score:
+                            continue
+                        results.append(
+                            SearchHit(
+                                title=title,
+                                url=url,
+                                snippet=snippet,
+                                relevance_score=score,
+                                discovery_pass=pass_name,
+                            )
+                        )
+
+                    calls_made += 1
+
+                if calls_made >= max_calls:
+                    break
 
         return _dedupe_hits(results)
 
@@ -1018,3 +1115,17 @@ def _env_float(name: str, default: float) -> float:
         return float(raw)
     except ValueError:
         return default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _research_provider(tavily_api_key: str) -> str:
+    configured = os.getenv("HEXAMIND_RESEARCH_PROVIDER", "auto").strip().lower()
+    if configured in {"tavily", "duckduckgo"}:
+        return configured
+    return "tavily" if tavily_api_key else "duckduckgo"

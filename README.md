@@ -182,6 +182,24 @@ HEXAMIND_WEB_RESEARCH=1
 
 Set `HEXAMIND_LOCAL_STRICT=1` to force Ollama/local-only generation and fail fast on local errors instead of falling back to deterministic output.
 
+Example root `.env` for Tavily retrieval + Ollama synthesis (recommended hybrid):
+
+```bash
+# Retrieval
+TAVILY_API_KEY=your_tavily_key
+HEXAMIND_RESEARCH_PROVIDER=tavily
+HEXAMIND_REQUIRE_RESEARCH_SOURCES=1
+HEXAMIND_WEB_RESEARCH=1
+
+# Synthesis (4 agent personalities + final report) via local Ollama
+HEXAMIND_MODEL_PROVIDER=ollama
+HEXAMIND_MODEL_NAME=llama3.1:8b
+HEXAMIND_LOCAL_BASE_URL=http://127.0.0.1:11434/v1
+HEXAMIND_LOCAL_STRICT=1
+```
+
+With this setup, retrieval uses Tavily only and synthesis stays on local Ollama only.
+
 To use this path, start a local model server first. Ollama is the easiest option:
 
 ```bash
