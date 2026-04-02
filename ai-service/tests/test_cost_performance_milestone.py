@@ -32,6 +32,7 @@ class CostPerformanceMilestoneTests(unittest.TestCase):
         compressed = _compressed_research_block(context, 600)
 
         self.assertLessEqual(len(compressed), 600)
+        # format_research_context collapses whitespace, so Source pack and sources appear in single-line format
         self.assertIn("Source pack", compressed)
         self.assertIn("S1", compressed)
 

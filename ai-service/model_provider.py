@@ -208,25 +208,29 @@ def _compressed_research_block(research: ResearchContext | None, char_budget: in
     if not research or not research.sources:
         return block[:char_budget].rstrip()
 
-    lines = block.splitlines()
-    prefix: list[str] = []
-    source_lines: list[str] = []
-    in_sources = False
-    for line in lines:
-        if not in_sources:
-            if line.startswith(("Query:", "Search terms:", "Subquestions:")):
-                prefix.append(line[:180].rstrip() + ("…" if len(line) > 180 else ""))
-            else:
-                prefix.append(line)
-            if line.strip() == "Source pack:":
-                in_sources = True
-            continue
-        source_lines.append(line)
-        if len("\n".join(prefix + source_lines)) >= char_budget:
-            break
-
-    compressed = "\n".join(prefix + source_lines)
-    return compressed[:char_budget].rstrip()
+    # format_research_context collapses whitespace, making everything inline
+    # Find "Source pack:" and try to include it with at least one source
+    source_pack_idx = block.find("Source pack:")
+    if source_pack_idx == -1:
+        return block[:char_budget].rstrip()
+    
+    # If we can fit everything up to and including source pack start, do it
+    if source_pack_idx + 200 <= char_budget:  # Leave room for at least partial source info
+        return block[:char_budget].rstrip()
+    
+    # Otherwise, compress the prefix and keep sources
+    # Take just the query, then jump to sources
+    query_end = block.find("Audience profile:")
+    if query_end > 0:
+        query_part = block[:query_end].rstrip()
+        sources_part = block[source_pack_idx:]
+        available = char_budget - len(query_part) - 5  # 5 for " ... "
+        if available > 50:
+            combined = query_part + " ... " + sources_part[:available].rstrip() + "…"
+            return combined[:char_budget].rstrip()
+    
+    # Fallback: simple truncation
+    return block[:char_budget].rstrip()
 
 
 def _deterministic_prompt_text(agent_id: str) -> str:
