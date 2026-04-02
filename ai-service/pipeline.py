@@ -169,7 +169,7 @@ class PipelineService:
                 warmup_event = PipelineEvent(
                     type=PipelineEventType.AGENT_CHUNK,
                     agentId=agent.id,
-                    chunk="Analyzing request... ",
+                    chunk="",
                 )
                 yield {
                     "event": warmup_event.type.value,
