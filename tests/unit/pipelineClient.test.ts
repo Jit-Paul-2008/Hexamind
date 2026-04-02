@@ -39,23 +39,55 @@ describe("startPipelineRun", () => {
     FakeEventSource.instances = [];
 
     const startPipeline = vi.fn();
+    const setBackendSessionId = vi.fn();
     const setNodeStatus = vi.fn();
     const appendChunk = vi.fn();
     const setFinalAnswer = vi.fn();
+    const setQualityLoading = vi.fn();
+    const setQualityReport = vi.fn();
+    const setQualityError = vi.fn();
 
-    const fetchImpl = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: vi.fn().mockResolvedValue({ sessionId: "session_test" }),
-    });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ sessionId: "session_test" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({
+          sessionId: "session_test",
+          status: "ready",
+          overallScore: 82.5,
+          passing: true,
+          regenerated: false,
+          metrics: {
+            citationCount: 4,
+            sourceCount: 6,
+            uniqueDomains: 4,
+            averageCredibility: 0.71,
+            contradictionCount: 1,
+            hasClaimToCitationMap: true,
+            hasUncertaintyDisclosure: true,
+          },
+          contradictionFindings: [],
+          notes: [],
+        }),
+      });
 
     await startPipelineRun(
       "How should we ship the MVP?",
       {
         startPipeline,
+        setBackendSessionId,
         setNodeStatus,
         appendChunk,
         setFinalAnswer,
+        setQualityLoading,
+        setQualityReport,
+        setQualityError,
       },
       {
         apiBaseUrl: "http://127.0.0.1:8000",
@@ -65,6 +97,7 @@ describe("startPipelineRun", () => {
     );
 
     expect(startPipeline).toHaveBeenCalledWith("How should we ship the MVP?");
+    expect(setBackendSessionId).toHaveBeenCalledWith("session_test");
     expect(fetchImpl).toHaveBeenCalledWith(
       "http://127.0.0.1:8000/api/pipeline/start",
       expect.objectContaining({
@@ -98,11 +131,19 @@ describe("startPipelineRun", () => {
     expect(setNodeStatus).toHaveBeenCalledWith("advocate", "done");
     expect(setNodeStatus).toHaveBeenCalledWith("output", "active");
     expect(setFinalAnswer).toHaveBeenCalledWith("Final answer");
+    expect(setQualityLoading).toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://127.0.0.1:8000/api/pipeline/session_test/quality"
+    );
+    expect(setQualityReport).toHaveBeenCalled();
     expect(source.closed).toBe(true);
   });
 
   it("marks the output node errored when the backend start request fails", async () => {
     const startPipeline = vi.fn();
+    const setBackendSessionId = vi.fn();
     const setNodeStatus = vi.fn();
 
     const fetchImpl = vi.fn().mockResolvedValue({
@@ -115,9 +156,13 @@ describe("startPipelineRun", () => {
       "Broken pipeline",
       {
         startPipeline,
+        setBackendSessionId,
         setNodeStatus,
         appendChunk: vi.fn(),
         setFinalAnswer: vi.fn(),
+        setQualityLoading: vi.fn(),
+        setQualityReport: vi.fn(),
+        setQualityError: vi.fn(),
       },
       {
         apiBaseUrl: "http://127.0.0.1:8000",

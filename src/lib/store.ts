@@ -3,7 +3,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { create } from "zustand";
-import type { NodeStatus, PipelineSession } from "@/types/pipeline";
+import type {
+  NodeStatus,
+  PipelineQualityReport,
+  PipelineSession,
+} from "@/types/pipeline";
 import { AGENTS } from "@/lib/agents";
 
 interface PipelineStore {
@@ -12,9 +16,13 @@ interface PipelineStore {
 
   // Actions
   startPipeline: (query: string) => void;
+  setBackendSessionId: (sessionId: string) => void;
   setNodeStatus: (agentId: string, status: NodeStatus) => void;
   appendChunk: (agentId: string, chunk: string) => void;
   setFinalAnswer: (answer: string) => void;
+  setQualityLoading: () => void;
+  setQualityReport: (report: PipelineQualityReport) => void;
+  setQualityError: () => void;
   resetPipeline: () => void;
 }
 
@@ -36,6 +44,7 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
       status: "running",
       outputs: {},
       finalAnswer: "",
+      qualityStatus: "idle",
     };
     AGENTS.forEach((a) => {
       session.outputs[a.id] = { agentId: a.id, status: "idle", content: "" };
@@ -45,6 +54,11 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
       nodeStatuses: { ...initialStatuses(), input: "done" },
     });
   },
+
+  setBackendSessionId: (backendSessionId) =>
+    set((state) => ({
+      session: state.session ? { ...state.session, backendSessionId } : null,
+    })),
 
   setNodeStatus: (agentId, status) =>
     set((state) => ({
@@ -84,9 +98,42 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
   setFinalAnswer: (answer) =>
     set((state) => ({
       session: state.session
-        ? { ...state.session, status: "complete", finalAnswer: answer }
+        ? {
+            ...state.session,
+            status: "complete",
+            finalAnswer: answer,
+            qualityStatus: "loading",
+          }
         : null,
       nodeStatuses: { ...state.nodeStatuses, output: "done" },
+    })),
+
+  setQualityLoading: () =>
+    set((state) => ({
+      session: state.session
+        ? { ...state.session, qualityStatus: "loading" }
+        : null,
+    })),
+
+  setQualityReport: (qualityReport) =>
+    set((state) => ({
+      session: state.session
+        ? {
+            ...state.session,
+            qualityReport,
+            qualityStatus: "ready",
+          }
+        : null,
+    })),
+
+  setQualityError: () =>
+    set((state) => ({
+      session: state.session
+        ? {
+            ...state.session,
+            qualityStatus: "error",
+          }
+        : null,
     })),
 
   resetPipeline: () =>

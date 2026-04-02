@@ -1,10 +1,18 @@
-import type { NodeStatus, PipelineEvent } from "../types/pipeline";
+import type {
+  NodeStatus,
+  PipelineEvent,
+  PipelineQualityReport,
+} from "../types/pipeline";
 
 export interface PipelineRunHandlers {
   startPipeline: (query: string) => void;
+  setBackendSessionId: (sessionId: string) => void;
   setNodeStatus: (agentId: string, status: NodeStatus) => void;
   appendChunk: (agentId: string, chunk: string) => void;
   setFinalAnswer: (answer: string) => void;
+  setQualityLoading: () => void;
+  setQualityReport: (report: PipelineQualityReport) => void;
+  setQualityError: () => void;
 }
 
 export interface PipelineClientOptions {
@@ -39,9 +47,11 @@ export async function startPipelineRun(
     }
 
     const { sessionId } = (await startResponse.json()) as { sessionId: string };
+    handlers.setBackendSessionId(sessionId);
     const source = new eventSourceImpl(
       `${apiBaseUrl}/api/pipeline/${sessionId}/stream`
     );
+    let pipelineCompleted = false;
 
     const onMessage = (raw: MessageEvent) => {
       try {
@@ -63,8 +73,14 @@ export async function startPipelineRun(
         }
 
         if (event.type === "pipeline_done") {
+          if (pipelineCompleted) {
+            return;
+          }
+          pipelineCompleted = true;
           handlers.setNodeStatus("output", "active");
           handlers.setFinalAnswer(event.fullContent || "");
+          handlers.setQualityLoading();
+          void fetchQualityReport(apiBaseUrl, sessionId, fetchImpl, handlers);
           source.close();
           return;
         }
@@ -95,5 +111,26 @@ export async function startPipelineRun(
   } catch {
     handlers.setNodeStatus("output", "error");
     return null;
+  }
+}
+
+async function fetchQualityReport(
+  apiBaseUrl: string,
+  sessionId: string,
+  fetchImpl: typeof fetch,
+  handlers: Pick<
+    PipelineRunHandlers,
+    "setQualityReport" | "setQualityError"
+  >
+): Promise<void> {
+  try {
+    const response = await fetchImpl(`${apiBaseUrl}/api/pipeline/${sessionId}/quality`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch quality report (${response.status})`);
+    }
+    const payload = (await response.json()) as PipelineQualityReport;
+    handlers.setQualityReport(payload);
+  } catch {
+    handlers.setQualityError();
   }
 }

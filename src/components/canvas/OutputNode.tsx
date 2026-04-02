@@ -7,6 +7,8 @@ import { usePipelineStore } from "@/lib/store";
 export default function OutputNode({}: NodeProps) {
   const status = usePipelineStore((s) => s.nodeStatuses["output"]);
   const finalAnswer = usePipelineStore((s) => s.session?.finalAnswer || "");
+  const qualityStatus = usePipelineStore((s) => s.session?.qualityStatus || "idle");
+  const qualityReport = usePipelineStore((s) => s.session?.qualityReport);
   const isDone = status === "done";
 
   return (
@@ -78,14 +80,59 @@ export default function OutputNode({}: NodeProps) {
 
         {/* Content */}
         {isDone ? (
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8 }}
-            className="font-sans text-[13px] text-white/88 leading-7 whitespace-pre-wrap max-h-[980px] overflow-y-auto pr-2"
-          >
-            {finalAnswer}
-          </motion.p>
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="text-[10px] uppercase tracking-[0.22em] text-white/45">
+                  Research Quality Gate
+                </div>
+                {qualityStatus === "loading" ? (
+                  <span className="text-[10px] text-amber-300/90">Scoring...</span>
+                ) : qualityStatus === "error" ? (
+                  <span className="text-[10px] text-rose-300/90">Quality check unavailable</span>
+                ) : qualityReport ? (
+                  <span
+                    className="text-[10px]"
+                    style={{ color: qualityReport.passing ? "#6ee7b7" : "#fca5a5" }}
+                  >
+                    {qualityReport.passing ? "Pass" : "Fail"} • Score {qualityReport.overallScore.toFixed(1)}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-white/35">Pending</span>
+                )}
+              </div>
+
+              {qualityReport && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-[11px] text-white/70">
+                    <div>Citations: {qualityReport.metrics.citationCount}</div>
+                    <div>Sources: {qualityReport.metrics.sourceCount}</div>
+                    <div>Domains: {qualityReport.metrics.uniqueDomains}</div>
+                    <div>Contradictions: {qualityReport.metrics.contradictionCount}</div>
+                  </div>
+                  {qualityReport.regenerated ? (
+                    <div className="text-[10px] text-cyan-300/90">
+                      Auto-regenerated once due to failed first quality pass.
+                    </div>
+                  ) : null}
+                  {qualityReport.contradictionFindings.length > 0 ? (
+                    <div className="text-[10px] text-amber-200/90">
+                      Top contradiction: {qualityReport.contradictionFindings[0]?.sourceA} vs {qualityReport.contradictionFindings[0]?.sourceB}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8 }}
+              className="font-sans text-[13px] text-white/88 leading-7 whitespace-pre-wrap max-h-[920px] overflow-y-auto pr-2"
+            >
+              {finalAnswer}
+            </motion.p>
+          </div>
         ) : status === "active" ? (
           <div className="flex items-center gap-2 min-h-[220px]">
             <div className="flex gap-1">
