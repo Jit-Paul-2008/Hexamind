@@ -315,7 +315,7 @@ class InternetResearcher:
                     payload = {
                         "api_key": self._tavily_api_key,
                         "query": f"{term} ({pass_name} evidence)",
-                        "search_depth": "advanced",
+                        "search_depth": "basic",
                         "max_results": max_hits,
                         "include_raw_content": True,
                         "include_images": False,
@@ -372,6 +372,15 @@ class InternetResearcher:
         if not hits:
             return []
 
+        if self._search_provider == "tavily":
+            candidates: list[tuple[float, ResearchSource]] = []
+            for hit in hits[: max(self._max_sources, workflow_profile.max_sources) * 8]:
+                item = self._hydrate_tavily_candidate(query, hit, workflow_profile)
+                if item is not None:
+                    candidates.append(item)
+            candidates.sort(key=lambda row: row[0], reverse=True)
+            return _rank_and_dedupe_candidates(candidates, workflow_profile)
+
         semaphore = asyncio.Semaphore(max(self._fetch_concurrency, workflow_profile.fetch_concurrency))
 
         async with httpx.AsyncClient(
@@ -391,6 +400,46 @@ class InternetResearcher:
                 candidates.append(item)
         candidates.sort(key=lambda row: row[0], reverse=True)
         return _rank_and_dedupe_candidates(candidates, workflow_profile)
+
+    def _hydrate_tavily_candidate(
+        self,
+        query: str,
+        hit: SearchHit,
+        workflow_profile: ResearchWorkflowProfile,
+    ) -> tuple[float, ResearchSource] | None:
+        canonical_url = _canonicalize_url(hit.url)
+        domain = urlparse(canonical_url).netloc or canonical_url
+        if _is_filtered_domain(domain):
+            return None
+
+        authority = _classify_authority(canonical_url)
+        credibility_score = _credibility_score(canonical_url)
+        excerpt = _extract_evidence_excerpt(hit.snippet, query, workflow_profile.evidence_excerpt_limit)
+        if not excerpt:
+            excerpt = _trim_text(hit.snippet, workflow_profile.evidence_excerpt_limit)
+        if not excerpt:
+            return None
+
+        source = ResearchSource(
+            id="",
+            title=_trim_text(hit.title, 140),
+            url=canonical_url,
+            domain=domain,
+            snippet=_trim_text(hit.snippet, 220),
+            excerpt=excerpt,
+            authority=authority,
+            credibility_score=credibility_score,
+            recency_score=_recency_score(canonical_url, hit.title, hit.snippet, hit.snippet),
+            discovery_pass=hit.discovery_pass,
+        )
+        if _is_boilerplate_source(source.title, source.snippet, source.excerpt):
+            return None
+
+        retrieval_score = _retrieval_score(hit.relevance_score, credibility_score, source.recency_score, excerpt)
+        retrieval_score += _authority_bonus(authority, workflow_profile.requires_primary_sources, workflow_profile.audience)
+        retrieval_score += _domain_trust_bonus(domain)
+        retrieval_score += _recency_bonus(source.recency_score)
+        return retrieval_score, source
 
     async def _hydrate_candidate(
         self,
