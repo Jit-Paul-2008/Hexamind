@@ -46,6 +46,7 @@ class SearchHit:
     url: str
     snippet: str
     relevance_score: float = 0.0
+    discovery_pass: str = ""
 
 
 class _DuckDuckGoResultParser(HTMLParser):
@@ -168,6 +169,22 @@ class InternetResearcher:
             contradictions=contradictions,
         )
 
+    def _build_search_passes(self, query: str, workflow_profile: ResearchWorkflowProfile) -> list[str]:
+        passes = list(workflow_profile.search_passes)
+        if not passes:
+            passes = ["official", "recent", "evidence", "failure_modes"]
+        if any(token in query.lower() for token in ("comparison", "vs", "versus", "tradeoff")) and "comparison" not in passes:
+            passes.append("comparison")
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for item in passes:
+            key = item.lower().strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(item)
+        return deduped
+
     async def _search_hits(
         self,
         query: str,
@@ -211,6 +228,7 @@ class InternetResearcher:
                                 url=hit.url,
                                 snippet=hit.snippet,
                                 relevance_score=score,
+                                discovery_pass=pass_name,
                             )
                         )
 
@@ -246,7 +264,7 @@ class InternetResearcher:
             if isinstance(item, tuple):
                 candidates.append(item)
         candidates.sort(key=lambda row: row[0], reverse=True)
-        return candidates
+        return _rank_and_dedupe_candidates(candidates, workflow_profile)
 
     async def _hydrate_candidate(
         self,
@@ -284,11 +302,15 @@ class InternetResearcher:
             authority=authority,
             credibility_score=credibility_score,
             recency_score=_recency_score(canonical_url, hit.title, hit.snippet, page_text),
-            discovery_pass=getattr(hit, "discovery_pass", ""),
+            discovery_pass=hit.discovery_pass,
         )
+        if _is_boilerplate_source(source.title, source.snippet, source.excerpt):
+            return None
+
         retrieval_score = _retrieval_score(hit.relevance_score, credibility_score, source.recency_score, excerpt)
         retrieval_score += _authority_bonus(authority, workflow_profile.requires_primary_sources, workflow_profile.audience)
         retrieval_score += _domain_trust_bonus(domain)
+        retrieval_score += _recency_bonus(source.recency_score)
         return retrieval_score, source
 
     async def _fetch_page_text(self, client: httpx.AsyncClient, url: str) -> str:
@@ -306,7 +328,12 @@ class InternetResearcher:
         parser.feed(response.text)
         return parser.text()
 
-    def _build_search_terms(self, query: str, workflow_profile: ResearchWorkflowProfile) -> list[str]:
+    def _build_search_terms(
+        self,
+        query: str,
+        workflow_profile: ResearchWorkflowProfile,
+        search_passes: Iterable[str],
+    ) -> list[str]:
         base = _clean_text(query)
         core_terms = _top_query_terms(base, max(5, workflow_profile.max_terms // 2))
         core_joined = " ".join(core_terms)
@@ -314,6 +341,13 @@ class InternetResearcher:
             f"{core_joined} systematic review",
             f"{core_joined} case study",
         ]
+        pass_set = set(search_passes)
+        if pass_set.intersection({"official", "primary_sources"}):
+            terms.extend([f"{base} official", f"{base} site:.gov", f"{base} site:.edu"])
+        if pass_set.intersection({"recent", "benchmark"}):
+            terms.extend([f"{base} latest", f"{base} recent review", f"{base} current evidence"])
+        if pass_set.intersection({"failure_modes", "comparison"}):
+            terms.extend([f"{base} limitations", f"{base} failures", f"{base} tradeoff analysis"])
         seen: set[str] = set()
         deduped: list[str] = []
         for term in terms:
@@ -465,9 +499,9 @@ def _classify_authority(url: str) -> str:
     return "secondary"
 
 
-def _retrieval_score(relevance_score: float, credibility_score: float, excerpt: str) -> float:
+def _retrieval_score(relevance_score: float, credibility_score: float, recency_score: float, excerpt: str) -> float:
     richness = min(1.0, len(excerpt) / 700.0)
-    return (relevance_score * 0.55) + (credibility_score * 0.35) + (richness * 0.10)
+    return (relevance_score * 0.48) + (credibility_score * 0.28) + (recency_score * 0.14) + (richness * 0.10)
 
 
 def _top_query_terms(query: str, max_terms: int) -> list[str]:
@@ -632,9 +666,253 @@ def _assign_source_ids(sources: list[ResearchSource]) -> list[ResearchSource]:
                 excerpt=source.excerpt,
                 authority=source.authority,
                 credibility_score=source.credibility_score,
+                recency_score=source.recency_score,
+                discovery_pass=source.discovery_pass,
             )
         )
     return result
+
+
+def _rank_and_dedupe_candidates(
+    candidates: list[tuple[float, ResearchSource]],
+    workflow_profile: ResearchWorkflowProfile,
+) -> list[tuple[float, ResearchSource]]:
+    selected: list[tuple[float, ResearchSource]] = []
+    seen_urls: set[str] = set()
+    signatures: list[set[str]] = []
+
+    for score, source in sorted(candidates, key=lambda row: row[0], reverse=True):
+        canonical_url = _canonicalize_url(source.url)
+        if canonical_url in seen_urls:
+            continue
+        if _is_boilerplate_source(source.title, source.snippet, source.excerpt):
+            continue
+
+        signature = _text_signature(source.title, source.excerpt)
+        if any(_signature_overlap(signature, existing) >= 0.72 for existing in signatures):
+            continue
+
+        selected.append((score + _source_quality_bonus(source, workflow_profile), source))
+        seen_urls.add(canonical_url)
+        signatures.append(signature)
+
+    selected.sort(key=lambda row: row[0], reverse=True)
+    return selected
+
+
+def _authority_bonus(authority: str, requires_primary_sources: bool, audience: str) -> float:
+    if authority == "primary":
+        return 0.18 if requires_primary_sources else 0.12
+    if authority == "high":
+        return 0.08 if audience in {"phd", "professor"} else 0.05
+    return 0.0
+
+
+def _domain_trust_bonus(domain: str) -> float:
+    lowered = domain.lower()
+    if lowered.endswith((".gov", ".edu")):
+        return 0.08
+    if any(token in lowered for token in ("docs", "developer", "research", "acm", "ieee", "nature", "science")):
+        return 0.05
+    if any(token in lowered for token in ("blog", "medium", "substack", "reddit", "forum")):
+        return -0.04
+    return 0.0
+
+
+def _recency_score(url: str, title: str, snippet: str, body: str) -> float:
+    current_year = time.gmtime().tm_year
+    haystack = f"{url} {title} {snippet} {body}"
+    years = [int(year) for year in re.findall(r"(?<!\d)(20\d{2})(?!\d)", haystack)]
+    if not years:
+        if any(token in haystack.lower() for token in ("latest", "recent", "current", "updated")):
+            return 0.4
+        return 0.15
+
+    delta = min(abs(current_year - year) for year in years)
+    if delta == 0:
+        return 1.0
+    if delta == 1:
+        return 0.75
+    if delta == 2:
+        return 0.5
+    return 0.2
+
+
+def _recency_bonus(recency_score: float) -> float:
+    return min(0.12, recency_score * 0.12)
+
+
+def _is_boilerplate_source(title: str, snippet: str, excerpt: str) -> bool:
+    text = f"{title} {snippet} {excerpt}".lower()
+    boilerplate_tokens = (
+        "cookie",
+        "privacy policy",
+        "terms of service",
+        "subscribe",
+        "javascript",
+        "all rights reserved",
+        "sign up",
+        "log in",
+        "newsletter",
+        "advertising",
+        "enable cookies",
+    )
+    if any(token in text for token in boilerplate_tokens):
+        return True
+    words = re.findall(r"[a-zA-Z0-9]{3,}", text)
+    if len(words) < 35:
+        return False
+    unique_ratio = len(set(words)) / max(1, len(words))
+    return unique_ratio < 0.38
+
+
+def _text_signature(title: str, excerpt: str) -> set[str]:
+    words = re.findall(r"[a-zA-Z0-9]{4,}", f"{title} {excerpt}".lower())
+    stop = {
+        "that",
+        "this",
+        "with",
+        "from",
+        "into",
+        "about",
+        "their",
+        "there",
+        "which",
+        "when",
+        "where",
+        "what",
+        "will",
+        "should",
+        "could",
+        "would",
+    }
+    return {word for word in words if word not in stop}
+
+
+def _signature_overlap(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    union = left | right
+    if not union:
+        return 0.0
+    return len(left & right) / len(union)
+
+
+def _source_quality_bonus(source: ResearchSource, workflow_profile: ResearchWorkflowProfile) -> float:
+    bonus = source.credibility_score * 0.08
+    bonus += source.recency_score * 0.06
+    if source.authority == "primary" and workflow_profile.requires_primary_sources:
+        bonus += 0.05
+    if source.discovery_pass in {"official", "primary_sources"}:
+        bonus += 0.03
+    return bonus
+
+
+def _detect_source_contradictions(query: str, sources: tuple[ResearchSource, ...]) -> list[tuple[str, str, str]]:
+    if len(sources) < 2:
+        return []
+
+    findings: list[tuple[str, str, str]] = []
+    for index, source_a in enumerate(sources):
+        for source_b in sources[index + 1 :]:
+            score_a = _stance_score(source_a.excerpt)
+            score_b = _stance_score(source_b.excerpt)
+            if score_a == 0 and score_b == 0:
+                continue
+            if score_a * score_b < 0 and abs(score_a - score_b) >= 2:
+                findings.append(
+                    (
+                        source_a.id,
+                        source_b.id,
+                        f"Evidence polarity differs for query '{query}' across {source_a.domain} and {source_b.domain}.",
+                    )
+                )
+    return findings[:5]
+
+
+def _stance_score(text: str) -> int:
+    normalized = text.lower()
+    positive_cues = [
+        "improve",
+        "improved",
+        "effective",
+        "success",
+        "increase",
+        "benefit",
+        "outperform",
+        "recommended",
+        "strong evidence",
+    ]
+    negative_cues = [
+        "fail",
+        "failed",
+        "risk",
+        "limitation",
+        "uncertain",
+        "not effective",
+        "decline",
+        "worse",
+        "harm",
+        "weak evidence",
+    ]
+    positive = sum(1 for cue in positive_cues if cue in normalized)
+    negative = sum(1 for cue in negative_cues if cue in normalized)
+    return positive - negative
+
+
+def _term_matches_pass(term: str, pass_name: str) -> bool:
+    lowered = term.lower()
+    if pass_name == "official":
+        return any(token in lowered for token in ("official", "documentation", "docs", "site:.gov", "site:.edu"))
+    if pass_name == "recent":
+        return any(token in lowered for token in ("latest", "recent", "current", "2025", "2026", "updated"))
+    if pass_name == "evidence":
+        return any(token in lowered for token in ("evidence", "review", "study", "benchmark", "evaluation", "method"))
+    if pass_name == "failure_modes":
+        return any(token in lowered for token in ("failure", "fail", "limitations", "risk", "tradeoff", "limitations failures"))
+    if pass_name == "comparison":
+        return any(token in lowered for token in ("compare", "comparison", "versus", "vs", "tradeoff", "between"))
+    if pass_name == "methodology":
+        return any(token in lowered for token in ("method", "methodology", "protocol", "experiment", "evaluation", "benchmark", "dataset"))
+    if pass_name == "benchmark":
+        return any(token in lowered for token in ("benchmark", "evaluation", "dataset", "metric", "measure", "test"))
+    if pass_name == "primary_sources":
+        return any(token in lowered for token in ("official", "primary", "docs", "site:.gov", "site:.edu", "specification"))
+    return True
+
+
+def _pass_weight(pass_name: str) -> float:
+    weights = {
+        "official": 1.06,
+        "recent": 1.04,
+        "evidence": 1.0,
+        "failure_modes": 1.02,
+        "comparison": 1.01,
+        "methodology": 1.03,
+        "benchmark": 1.05,
+        "primary_sources": 1.07,
+    }
+    return weights.get(pass_name, 1.0)
+
+
+def _dedupe_hits(results: list[SearchHit]) -> list[SearchHit]:
+    seen_urls: dict[str, SearchHit] = {}
+
+    for hit in sorted(results, key=lambda item: item.relevance_score, reverse=True):
+        canonical_url = _canonicalize_url(hit.url)
+        existing = seen_urls.get(canonical_url)
+        if existing is None or hit.relevance_score > existing.relevance_score:
+            seen_urls[canonical_url] = SearchHit(
+                title=hit.title,
+                url=canonical_url,
+                snippet=hit.snippet,
+                relevance_score=hit.relevance_score,
+                discovery_pass=hit.discovery_pass,
+            )
+
+    unique = list(seen_urls.values())
+    unique.sort(key=lambda item: item.relevance_score, reverse=True)
+    return unique
 
 
 def _credibility_score(url: str) -> float:

@@ -264,7 +264,25 @@ def _detect_contradictions(
     query: str,
     research: ResearchContext | None,
 ) -> list[ContradictionFinding]:
-    if not research or len(research.sources) < 2:
+    if not research:
+        return []
+
+    precomputed = getattr(research, "contradictions", ())
+    if precomputed:
+        findings: list[ContradictionFinding] = []
+        for item in precomputed[:5]:
+            if isinstance(item, tuple) and len(item) == 3:
+                findings.append(
+                    ContradictionFinding(
+                        sourceA=str(item[0]),
+                        sourceB=str(item[1]),
+                        reason=str(item[2]),
+                    )
+                )
+        if findings:
+            return findings
+
+    if len(research.sources) < 2:
         return []
 
     findings: list[ContradictionFinding] = []

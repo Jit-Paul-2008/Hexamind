@@ -212,40 +212,40 @@ class DeterministicPipelineModelProvider:
         research: ResearchContext | None = None,
     ) -> str:
         q = query.strip()
+        report_mode = self._report_mode(q, research)
         source_inventory = source_inventory_markdown(research)
         evidence_snapshot = self._evidence_snapshot_markdown(research)
-        claim_map = self._claim_map_markdown(outputs, research)
-        recommendation = self._decision_recommendation(outputs, research)
-        uncertainty = self._uncertainty_markdown(research)
+        report_plan = self._report_plan_markdown(q, research, report_mode)
+        claim_graph = self._claim_graph_markdown(outputs, research, report_mode)
+        recommendation = self._decision_recommendation(outputs, research, report_mode)
+        uncertainty = self._uncertainty_markdown(research, report_mode)
+        action_plan = self._action_plan_markdown(report_mode, research)
         return (
             "## Executive Summary\n"
             f"This report addresses '{q}' using live retrieval evidence when available. It combines supportive and skeptical views, then converts them into a testable plan rather than a generic recommendation.\n\n"
             "## Research Scope\n"
             f"- Core question: {q}\n"
             "- Method: retrieval-first synthesis with explicit citations and uncertainty disclosure.\n"
-            "- Output objective: a recommendation that can be validated in staged execution.\n\n"
+            f"- Output objective: a {report_mode} decision memo that can be validated in staged execution.\n"
+            f"### Report Plan\n{report_plan}\n\n"
             "## Evidence Snapshot\n"
             f"{evidence_snapshot}\n\n"
             "## Analytical Breakdown\n"
-            "### Cross-Agent Synthesis\n"
+            f"### {self._analysis_lens_heading(report_mode)}\n"
             f"- Opportunity case: {self._extract_section_summary(outputs.get('advocate', ''), '## Strategic Upside', '## Supporting Logic')}\n"
             f"- Risk case: {self._extract_section_summary(outputs.get('skeptic', ''), '## Primary Failure Modes', '## Risk Severity')}\n"
             f"- Integrated position: {self._extract_section_summary(outputs.get('synthesiser', ''), '## Tradeoff Resolution', '## Decision Rule')}\n"
             f"- Forecast signal: {self._extract_section_summary(outputs.get('oracle', ''), '## Most Likely Outcome (60%)', '## Upside Scenario (25%)')}\n\n"
-            "### Claim-to-Citation Map\n"
-            f"{claim_map}\n\n"
+            "### Claim Graph\n"
+            f"{claim_graph}\n\n"
             "### Contradictions and Uncertainty\n"
             f"{uncertainty}\n\n"
             "## Decision Recommendation\n"
             f"{recommendation}\n\n"
             "## Action Plan\n"
-            "- Week 1: confirm baseline, collect sources, and document assumptions.\n"
-            "- Week 2: run a constrained pilot or desk evaluation.\n"
-            "- Week 3: review performance, risks, and source contradictions.\n"
-            "- Week 4: decide whether to scale, hold, or stop.\n\n"
+            f"{action_plan}\n\n"
             "## Confidence and Open Questions\n"
-            "- Confidence: Moderate, and increases when multiple independent domains agree on the same claim.\n"
-            "- Open questions: what new evidence is likely to invalidate the current recommendation, and how quickly that can be detected in production.\n\n"
+            f"{self._confidence_block(research, report_mode)}\n\n"
             "## Source Inventory\n"
             f"{source_inventory}"
         )
@@ -262,9 +262,9 @@ class DeterministicPipelineModelProvider:
             lines.append(f"  - Evidence: {source.excerpt}")
         return "\n".join(lines)
 
-    def _claim_map_markdown(self, outputs: dict[str, str], research: ResearchContext | None) -> str:
+    def _claim_graph_markdown(self, outputs: dict[str, str], research: ResearchContext | None, report_mode: str) -> str:
         if not research or not research.sources:
-            return "- Claim: Evidence is currently limited. Citation: n/a"
+            return "- Claim graph unavailable because no live sources were retrieved."
 
         advocate_claim = self._extract_section_summary(outputs.get("advocate", ""), "## Strategic Upside", "## Supporting Logic")
         skeptic_claim = self._extract_section_summary(outputs.get("skeptic", ""), "## Primary Failure Modes", "## Risk Severity")
@@ -273,30 +273,141 @@ class DeterministicPipelineModelProvider:
 
         top = research.sources[:4]
         lines = [
-            f"- Claim: {advocate_claim} Citation: [{top[0].id}]",
-            f"- Claim: {skeptic_claim} Citation: [{top[min(1, len(top) - 1)].id}]",
-            f"- Claim: {synthesis_claim} Citation: [{top[min(2, len(top) - 1)].id}]",
-            f"- Claim: {outlook_claim} Citation: [{top[min(3, len(top) - 1)].id}]",
+            f"- Node C1 (opportunity): {advocate_claim} -> [{top[0].id}]",
+            f"- Node C2 (risk): {skeptic_claim} -> [{top[min(1, len(top) - 1)].id}]",
+            f"- Node C3 (synthesis): {synthesis_claim} -> [{top[min(2, len(top) - 1)].id}]",
+            f"- Node C4 (forecast): {outlook_claim} -> [{top[min(3, len(top) - 1)].id}]",
+            f"- Edge: C1 supports C3; C2 constrains C3; C4 is conditional on the {report_mode} evidence profile.",
         ]
         return "\n".join(lines)
 
-    def _decision_recommendation(self, outputs: dict[str, str], research: ResearchContext | None) -> str:
+    def _decision_recommendation(self, outputs: dict[str, str], research: ResearchContext | None, report_mode: str) -> str:
         confidence_basis = self._source_block(research)
         summary = self._extract_section_summary(outputs.get("synthesiser", ""), "## Decision Rule", "## Guardrails")
         return (
-            "1. Run a staged pilot with explicit success/failure gates.\n"
+            f"1. Use a {report_mode}-specific pilot with explicit success/failure gates.\n"
             "2. Require each key claim to map to at least one source ID and one measurable KPI.\n"
             "3. Escalate only when two consecutive review cycles show stable metrics and no unresolved contradictions.\n"
             f"4. Current confidence basis: {confidence_basis}.\n"
             f"5. Decision rule from synthesis: {summary}"
         )
 
-    def _uncertainty_markdown(self, research: ResearchContext | None) -> str:
+    def _report_plan_markdown(self, query: str, research: ResearchContext | None, report_mode: str) -> str:
         if not research or not research.sources:
-            return "- Uncertainty is high because there are no retrieved live sources to validate external claims."
+            return (
+                f"- Mode: {report_mode}\n"
+                "- Plan: collect evidence first, then build a claim graph, then validate against contradictions.\n"
+                "- Priority: state uncertainty explicitly because no live sources were found."
+            )
+
+        plan_lines = [
+            f"- Mode: {report_mode}",
+            "- Section order: evidence snapshot -> claim graph -> contradictions -> decision recommendation -> action plan.",
+            "- Priority: privilege primary sources, then reconcile disagreements before recommending action.",
+        ]
+        if report_mode == "policy":
+            plan_lines.append("- Focus: regulatory constraints, stakeholder impact, and compliance risk.")
+        elif report_mode == "engineering":
+            plan_lines.append("- Focus: architecture, failure modes, reliability, and implementation cost.")
+        elif report_mode == "medical":
+            plan_lines.append("- Focus: evidence strength, safety, and conservative interpretation of claims.")
+        elif report_mode == "operations":
+            plan_lines.append("- Focus: execution, rollout sequencing, and operational guardrails.")
+        else:
+            plan_lines.append("- Focus: evidence quality, source diversity, and decision confidence.")
+        return "\n".join(plan_lines)
+
+    def _uncertainty_markdown(self, research: ResearchContext | None, report_mode: str) -> str:
+        if not research or not research.sources:
+            return "- Confidence: low because there are no retrieved live sources to validate external claims.\n- Open question: which live sources are most likely to overturn the current answer?"
         if len(research.sources) < 3:
-            return "- Source diversity is limited; prioritize collecting additional independent domains before scaling decisions."
-        return "- Main uncertainty lies in rapidly changing evidence and conflicting benchmarks across domains; treat any recommendation as conditional."
+            return (
+                "- Confidence: moderate but limited by source diversity.\n"
+                "- Rationale: prioritize collecting additional independent domains before scaling decisions.\n"
+                f"- Open question: which {report_mode}-specific evidence is still missing?"
+            )
+        contradiction_count = len(getattr(research, "contradictions", ()))
+        return (
+            f"- Confidence: moderate, with {len(research.sources)} sources across {len({source.domain for source in research.sources})} domains.\n"
+            f"- Rationale: contradiction count = {contradiction_count}; treat the recommendation as conditional when disputes remain unresolved.\n"
+            f"- Open question: which source pair would most strongly change the answer if it were updated?"
+        )
+
+    def _action_plan_markdown(self, report_mode: str, research: ResearchContext | None) -> str:
+        if report_mode == "policy":
+            return (
+                "- Step 1: map the policy surface and required approvals.\n"
+                "- Step 2: validate the recommendation against the most authoritative sources.\n"
+                "- Step 3: review implementation risk with stakeholders and legal/compliance owners.\n"
+                "- Step 4: decide whether to adopt, revise, or stop."
+            )
+        if report_mode == "engineering":
+            return (
+                "- Step 1: confirm baseline architecture and bottlenecks.\n"
+                "- Step 2: run a constrained technical pilot with explicit reliability gates.\n"
+                "- Step 3: measure latency, failure modes, and implementation effort.\n"
+                "- Step 4: scale only if the pilot improves both quality and operability."
+            )
+        if report_mode == "medical":
+            return (
+                "- Step 1: verify that the evidence base is current and primary-source backed.\n"
+                "- Step 2: separate observational signal from causal inference.\n"
+                "- Step 3: assess safety, uncertainty, and contraindications explicitly.\n"
+                "- Step 4: escalate only with clinical oversight and documented caveats."
+            )
+        if report_mode == "operations":
+            return (
+                "- Step 1: define the operational baseline and failure thresholds.\n"
+                "- Step 2: pilot the change in one constrained workflow.\n"
+                "- Step 3: review defects, cycle time, and user adoption.\n"
+                "- Step 4: scale only after two stable review cycles."
+            )
+        return (
+            "- Step 1: confirm baseline, collect sources, and document assumptions.\n"
+            "- Step 2: run a constrained pilot or desk evaluation.\n"
+            "- Step 3: review performance, risks, and source contradictions.\n"
+            "- Step 4: decide whether to scale, hold, or stop."
+        )
+
+    def _confidence_block(self, research: ResearchContext | None, report_mode: str) -> str:
+        if not research or not research.sources:
+            return "- Confidence: low, because the report has no live source support.\n- Open questions: which live source would most likely invalidate the recommendation?"
+
+        domain_count = len({source.domain for source in research.sources})
+        contradiction_count = len(getattr(research, "contradictions", ()))
+        confidence = "high" if len(research.sources) >= 5 and domain_count >= 3 and contradiction_count == 0 else "moderate"
+        if contradiction_count > 0:
+            confidence = "moderate"
+        return (
+            f"- Confidence: {confidence}, with {len(research.sources)} sources across {domain_count} domains for the {report_mode} frame.\n"
+            f"- Rationale: contradiction count = {contradiction_count}; source mix and recency determine how much weight to put on the recommendation.\n"
+            "- Open questions: which claim would fail first under a stricter source audit?"
+        )
+
+    def _report_mode(self, query: str, research: ResearchContext | None) -> str:
+        normalized = query.lower()
+        if any(token in normalized for token in ("policy", "regulation", "law", "compliance", "governance")):
+            return "policy"
+        if any(token in normalized for token in ("medical", "clinical", "health", "patient", "diagnosis", "treatment")):
+            return "medical"
+        if any(token in normalized for token in ("architecture", "engineering", "system", "api", "backend", "latency", "performance", "reliability")):
+            return "engineering"
+        if any(token in normalized for token in ("operations", "workflow", "launch", "rollout", "scale", "process", "team")):
+            return "operations"
+        if any(token in normalized for token in ("compare", "versus", "vs", "benchmark", "tradeoff")):
+            return "comparison"
+        return "research"
+
+    def _analysis_lens_heading(self, report_mode: str) -> str:
+        headings = {
+            "policy": "Policy Lens",
+            "medical": "Clinical Evidence Lens",
+            "engineering": "Engineering Lens",
+            "operations": "Operational Lens",
+            "comparison": "Comparison Lens",
+            "research": "Research Lens",
+        }
+        return headings.get(report_mode, "Research Lens")
 
     def _structured_advocate(self, query: str, source_block: str) -> str:
         return (
@@ -558,7 +669,7 @@ class GeminiPipelineModelProvider:
                     "'## Analytical Breakdown', '## Decision Recommendation', '## Action Plan', "
                     "'## Confidence and Open Questions', '## Source Inventory'. "
                     "Use numbered subsections, bullet lists, and cite source IDs inline like [S1]. "
-                    "Include a subsection named '### Claim-to-Citation Map' under Analytical Breakdown. "
+                    "Include a dynamic '### Report Plan', a '### Claim Graph', and a query-type-aware Analytical Breakdown. "
                     "If evidence is weak, state the gap explicitly instead of speculating. "
                     "The report should be detailed enough to fill a full A4 page and avoid generic wording.\n\n"
                     f"Question: {query.strip()}\n\n"
@@ -733,7 +844,7 @@ class OpenRouterPipelineModelProvider:
                         "'## Executive Summary', '## Research Scope', '## Evidence Snapshot', "
                         "'## Analytical Breakdown', '## Decision Recommendation', '## Action Plan', "
                         "'## Confidence and Open Questions', '## Source Inventory'. Under '## Analytical Breakdown' "
-                        "include '### Claim-to-Citation Map' and '### Contradictions and Uncertainty'. "
+                        "include a dynamic '### Report Plan', '### Claim Graph', and '### Contradictions and Uncertainty'. "
                         "Every key claim must cite [Sx]. If evidence is weak, state the evidence gap explicitly."
                     ),
                     user_prompt=(
@@ -931,7 +1042,7 @@ class LocalPipelineModelProvider:
                             "'## Executive Summary', '## Research Scope', '## Evidence Snapshot', '## Analytical Breakdown', "
                             "'## Decision Recommendation', '## Action Plan', '## Confidence and Open Questions', '## Source Inventory'. "
                             "Under '## Analytical Breakdown' include '### Claim-to-Citation Map' and '### Contradictions and Uncertainty'. "
-                            "Use the live evidence only, avoid generic statements, and cite [Sx] for every important claim."
+                            "Use the live evidence only, avoid generic statements, and include a dynamic report plan plus claim graph."
                         ),
                         user_prompt=(
                             f"Question: {query.strip()}\n\n"
