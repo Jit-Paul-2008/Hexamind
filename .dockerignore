@@ -1,0 +1,13 @@
+.git
+.gitignore
+.github
+node_modules
+.next
+coverage
+ai-service/.data
+ai-service/__pycache__
+ai-service/.venv
+npm-debug.log*
+Dockerfile
+ai-service/Dockerfile
+docker-compose.yml

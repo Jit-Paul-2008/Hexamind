@@ -52,3 +52,34 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 npm run lint
 npm run build
 ```
+
+## Deployment
+
+The project is ready for Docker-based deployment. Use the root `Dockerfile` for the
+frontend and `ai-service/Dockerfile` for the backend, or run both with
+`docker-compose.yml`.
+
+Local Docker run:
+
+```bash
+docker compose up --build
+```
+
+Service URLs:
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8000`
+
+Environment variables:
+
+- `NEXT_PUBLIC_API_BASE_URL` is required for the frontend build. Set it to the public
+	backend URL in production, or leave the default `http://localhost:8000` for local
+	Docker usage.
+- `HEXAMIND_MODEL_PROVIDER` is optional. Leave it as `deterministic` for a no-key
+	deployment, or set it to `gemini` to use Google Gemini.
+- `HEXAMIND_MODEL_NAME` is optional and only applies when `HEXAMIND_MODEL_PROVIDER`
+	is set to `gemini`.
+
+If you want the real model path, enter the Google API key in your platform's secret
+store for the Gemini provider package. The deterministic mode needs no external API
+key.

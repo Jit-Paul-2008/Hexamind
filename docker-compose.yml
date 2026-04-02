@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: ai-service/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      HEXAMIND_MODEL_PROVIDER: ${HEXAMIND_MODEL_PROVIDER:-deterministic}
+      HEXAMIND_MODEL_NAME: ${HEXAMIND_MODEL_NAME:-gemini-1.5-flash}
+
+  frontend:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
