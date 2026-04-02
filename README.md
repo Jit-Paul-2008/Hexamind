@@ -23,6 +23,57 @@ The UI is a single full-window experience at `/` with the existing 4 agents:
 - `GET /api/agents` -> agent metadata
 - `POST /api/pipeline/start` -> create pipeline session
 - `GET /api/pipeline/{sessionId}/stream` -> SSE events (`agent_start`, `agent_chunk`, `agent_done`, `pipeline_done`)
+- `GET /api/pipeline/{sessionId}/quality` -> structured quality diagnostics + trust metrics
+- `POST /api/pipeline/{sessionId}/sarvam-transform` -> optional language/instruction transform of final report
+- `POST /api/pipeline/{sessionId}/export-docx` -> optional DOCX export of transformed final report
+
+## Additional Notable Project Capabilities
+
+These are implemented in the repo but easy to miss if you only skim the quick-start:
+
+- Request-level security middleware with optional auth token gating for sensitive pipeline routes.
+- Built-in per-IP rate limiting via `HEXAMIND_RATE_LIMIT_PER_MINUTE`.
+- JSONL audit logging for API traffic in `ai-service/.data/audit-log.jsonl`.
+- Pipeline queue/backpressure controls (`HEXAMIND_STREAM_MAX_CONCURRENT`, queue wait timeout).
+- Stage-level timeout budgets for retrieval, per-agent generation, and final synthesis.
+- Automatic regenerate-on-quality-fail flow and deterministic failsafe fallback path.
+- Run metadata emitted with quality reports (timings, trace coverage, provider diagnostics, report digest).
+- Retrieval cache with TTL and automatic fallback source expansion when web sources are sparse.
+- Prompt/version fingerprint snapshot support for reproducibility.
+- Benchmark harness (`ai-service/benchmarking.py`) with win-rate and regression-oriented scoring helpers.
+- Sarvam integration includes safe fallback behavior even when `SARVAM_API_KEY` is absent.
+
+## Reliability and Security Environment Knobs
+
+Useful production/runtime controls not listed elsewhere in this README:
+
+```bash
+# Security / traffic control
+HEXAMIND_AUTH_TOKEN=your_token
+HEXAMIND_RATE_LIMIT_PER_MINUTE=60
+
+# Streaming concurrency + queueing
+HEXAMIND_STREAM_MAX_CONCURRENT=2
+HEXAMIND_STREAM_QUEUE_WAIT_SECONDS=15
+
+# Stage timeouts
+HEXAMIND_RETRIEVAL_TIMEOUT_SECONDS=18
+HEXAMIND_AGENT_TIMEOUT_SECONDS=30
+HEXAMIND_FINAL_TIMEOUT_SECONDS=40
+
+# Provider health manager
+HEXAMIND_PROVIDER_RETRY_BUDGET=1
+HEXAMIND_PROVIDER_FAILURE_THRESHOLD=3
+HEXAMIND_PROVIDER_COOLDOWN_SECONDS=30
+HEXAMIND_PROVIDER_BACKOFF_SECONDS=0.25
+
+# Research cache
+HEXAMIND_RESEARCH_CACHE_TTL_SECONDS=1800
+
+# Report safety behavior
+HEXAMIND_AUTO_REGENERATE_ON_FAIL=1
+HEXAMIND_NEVER_FAIL_REPORT=1
+```
 
 ## Run Backend
 
