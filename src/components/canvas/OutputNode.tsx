@@ -1,15 +1,96 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { motion } from "framer-motion";
 import { usePipelineStore } from "@/lib/store";
+import { exportReportDocx, transformReportWithSarvam } from "@/lib/pipelineClient";
+
+const LANGUAGE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "en-IN", label: "English (India)" },
+  { value: "hi-IN", label: "Hindi" },
+  { value: "bn-IN", label: "Bengali" },
+  { value: "ta-IN", label: "Tamil" },
+  { value: "te-IN", label: "Telugu" },
+  { value: "gu-IN", label: "Gujarati" },
+  { value: "kn-IN", label: "Kannada" },
+  { value: "ml-IN", label: "Malayalam" },
+  { value: "mr-IN", label: "Marathi" },
+  { value: "pa-IN", label: "Punjabi" },
+  { value: "od-IN", label: "Odia" },
+];
 
 export default function OutputNode({}: NodeProps) {
   const status = usePipelineStore((s) => s.nodeStatuses["output"]);
   const finalAnswer = usePipelineStore((s) => s.session?.finalAnswer || "");
+  const backendSessionId = usePipelineStore((s) => s.session?.backendSessionId || "");
   const qualityStatus = usePipelineStore((s) => s.session?.qualityStatus || "idle");
   const qualityReport = usePipelineStore((s) => s.session?.qualityReport);
+  const [displayAnswer, setDisplayAnswer] = useState("");
+  const [targetLanguageCode, setTargetLanguageCode] = useState("hi-IN");
+  const [instruction, setInstruction] = useState("");
+  const [transforming, setTransforming] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [transformStatus, setTransformStatus] = useState("");
   const isDone = status === "done";
+
+  useEffect(() => {
+    setDisplayAnswer(finalAnswer);
+    setTransformStatus("");
+  }, [finalAnswer]);
+
+  const canTransform = isDone && Boolean(backendSessionId) && Boolean(finalAnswer.trim());
+
+  const onTransformWithSarvam = async () => {
+    if (!canTransform || transforming) {
+      return;
+    }
+    setTransforming(true);
+    setTransformStatus("Applying Sarvam transformation...");
+    try {
+      const response = await transformReportWithSarvam(backendSessionId, {
+        targetLanguageCode,
+        instruction,
+      });
+      setDisplayAnswer(response.text);
+      setTransformStatus(
+        response.fallback
+          ? "Sarvam fallback used. Report updated with best-effort transformation."
+          : `Sarvam transformation applied (${response.languageCode}).`
+      );
+    } catch {
+      setTransformStatus("Sarvam transformation failed. Showing original report.");
+    } finally {
+      setTransforming(false);
+    }
+  };
+
+  const onDownloadDocx = async () => {
+    if (!canTransform || exporting) {
+      return;
+    }
+    setExporting(true);
+    setTransformStatus("Preparing DOCX download...");
+    try {
+      const { blob, filename } = await exportReportDocx(backendSessionId, {
+        targetLanguageCode,
+        instruction,
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      setTransformStatus(`DOCX downloaded: ${filename}`);
+    } catch {
+      setTransformStatus("DOCX export failed. Try running the report again.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <motion.div
@@ -133,13 +214,67 @@ export default function OutputNode({}: NodeProps) {
               )}
             </div>
 
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+              <div className="text-[10px] uppercase tracking-[0.22em] text-white/45">
+                Sarvam Export and Language Transform
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-[10px] text-white/55">
+                  Target language
+                  <select
+                    value={targetLanguageCode}
+                    onChange={(event) => setTargetLanguageCode(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-white/80"
+                    disabled={!canTransform || transforming || exporting}
+                  >
+                    {LANGUAGE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value} className="bg-[#11131a]">
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-end gap-2">
+                  <button
+                    type="button"
+                    onClick={onTransformWithSarvam}
+                    disabled={!canTransform || transforming || exporting}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-white/70 disabled:opacity-40"
+                  >
+                    {transforming ? "Transforming" : "Transform"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDownloadDocx}
+                    disabled={!canTransform || transforming || exporting}
+                    className="rounded-lg border border-cyan-200/20 bg-cyan-200/10 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-cyan-100 disabled:opacity-40"
+                  >
+                    {exporting ? "Exporting" : "Download DOCX"}
+                  </button>
+                </div>
+              </div>
+              <label className="text-[10px] text-white/55 block">
+                Optional prompt to modify output before download
+                <textarea
+                  value={instruction}
+                  onChange={(event) => setInstruction(event.target.value)}
+                  placeholder="Example: Make it concise for executives and keep bullet points only"
+                  disabled={!canTransform || transforming || exporting}
+                  className="mt-1 w-full min-h-[72px] rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-[11px] text-white/80 placeholder:text-white/30"
+                />
+              </label>
+              {transformStatus ? (
+                <div className="text-[10px] text-cyan-100/90">{transformStatus}</div>
+              ) : null}
+            </div>
+
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8 }}
               className="font-sans text-[13px] text-white/88 leading-7 whitespace-pre-wrap max-h-[920px] overflow-y-auto pr-2"
             >
-              {finalAnswer}
+              {displayAnswer}
             </motion.p>
           </div>
         ) : status === "active" ? (

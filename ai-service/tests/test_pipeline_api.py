@@ -88,6 +88,41 @@ class PipelineApiTests(unittest.TestCase):
         quality_response = self.client.get("/api/pipeline/does-not-exist/quality")
         self.assertEqual(quality_response.status_code, 404)
 
+    def test_sarvam_transform_and_export_endpoints(self) -> None:
+        with patch.object(pipeline.asyncio, "sleep", new=AsyncMock(return_value=None)):
+            start_response = self.client.post(
+                "/api/pipeline/start",
+                json={"query": "Compare laptop-first versus cloud-first development workflows."},
+            )
+            self.assertEqual(start_response.status_code, 200)
+            session_id = start_response.json()["sessionId"]
+
+            with self.client.stream("GET", f"/api/pipeline/{session_id}/stream") as response:
+                self.assertEqual(response.status_code, 200)
+                _ = self._collect_sse_frames(response.iter_lines())
+
+        transform_response = self.client.post(
+            f"/api/pipeline/{session_id}/sarvam-transform",
+            json={"targetLanguageCode": "hi-IN", "instruction": "make it concise"},
+        )
+        self.assertEqual(transform_response.status_code, 200)
+        transform_payload = transform_response.json()
+        self.assertEqual(transform_payload["sessionId"], session_id)
+        self.assertIn("text", transform_payload)
+        self.assertIn("languageCode", transform_payload)
+
+        export_response = self.client.post(
+            f"/api/pipeline/{session_id}/export-docx",
+            json={"targetLanguageCode": "hi-IN", "instruction": "keep bullets"},
+        )
+        self.assertEqual(export_response.status_code, 200)
+        self.assertEqual(
+            export_response.headers.get("content-type"),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        self.assertIn("attachment; filename=", export_response.headers.get("content-disposition", ""))
+        self.assertGreater(len(export_response.content), 100)
+
     @staticmethod
     def _collect_sse_frames(lines: object) -> list[dict[str, str]]:
         frames: list[dict[str, str]] = []

@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Iterable
-from urllib.parse import parse_qs, unquote, urljoin, urlparse
+from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse
 
 import httpx
 
@@ -140,6 +140,17 @@ class InternetResearcher:
             max(self._max_sources_per_domain, workflow_profile.required_source_mix),
             workflow_profile,
         )
+
+        if len(sources) < 2:
+            fallback = await self._wikipedia_fallback_sources(query, workflow_profile)
+            merged = list(sources)
+            seen_urls = {item.url for item in merged}
+            for item in fallback:
+                if item.url in seen_urls:
+                    continue
+                merged.append(item)
+                seen_urls.add(item.url)
+            sources = _assign_source_ids(merged[: max(self._max_sources, workflow_profile.max_sources)])
 
         return ResearchContext(
             query=query,
@@ -313,6 +324,70 @@ class InternetResearcher:
             seen.add(key)
             deduped.append(term)
         return deduped
+
+    async def _wikipedia_fallback_sources(
+        self,
+        query: str,
+        workflow_profile: ResearchWorkflowProfile,
+    ) -> list[ResearchSource]:
+        params = {
+            "action": "query",
+            "list": "search",
+            "srsearch": query,
+            "format": "json",
+            "utf8": "1",
+            "srlimit": str(max(3, min(6, workflow_profile.max_sources))),
+        }
+        async with httpx.AsyncClient(
+            timeout=self._timeout_seconds,
+            follow_redirects=True,
+            headers={"User-Agent": "HexamindResearch/1.0 (+https://example.com)"},
+        ) as client:
+            try:
+                response = await client.get("https://en.wikipedia.org/w/api.php", params=params)
+                response.raise_for_status()
+                payload = response.json()
+            except Exception:
+                return []
+
+            entries = payload.get("query", {}).get("search", [])
+            if not isinstance(entries, list):
+                return []
+
+            sources: list[ResearchSource] = []
+            for entry in entries:
+                title = str(entry.get("title", "")).strip()
+                snippet = _clean_text(str(entry.get("snippet", "")))
+                if not title:
+                    continue
+                page_url = f"https://en.wikipedia.org/wiki/{quote(title.replace(' ', '_'))}"
+                summary_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{quote(title)}"
+                try:
+                    summary_response = await client.get(summary_url)
+                    summary_response.raise_for_status()
+                    summary_payload = summary_response.json()
+                    extract = _clean_text(str(summary_payload.get("extract", "")))
+                except Exception:
+                    extract = snippet
+
+                excerpt = _extract_evidence_excerpt(extract or snippet, query, workflow_profile.evidence_excerpt_limit)
+                if not excerpt:
+                    continue
+
+                sources.append(
+                    ResearchSource(
+                        id="",
+                        title=_trim_text(title, 140),
+                        url=page_url,
+                        domain="en.wikipedia.org",
+                        snippet=_trim_text(snippet, 220),
+                        excerpt=excerpt,
+                        authority="high",
+                        credibility_score=0.66,
+                    )
+                )
+
+            return sources
 
 
 def format_research_context(context: ResearchContext | None) -> str:
@@ -535,8 +610,12 @@ def _select_sources_with_diversity(
         selected.append(source)
         domain_counts[source.domain] = domain_counts.get(source.domain, 0) + 1
 
+    return _assign_source_ids(selected)
+
+
+def _assign_source_ids(sources: list[ResearchSource]) -> list[ResearchSource]:
     result: list[ResearchSource] = []
-    for idx, source in enumerate(selected, start=1):
+    for idx, source in enumerate(sources, start=1):
         result.append(
             ResearchSource(
                 id=f"S{idx}",
@@ -549,7 +628,6 @@ def _select_sources_with_diversity(
                 credibility_score=source.credibility_score,
             )
         )
-
     return result
 
 

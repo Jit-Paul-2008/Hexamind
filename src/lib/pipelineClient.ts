@@ -21,6 +21,21 @@ export interface PipelineClientOptions {
   eventSourceImpl?: new (url: string) => EventSource;
 }
 
+export interface SarvamTransformPayload {
+  targetLanguageCode: string;
+  instruction?: string;
+}
+
+export interface SarvamTransformResponse {
+  sessionId: string;
+  text: string;
+  languageCode: string;
+  instructionApplied: boolean;
+  provider: string;
+  fallback: boolean;
+  notes: string[];
+}
+
 export async function startPipelineRun(
   query: string,
   handlers: PipelineRunHandlers,
@@ -103,6 +118,9 @@ export async function startPipelineRun(
     source.addEventListener("error", onMessage as EventListener);
 
     source.onerror = () => {
+      if (pipelineCompleted) {
+        return;
+      }
       handlers.setNodeStatus("output", "error");
       source.close();
     };
@@ -124,13 +142,84 @@ async function fetchQualityReport(
   >
 ): Promise<void> {
   try {
-    const response = await fetchImpl(`${apiBaseUrl}/api/pipeline/${sessionId}/quality`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch quality report (${response.status})`);
+    let attempts = 0;
+    let payload: PipelineQualityReport | null = null;
+
+    while (attempts < 3 && !payload) {
+      attempts += 1;
+      const response = await fetchImpl(`${apiBaseUrl}/api/pipeline/${sessionId}/quality`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch quality report (${response.status})`);
+      }
+      const candidate = (await response.json()) as PipelineQualityReport;
+      if (candidate.status === "ready" || attempts >= 3) {
+        payload = candidate;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
-    const payload = (await response.json()) as PipelineQualityReport;
+
+    if (!payload) {
+      throw new Error("Quality report did not become ready");
+    }
+
     handlers.setQualityReport(payload);
   } catch {
     handlers.setQualityError();
   }
+}
+
+export async function transformReportWithSarvam(
+  sessionId: string,
+  payload: SarvamTransformPayload,
+  options: Omit<PipelineClientOptions, "eventSourceImpl"> = {}
+): Promise<SarvamTransformResponse> {
+  const apiBaseUrl =
+    options.apiBaseUrl ??
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
+    "http://localhost:8000";
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const response = await fetchImpl(
+    `${apiBaseUrl}/api/pipeline/${sessionId}/sarvam-transform`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Sarvam transform failed (${response.status})`);
+  }
+
+  return (await response.json()) as SarvamTransformResponse;
+}
+
+export async function exportReportDocx(
+  sessionId: string,
+  payload: SarvamTransformPayload,
+  options: Omit<PipelineClientOptions, "eventSourceImpl"> = {}
+): Promise<{ blob: Blob; filename: string }> {
+  const apiBaseUrl =
+    options.apiBaseUrl ??
+    process.env.NEXT_PUBLIC_API_BASE_URL ??
+    "http://localhost:8000";
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const response = await fetchImpl(`${apiBaseUrl}/api/pipeline/${sessionId}/export-docx`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`DOCX export failed (${response.status})`);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("content-disposition") || "";
+  const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+  const filename = filenameMatch?.[1] || `hexamind-${sessionId}.docx`;
+  return { blob, filename };
 }

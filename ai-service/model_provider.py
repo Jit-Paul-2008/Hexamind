@@ -67,54 +67,91 @@ class DeterministicPipelineModelProvider:
         research: ResearchContext | None = None,
     ) -> str:
         q = query.strip()
-        source_block = self._source_block(research)
         source_inventory = source_inventory_markdown(research)
-        support = outputs.get("advocate", "")
-        risk = outputs.get("skeptic", "")
-        synthesis = outputs.get("synthesiser", "")
-        outlook = outputs.get("oracle", "")
-        research_findings = self._research_findings(research)
-        tool_analysis = self._tool_analysis_markdown(research)
+        evidence_snapshot = self._evidence_snapshot_markdown(research)
+        claim_map = self._claim_map_markdown(outputs, research)
+        recommendation = self._decision_recommendation(outputs, research)
+        uncertainty = self._uncertainty_markdown(research)
         return (
             "## Executive Summary\n"
-            f"The decision on '{q}' should be treated as a bounded research problem: gather current evidence, separate primary from secondary sources, and validate the recommendation through staged execution.\n\n"
-            "## 1. Research Question and Scope\n"
+            f"This report addresses '{q}' using live retrieval evidence when available. It combines supportive and skeptical views, then converts them into a testable plan rather than a generic recommendation.\n\n"
+            "## Research Scope\n"
             f"- Core question: {q}\n"
-            "- Scope: current public evidence, implementation implications, and decision risks.\n"
-            "- Method: internet search, page retrieval, source comparison, and structured synthesis.\n\n"
-            "## 2. Evidence Snapshot\n"
-            f"- Opportunity case: {self._extract_section_summary(support, '## Strategic Upside', '## Supporting Logic')}\n"
-            f"- Risk case: {self._extract_section_summary(risk, '## Primary Failure Modes', '## Risk Severity')}\n"
-            f"- Integrated position: {self._extract_section_summary(synthesis, '## Tradeoff Resolution', '## Decision Rule')}\n"
-            f"- Forecast: {self._extract_section_summary(outlook, '## Most Likely Outcome (60%)', '## Upside Scenario (25%)')}\n\n"
-            "## 3. Comparative Analysis\n"
-            "### 3.1 What the evidence supports\n"
-            f"- The live source pack indicates where the question is discussed on the web and which pages are directly relevant. {source_block}\n"
-            "- The strongest conclusion is not absolute certainty; it is a controlled path that preserves optionality.\n"
-            "- The most defensible move is a pilot with measurable gates, not unconstrained scale.\n\n"
-            "### 3.2 Tool-by-tool assessment\n"
-            f"{tool_analysis}\n"
-            "### 3.3 Where uncertainty remains\n"
-            "- Source quality can vary widely across summaries, forums, and vendor material.\n"
-            "- If current public evidence is thin, the report should explicitly label those gaps rather than infer them.\n"
-            "- Operational risk remains material whenever ownership, dependencies, or measurement are unclear.\n\n"
-            "## 4. Missing Steps in the Current App\n"
-            f"{research_findings}\n\n"
-            "## 5. Recommendation\n"
-            "1. Proceed only with a narrow pilot and written success criteria.\n"
-            "2. Require one owner per risk category and one metric per success claim.\n"
-            "3. Expand only after the pilot meets the baseline and no critical triggers are active.\n\n"
-            "## 6. 30-Day Action Plan\n"
+            "- Method: retrieval-first synthesis with explicit citations and uncertainty disclosure.\n"
+            "- Output objective: a recommendation that can be validated in staged execution.\n\n"
+            "## Evidence Snapshot\n"
+            f"{evidence_snapshot}\n\n"
+            "## Analytical Breakdown\n"
+            "### Cross-Agent Synthesis\n"
+            f"- Opportunity case: {self._extract_section_summary(outputs.get('advocate', ''), '## Strategic Upside', '## Supporting Logic')}\n"
+            f"- Risk case: {self._extract_section_summary(outputs.get('skeptic', ''), '## Primary Failure Modes', '## Risk Severity')}\n"
+            f"- Integrated position: {self._extract_section_summary(outputs.get('synthesiser', ''), '## Tradeoff Resolution', '## Decision Rule')}\n"
+            f"- Forecast signal: {self._extract_section_summary(outputs.get('oracle', ''), '## Most Likely Outcome (60%)', '## Upside Scenario (25%)')}\n\n"
+            "### Claim-to-Citation Map\n"
+            f"{claim_map}\n\n"
+            "### Contradictions and Uncertainty\n"
+            f"{uncertainty}\n\n"
+            "## Decision Recommendation\n"
+            f"{recommendation}\n\n"
+            "## Action Plan\n"
             "- Week 1: confirm baseline, collect sources, and document assumptions.\n"
             "- Week 2: run a constrained pilot or desk evaluation.\n"
             "- Week 3: review performance, risks, and source contradictions.\n"
             "- Week 4: decide whether to scale, hold, or stop.\n\n"
-            "## 7. Confidence and Open Questions\n"
-            "- Confidence: Moderate, because the recommendation is grounded but still depends on the quality of current web evidence.\n"
-            "- Open questions: whether the newest sources materially change the baseline, and which external dependencies are most fragile.\n\n"
-            "## 8. Source Inventory\n"
+            "## Confidence and Open Questions\n"
+            "- Confidence: Moderate, and increases when multiple independent domains agree on the same claim.\n"
+            "- Open questions: what new evidence is likely to invalidate the current recommendation, and how quickly that can be detected in production.\n\n"
+            "## Source Inventory\n"
             f"{source_inventory}"
         )
+
+    def _evidence_snapshot_markdown(self, research: ResearchContext | None) -> str:
+        if not research or not research.sources:
+            return "- No live sources were retrieved. This report uses structured reasoning only and should be treated as provisional."
+
+        lines: list[str] = []
+        for source in research.sources[:6]:
+            lines.append(
+                f"- [{source.id}] {source.title} ({source.domain}) - authority: {source.authority}, credibility: {source.credibility_score:.2f}"
+            )
+            lines.append(f"  - Evidence: {source.excerpt}")
+        return "\n".join(lines)
+
+    def _claim_map_markdown(self, outputs: dict[str, str], research: ResearchContext | None) -> str:
+        if not research or not research.sources:
+            return "- Claim: Evidence is currently limited. Citation: n/a"
+
+        advocate_claim = self._extract_section_summary(outputs.get("advocate", ""), "## Strategic Upside", "## Supporting Logic")
+        skeptic_claim = self._extract_section_summary(outputs.get("skeptic", ""), "## Primary Failure Modes", "## Risk Severity")
+        synthesis_claim = self._extract_section_summary(outputs.get("synthesiser", ""), "## Tradeoff Resolution", "## Decision Rule")
+        outlook_claim = self._extract_section_summary(outputs.get("oracle", ""), "## Most Likely Outcome (60%)", "## Upside Scenario (25%)")
+
+        top = research.sources[:4]
+        lines = [
+            f"- Claim: {advocate_claim} Citation: [{top[0].id}]",
+            f"- Claim: {skeptic_claim} Citation: [{top[min(1, len(top) - 1)].id}]",
+            f"- Claim: {synthesis_claim} Citation: [{top[min(2, len(top) - 1)].id}]",
+            f"- Claim: {outlook_claim} Citation: [{top[min(3, len(top) - 1)].id}]",
+        ]
+        return "\n".join(lines)
+
+    def _decision_recommendation(self, outputs: dict[str, str], research: ResearchContext | None) -> str:
+        confidence_basis = self._source_block(research)
+        summary = self._extract_section_summary(outputs.get("synthesiser", ""), "## Decision Rule", "## Guardrails")
+        return (
+            "1. Run a staged pilot with explicit success/failure gates.\n"
+            "2. Require each key claim to map to at least one source ID and one measurable KPI.\n"
+            "3. Escalate only when two consecutive review cycles show stable metrics and no unresolved contradictions.\n"
+            f"4. Current confidence basis: {confidence_basis}.\n"
+            f"5. Decision rule from synthesis: {summary}"
+        )
+
+    def _uncertainty_markdown(self, research: ResearchContext | None) -> str:
+        if not research or not research.sources:
+            return "- Uncertainty is high because there are no retrieved live sources to validate external claims."
+        if len(research.sources) < 3:
+            return "- Source diversity is limited; prioritize collecting additional independent domains before scaling decisions."
+        return "- Main uncertainty lies in rapidly changing evidence and conflicting benchmarks across domains; treat any recommendation as conditional."
 
     def _structured_advocate(self, query: str, source_block: str) -> str:
         return (

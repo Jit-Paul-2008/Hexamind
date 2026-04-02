@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
@@ -9,10 +10,18 @@ load_dotenv()
 
 from agents import AGENTS
 from pipeline import pipeline_service
-from schemas import Agent, StartPipelineRequest, StartPipelineResponse
+from sarvam_service import SarvamService
+from schemas import (
+    Agent,
+    SarvamTransformRequest,
+    SarvamTransformResponse,
+    StartPipelineRequest,
+    StartPipelineResponse,
+)
 
 
 app = FastAPI(title="Hexamind AI Service", version="1.0.0")
+sarvam_service = SarvamService()
 
 app.add_middleware(
     CORSMiddleware,
@@ -64,3 +73,62 @@ def pipeline_quality(session_id: str) -> dict[str, object]:
         return pipeline_service.get_quality_report(session_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Unknown pipeline session")
+
+
+@app.post("/api/pipeline/{session_id}/sarvam-transform", response_model=SarvamTransformResponse)
+async def pipeline_sarvam_transform(
+    session_id: str,
+    payload: SarvamTransformRequest,
+) -> SarvamTransformResponse:
+    try:
+        report_text = pipeline_service.get_final_report(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Unknown pipeline session")
+    if not report_text.strip():
+        raise HTTPException(status_code=400, detail="No completed report found for this session")
+
+    result = await sarvam_service.transform_report(
+        text=report_text,
+        target_language_code=payload.targetLanguageCode,
+        instruction=payload.instruction,
+    )
+    return SarvamTransformResponse(
+        sessionId=session_id,
+        text=result.text,
+        languageCode=result.language_code,
+        instructionApplied=result.instruction_applied,
+        provider=result.provider,
+        fallback=result.fallback,
+        notes=list(result.notes),
+    )
+
+
+@app.post("/api/pipeline/{session_id}/export-docx")
+async def pipeline_export_docx(
+    session_id: str,
+    payload: SarvamTransformRequest,
+) -> Response:
+    try:
+        report_text = pipeline_service.get_final_report(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Unknown pipeline session")
+    if not report_text.strip():
+        raise HTTPException(status_code=400, detail="No completed report found for this session")
+
+    docx_bytes, result = await sarvam_service.build_docx(
+        title=f"Hexamind Research Report - {session_id}",
+        text=report_text,
+        target_language_code=payload.targetLanguageCode,
+        instruction=payload.instruction,
+    )
+    filename = f"hexamind-{session_id}-{result.language_code}.docx"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-Hexamind-Transform-Provider": result.provider,
+        "X-Hexamind-Transform-Fallback": str(result.fallback).lower(),
+    }
+    return Response(
+        content=docx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers=headers,
+    )

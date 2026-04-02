@@ -23,6 +23,21 @@ class StartPipelineResponse(BaseModel):
     sessionId: str
 
 
+class SarvamTransformRequest(BaseModel):
+    targetLanguageCode: str = Field(min_length=2, max_length=20)
+    instruction: str = Field(default="", max_length=2000)
+
+
+class SarvamTransformResponse(BaseModel):
+    sessionId: str
+    text: str
+    languageCode: str
+    instructionApplied: bool
+    provider: str
+    fallback: bool
+    notes: list[str] = Field(default_factory=list)
+
+
 class PipelineEventType(str, Enum):
     AGENT_START = "agent_start"
     AGENT_CHUNK = "agent_chunk"
