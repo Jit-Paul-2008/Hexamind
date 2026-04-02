@@ -11,6 +11,7 @@ from typing import Awaitable, Callable, Protocol, TypeVar
 import httpx
 
 from research import ResearchContext, format_research_context, source_inventory_markdown
+from prompt_registry import prompt_fingerprint, prompt_registry_snapshot
 
 
 T = TypeVar("T")
@@ -221,6 +222,46 @@ def _compressed_research_block(research: ResearchContext | None, char_budget: in
 
     compressed = "\n".join(prefix + source_lines)
     return compressed[:char_budget].rstrip()
+
+
+def _deterministic_prompt_text(agent_id: str) -> str:
+    prompts = {
+        "advocate": (
+            "## Opportunity Thesis\n"
+            "Produce a concise research-grounded advocate response with strategic upside, supporting logic, and an actionable next step."
+        ),
+        "skeptic": (
+            "## Risk Thesis\n"
+            "Produce a concise research-grounded skeptic response with failure modes, severity, and mitigation requirements."
+        ),
+        "synthesiser": (
+            "## Integrated Assessment\n"
+            "Produce a concise synthesis that resolves tradeoffs, gives a decision rule, and lists guardrails."
+        ),
+        "oracle": (
+            "## Scenario Outlook\n"
+            "Produce a concise forward-looking assessment with likely, upside, and downside scenarios plus leading indicators."
+        ),
+        "final": (
+            "## Executive Summary\n"
+            "Produce a thesis-style report with evidence snapshot, claim graph, contradictions, recommendation, action plan, and source inventory."
+        ),
+    }
+    return prompts.get(agent_id, prompts["final"])
+
+
+def _provider_agent_prompt(provider_name: str, agent_id: str) -> str:
+    if provider_name == "openrouter":
+        return _deterministic_prompt_text(agent_id)
+    if provider_name == "local":
+        return _deterministic_prompt_text(agent_id)
+    if provider_name == "gemini":
+        return _deterministic_prompt_text(agent_id)
+    return _deterministic_prompt_text(agent_id)
+
+
+def _provider_final_prompt(provider_name: str) -> str:
+    return _deterministic_prompt_text("final")
 
 
 async def _invoke_with_resilience(
@@ -610,6 +651,15 @@ class DeterministicPipelineModelProvider:
         )
 
     def diagnostics(self) -> dict[str, str | int | bool]:
+        registry = prompt_registry_snapshot(
+            [
+                prompt_fingerprint("advocate", _provider_agent_prompt(self.configured_provider, "advocate")),
+                prompt_fingerprint("skeptic", _provider_agent_prompt(self.configured_provider, "skeptic")),
+                prompt_fingerprint("synthesiser", _provider_agent_prompt(self.configured_provider, "synthesiser")),
+                prompt_fingerprint("oracle", _provider_agent_prompt(self.configured_provider, "oracle")),
+                prompt_fingerprint("final", _provider_final_prompt(self.configured_provider)),
+            ]
+        )
         return {
             "configuredProvider": self.configured_provider,
             "activeProvider": "deterministic",
@@ -617,6 +667,8 @@ class DeterministicPipelineModelProvider:
             "isFallback": self.configured_provider != "deterministic",
             "fallbackCount": 0,
             "lastError": self.reason,
+            "promptRegistryVersion": registry["registryVersion"],
+            "promptRegistrySize": len(registry["prompts"]),
         }
 
 
@@ -764,6 +816,15 @@ class GeminiPipelineModelProvider:
 
     def diagnostics(self) -> dict[str, str | int | bool]:
         breaker_state = self._health.snapshot()
+        registry = prompt_registry_snapshot(
+            [
+                prompt_fingerprint("advocate", _provider_agent_prompt("gemini", "advocate")),
+                prompt_fingerprint("skeptic", _provider_agent_prompt("gemini", "skeptic")),
+                prompt_fingerprint("synthesiser", _provider_agent_prompt("gemini", "synthesiser")),
+                prompt_fingerprint("oracle", _provider_agent_prompt("gemini", "oracle")),
+                prompt_fingerprint("final", _provider_final_prompt("gemini")),
+            ]
+        )
         return {
             "configuredProvider": "gemini",
             "activeProvider": "deterministic-fallback" if self._health.is_open() else "gemini",
@@ -771,6 +832,8 @@ class GeminiPipelineModelProvider:
             "isFallback": self._fallback_count > 0,
             "fallbackCount": self._fallback_count,
             "lastError": self._last_error,
+            "promptRegistryVersion": registry["registryVersion"],
+            "promptRegistrySize": len(registry["prompts"]),
             **breaker_state,
         }
 
@@ -941,6 +1004,15 @@ class OpenRouterPipelineModelProvider:
 
     def diagnostics(self) -> dict[str, str | int | bool]:
         breaker_state = self._health.snapshot()
+        registry = prompt_registry_snapshot(
+            [
+                prompt_fingerprint("advocate", _provider_agent_prompt("openrouter", "advocate")),
+                prompt_fingerprint("skeptic", _provider_agent_prompt("openrouter", "skeptic")),
+                prompt_fingerprint("synthesiser", _provider_agent_prompt("openrouter", "synthesiser")),
+                prompt_fingerprint("oracle", _provider_agent_prompt("openrouter", "oracle")),
+                prompt_fingerprint("final", _provider_final_prompt("openrouter")),
+            ]
+        )
         return {
             "configuredProvider": "openrouter",
             "activeProvider": "deterministic-fallback" if self._health.is_open() else "openrouter",
@@ -950,6 +1022,8 @@ class OpenRouterPipelineModelProvider:
             "fallbackCount": self._fallback_count,
             "lastError": self._last_error,
             "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
+            "promptRegistryVersion": registry["registryVersion"],
+            "promptRegistrySize": len(registry["prompts"]),
             **breaker_state,
         }
 
@@ -1148,6 +1222,15 @@ class LocalPipelineModelProvider:
 
     def diagnostics(self) -> dict[str, str | int | bool]:
         breaker_state = self._health.snapshot()
+        registry = prompt_registry_snapshot(
+            [
+                prompt_fingerprint("advocate", _provider_agent_prompt("local", "advocate")),
+                prompt_fingerprint("skeptic", _provider_agent_prompt("local", "skeptic")),
+                prompt_fingerprint("synthesiser", _provider_agent_prompt("local", "synthesiser")),
+                prompt_fingerprint("oracle", _provider_agent_prompt("local", "oracle")),
+                prompt_fingerprint("final", _provider_final_prompt("local")),
+            ]
+        )
         return {
             "configuredProvider": "local",
             "activeProvider": "local" if self._local_available and not self._health.is_open() else "deterministic-fallback",
@@ -1158,6 +1241,8 @@ class LocalPipelineModelProvider:
             "fallbackCount": self._fallback_count,
             "lastError": self._last_error,
             "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
+            "promptRegistryVersion": registry["registryVersion"],
+            "promptRegistrySize": len(registry["prompts"]),
             **breaker_state,
         }
 

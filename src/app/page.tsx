@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import InputBar from "@/components/ui/InputBar";
 import StatusIndicator from "@/components/ui/StatusIndicator";
+import TelemetryPanel from "@/components/ui/TelemetryPanel";
 
 // CSR-only — ReactFlow uses browser APIs
 const HexamindCanvas = dynamic(
@@ -36,6 +37,9 @@ export default function Home() {
 
       {/* ── Status indicator (top-right) ── */}
       <StatusIndicator />
+
+      {/* ── Telemetry panel (bottom-left) ── */}
+      <TelemetryPanel />
 
       {/* ── Centre vignette — subtle radial glow ── */}
       <div className="absolute inset-0 z-0 pointer-events-none flex items-center justify-center">
