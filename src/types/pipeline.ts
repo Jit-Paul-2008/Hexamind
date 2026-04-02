@@ -22,7 +22,6 @@ export interface PipelineSession {
 }
 
 // Backend SSE event shape — matches what the FastAPI backend will emit
-// TODO(backend): sync with ai-service/schemas.py
 export interface PipelineEvent {
   type: "agent_start" | "agent_chunk" | "agent_done" | "pipeline_done" | "error";
   agentId: string;

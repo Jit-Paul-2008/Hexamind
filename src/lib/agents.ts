@@ -1,5 +1,5 @@
-// TODO(backend): replace static array with GET /api/agents when backend is ready
-// Agent type mirrors the backend schema — keep in sync with server/models/agent.go
+// Agent metadata mirrors backend defaults from ai-service/agents.py.
+// Keeping a local copy ensures the graph layout can render immediately.
 
 export type AgentShape = "tetrahedron" | "icosahedron" | "dodecahedron" | "box";
 

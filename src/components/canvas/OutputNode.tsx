@@ -4,7 +4,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { motion } from "framer-motion";
 import { usePipelineStore } from "@/lib/store";
 
-export default function OutputNode({ data }: NodeProps) {
+export default function OutputNode({}: NodeProps) {
   const status = usePipelineStore((s) => s.nodeStatuses["output"]);
   const finalAnswer = usePipelineStore((s) => s.session?.finalAnswer || "");
   const isDone = status === "done";

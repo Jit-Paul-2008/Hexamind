@@ -4,9 +4,8 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { motion } from "framer-motion";
 import { usePipelineStore } from "@/lib/store";
 
-export default function InputNode({ data }: NodeProps) {
+export default function InputNode({}: NodeProps) {
   const session = usePipelineStore((s) => s.session);
-  const status = usePipelineStore((s) => s.nodeStatuses["input"]);
 
   const hasQuery = !!session?.query;
 

@@ -1,43 +1,21 @@
-# ARIA & NEXT.js UI Roadmap
+# Hexamind Delivery Roadmap
 
-This document outlines the architectural plan to support a 3D-heavy, infinite scroll website integrated with the ARIA AI structure.
+## Current State (Implemented)
 
-## Architecture Decision
+1. FastAPI backend is live with health, agents, pipeline start, and SSE stream endpoints.
+2. Frontend single-window 4-agent UI is wired to the backend streaming pipeline.
+3. Build and lint pass on the frontend.
+4. Repository cleanup done for stale placeholders and obsolete window docs.
 
-We have decided on a **decoupled architecture**:
-1. **Frontend**: Next.js + React Three Fiber (for 3D) + Framer Motion (for animations).
-2. **Backend**: Python (FastAPI/LangGraph) to run the ARIA AI agents.
+## Immediate Next Steps
 
-## Repository Structure
+1. Add unit tests for backend pipeline event sequencing.
+2. Add frontend e2e test for full pipeline run from query to final output.
+3. Add retry/reconnect logic for SSE interruptions.
+4. Add persistent storage for session history.
 
-The following directories have been created to support this architecture:
-- `src/components/canvas/` (React Three Fiber components)
-- `src/components/ui/` (2D components, forms, infinite scroll lists)
-- `src/hooks/api/` (React Query/SWR hooks for fetching from python backend)
-- `public/models/` (.gltf / .glb files)
-- `public/textures/` (materials)
-- `ai-service/` (Root directory for ARIA Python code)
+## Optional Enhancements
 
-## Development Options (Next Session)
-
-When development begins, we can select one of these three tracks:
-
-### Option A: The "Frontend-First" Track 
-Focus on the visual "wow" factor first.
-1. Install `three`, `@react-three/fiber`, `@react-three/drei`, and `framer-motion`.
-2. Build a basic 3D scene (e.g., a floating interactive object).
-3. Implement a dummy infinite scroll list overlaid on the 3D background.
-4. Connect the backend later.
-
-### Option B: The "AI-Backend First" Track (ARIA strict)
-Focus on the intelligence first, UI later.
-1. Initialize the `ai-service/` directory with `requirements.txt`.
-2. Build the Advocate and Skeptic LangGraph agents.
-3. Expose them via a FastAPI endpoint.
-4. Build the 3D Next.js frontend to consume these endpoints.
-
-### Option C: The "Full-Stack Slice" Track
-Build one feature from front to back.
-1. Setup Next.js.
-2. Setup FastAPI.
-3. Create a single 3D animated search bar that triggers an AI agent and streams the first response into an infinite scroll list.
+1. Replace deterministic agent text with LLM-backed responses.
+2. Add authentication and rate limiting for public deployment.
+3. Add observability (structured logs + trace ids per session).

@@ -1,10 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Zustand store — single source of truth for the processing pipeline
-// TODO(backend): replace mock flow with real WebSocket/SSE connection
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { create } from "zustand";
-import type { NodeStatus, PipelineSession, AgentOutput } from "@/types/pipeline";
+import type { NodeStatus, PipelineSession } from "@/types/pipeline";
 import { AGENTS } from "@/lib/agents";
 
 interface PipelineStore {
@@ -25,7 +24,7 @@ const initialStatuses = (): Record<string, NodeStatus> => {
   return s;
 };
 
-export const usePipelineStore = create<PipelineStore>((set, get) => ({
+export const usePipelineStore = create<PipelineStore>((set) => ({
   session: null,
   nodeStatuses: initialStatuses(),
 
