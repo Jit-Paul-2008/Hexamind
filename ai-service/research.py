@@ -25,6 +25,8 @@ class ResearchSource:
     excerpt: str
     authority: str
     credibility_score: float
+    recency_score: float = 0.0
+    discovery_pass: str = ""
 
 
 @dataclass(frozen=True)
@@ -32,8 +34,10 @@ class ResearchContext:
     query: str
     workflow_profile: ResearchWorkflowProfile
     search_terms: tuple[str, ...]
+    search_passes: tuple[str, ...]
     sources: tuple[ResearchSource, ...]
     generated_at: float
+    contradictions: tuple[tuple[str, str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -131,8 +135,9 @@ class InternetResearcher:
 
     async def research(self, query: str) -> ResearchContext:
         workflow_profile = build_workflow_profile(query)
-        search_terms = self._build_search_terms(query, workflow_profile)
-        hits = await self._search_hits(query, search_terms, workflow_profile)
+        search_passes = self._build_search_passes(query, workflow_profile)
+        search_terms = self._build_search_terms(query, workflow_profile, search_passes)
+        hits = await self._search_hits(query, search_terms, workflow_profile, search_passes)
         candidates = await self._build_candidates(query, hits, workflow_profile)
         sources = _select_sources_with_diversity(
             candidates,
@@ -140,6 +145,7 @@ class InternetResearcher:
             max(self._max_sources_per_domain, workflow_profile.required_source_mix),
             workflow_profile,
         )
+        contradictions = tuple(_detect_source_contradictions(query, sources))
 
         if len(sources) < 2:
             fallback = await self._wikipedia_fallback_sources(query, workflow_profile)
@@ -156,8 +162,10 @@ class InternetResearcher:
             query=query,
             workflow_profile=workflow_profile,
             search_terms=tuple(search_terms),
+            search_passes=tuple(search_passes),
             sources=tuple(sources),
             generated_at=time.time(),
+            contradictions=contradictions,
         )
 
     async def _search_hits(
@@ -165,6 +173,7 @@ class InternetResearcher:
         query: str,
         search_terms: Iterable[str],
         workflow_profile: ResearchWorkflowProfile,
+        search_passes: Iterable[str],
     ) -> list[SearchHit]:
         results: list[SearchHit] = []
         max_terms = max(self._max_terms, workflow_profile.max_terms)
@@ -174,51 +183,41 @@ class InternetResearcher:
             follow_redirects=True,
             headers={"User-Agent": "HexamindResearch/1.0 (+https://example.com)"},
         ) as client:
-            for term in list(search_terms)[: max_terms]:
-                try:
-                    response = await client.get(
-                        "https://html.duckduckgo.com/html/",
-                        params={"q": term},
-                    )
-                    response.raise_for_status()
-                except httpx.HTTPError:
-                    continue
-
-                parser = _DuckDuckGoResultParser()
-                parser.feed(response.text)
-                for hit in parser.results[: max(self._max_hits_per_term, workflow_profile.max_hits_per_term)]:
-                    score = _hit_relevance(query, term, hit.title, hit.snippet, hit.url)
-                    if score < min_relevance_score:
+            ordered_terms = list(search_terms)[: max_terms]
+            passes = list(search_passes) or ["evidence"]
+            for pass_name in passes:
+                for term in ordered_terms:
+                    if not _term_matches_pass(term, pass_name):
                         continue
-                    results.append(
-                        SearchHit(
-                            title=hit.title,
-                            url=hit.url,
-                            snippet=hit.snippet,
-                            relevance_score=score,
+                    try:
+                        response = await client.get(
+                            "https://html.duckduckgo.com/html/",
+                            params={"q": term},
                         )
-                    )
+                        response.raise_for_status()
+                    except httpx.HTTPError:
+                        continue
 
-                if len(results) >= max(self._max_sources, workflow_profile.max_sources) * 12:
-                    break
+                    parser = _DuckDuckGoResultParser()
+                    parser.feed(response.text)
+                    for hit in parser.results[: max(self._max_hits_per_term, workflow_profile.max_hits_per_term)]:
+                        score = _hit_relevance(query, term, hit.title, hit.snippet, hit.url)
+                        score *= _pass_weight(pass_name)
+                        if score < min_relevance_score:
+                            continue
+                        results.append(
+                            SearchHit(
+                                title=hit.title,
+                                url=hit.url,
+                                snippet=hit.snippet,
+                                relevance_score=score,
+                            )
+                        )
 
-        unique: list[SearchHit] = []
-        seen_urls: set[str] = set()
-        for hit in sorted(results, key=lambda item: item.relevance_score, reverse=True):
-            canonical_url = _canonicalize_url(hit.url)
-            if canonical_url in seen_urls:
-                continue
-            seen_urls.add(canonical_url)
-            unique.append(
-                SearchHit(
-                    title=hit.title,
-                    url=canonical_url,
-                    snippet=hit.snippet,
-                    relevance_score=hit.relevance_score,
-                )
-            )
+                    if len(results) >= max(self._max_sources, workflow_profile.max_sources) * 12:
+                        break
 
-        return unique
+        return _dedupe_hits(results)
 
     async def _build_candidates(
         self,
@@ -284,12 +283,12 @@ class InternetResearcher:
             excerpt=excerpt,
             authority=authority,
             credibility_score=credibility_score,
+            recency_score=_recency_score(canonical_url, hit.title, hit.snippet, page_text),
+            discovery_pass=getattr(hit, "discovery_pass", ""),
         )
-        retrieval_score = _retrieval_score(hit.relevance_score, credibility_score, excerpt)
-        if workflow_profile.requires_primary_sources and authority == "primary":
-            retrieval_score += 0.12
-        if workflow_profile.audience in {"phd", "professor"} and authority == "high":
-            retrieval_score += 0.06
+        retrieval_score = _retrieval_score(hit.relevance_score, credibility_score, source.recency_score, excerpt)
+        retrieval_score += _authority_bonus(authority, workflow_profile.requires_primary_sources, workflow_profile.audience)
+        retrieval_score += _domain_trust_bonus(domain)
         return retrieval_score, source
 
     async def _fetch_page_text(self, client: httpx.AsyncClient, url: str) -> str:
@@ -384,6 +383,8 @@ class InternetResearcher:
                         excerpt=excerpt,
                         authority="high",
                         credibility_score=0.66,
+                        recency_score=_recency_score(page_url, title, snippet, extract),
+                        discovery_pass="fallback",
                     )
                 )
 
@@ -411,11 +412,16 @@ def format_research_context(context: ResearchContext | None) -> str:
                 f"[{source.id}] {source.title}",
                 f"URL: {source.url}",
                 f"Domain: {source.domain} | Authority: {source.authority} | Credibility: {source.credibility_score:.2f}",
+                f"Pass: {source.discovery_pass or 'n/a'} | Recency: {source.recency_score:.2f}",
                 f"Snippet: {source.snippet or 'n/a'}",
                 f"Excerpt: {_trim_text(source.excerpt, context.workflow_profile.evidence_excerpt_limit)}",
                 "",
             ]
         )
+    if context.contradictions:
+        lines.extend(["", "Contradictions:"])
+        for source_a, source_b, reason in context.contradictions[:5]:
+            lines.append(f"- {source_a} vs {source_b}: {reason}")
     return "\n".join(lines).strip()
 
 

@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
+import time
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Awaitable, Callable, Protocol, TypeVar
 
 import httpx
 
 from research import ResearchContext, format_research_context, source_inventory_markdown
+
+
+T = TypeVar("T")
 
 
 class PipelineModelProvider(Protocol):
@@ -33,6 +38,146 @@ class PipelineModelProvider(Protocol):
 
     def diagnostics(self) -> dict[str, str | int | bool]:
         ...
+
+
+@dataclass
+class _ProviderHealthManager:
+    provider_name: str
+    retry_budget: int = 1
+    failure_threshold: int = 3
+    cooldown_seconds: float = 30.0
+    backoff_seconds: float = 0.25
+    failure_count: int = 0
+    success_count: int = 0
+    open_until: float = 0.0
+    last_error: str = ""
+    last_stage: str = ""
+    last_failure_at: float = 0.0
+
+    def can_attempt(self) -> bool:
+        return not self.is_open()
+
+    def is_open(self) -> bool:
+        return time.monotonic() < self.open_until
+
+    def record_success(self) -> None:
+        self.success_count += 1
+        self.failure_count = 0
+        self.open_until = 0.0
+
+    def record_failure(self, stage: str, exc: Exception) -> None:
+        self.failure_count += 1
+        self.last_stage = stage
+        self.last_failure_at = time.monotonic()
+        self.last_error = f"{type(exc).__name__}: {exc}".strip()[:240]
+        if self.failure_count >= self.failure_threshold:
+            self.open_until = time.monotonic() + self.cooldown_seconds
+
+    def snapshot(self) -> dict[str, str | int | bool]:
+        return {
+            "circuitState": "open" if self.is_open() else "closed",
+            "circuitOpen": self.is_open(),
+            "failureCount": self.failure_count,
+            "successCount": self.success_count,
+            "retryBudget": self.retry_budget,
+            "failureThreshold": self.failure_threshold,
+            "cooldownSeconds": int(self.cooldown_seconds),
+            "backoffSeconds": int(self.backoff_seconds * 1000),
+            "lastStage": self.last_stage,
+            "lastError": self.last_error,
+            "cooldownRemainingSeconds": max(0, int(self.open_until - time.monotonic())),
+        }
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
+def _stage_timeout_seconds(stage: str) -> float:
+    defaults = {
+        "retrieval": 18.0,
+        "agent": 30.0,
+        "final": 40.0,
+    }
+    env_names = {
+        "retrieval": "HEXAMIND_STAGE_TIMEOUT_RETRIEVAL_SECONDS",
+        "agent": "HEXAMIND_STAGE_TIMEOUT_AGENT_SECONDS",
+        "final": "HEXAMIND_STAGE_TIMEOUT_FINAL_SECONDS",
+    }
+    default = defaults.get(stage, 30.0)
+    env_name = env_names.get(stage)
+    if not env_name:
+        return default
+    value = os.getenv(env_name)
+    if value is None:
+        return default
+    try:
+        return max(0.5, float(value))
+    except ValueError:
+        return default
+
+
+def _provider_retry_budget() -> int:
+    return max(0, _env_int("HEXAMIND_PROVIDER_RETRY_BUDGET", 1))
+
+
+def _provider_failure_threshold() -> int:
+    return max(1, _env_int("HEXAMIND_PROVIDER_FAILURE_THRESHOLD", 3))
+
+
+def _provider_cooldown_seconds() -> float:
+    return max(1.0, _env_float("HEXAMIND_PROVIDER_COOLDOWN_SECONDS", 30.0))
+
+
+def _provider_backoff_seconds() -> float:
+    return max(0.05, _env_float("HEXAMIND_PROVIDER_BACKOFF_SECONDS", 0.25))
+
+
+async def _invoke_with_resilience(
+    health: _ProviderHealthManager,
+    stage: str,
+    operation: Callable[[], Awaitable[T]],
+    timeout_seconds: float,
+    validate: Callable[[T], bool] | None = None,
+) -> T:
+    last_error: Exception | None = None
+    attempts = health.retry_budget + 1
+
+    for attempt in range(attempts):
+        if not health.can_attempt():
+            raise RuntimeError(f"{health.provider_name} circuit breaker is open")
+
+        try:
+            result = await asyncio.wait_for(operation(), timeout=timeout_seconds)
+            if validate is not None and not validate(result):
+                raise RuntimeError(f"{health.provider_name} stage {stage} returned an invalid result")
+            health.record_success()
+            return result
+        except Exception as exc:
+            last_error = exc
+            health.record_failure(stage, exc)
+            if attempt >= health.retry_budget or health.is_open():
+                break
+            await asyncio.sleep(min(health.backoff_seconds * (attempt + 1), 1.0))
+
+    assert last_error is not None
+    raise last_error
 
 
 @dataclass
@@ -297,6 +442,13 @@ class GeminiPipelineModelProvider:
         self._model_name = model_name
         self._fallback_count = 0
         self._last_error = ""
+        self._health = _ProviderHealthManager(
+            provider_name="gemini",
+            retry_budget=_provider_retry_budget(),
+            failure_threshold=_provider_failure_threshold(),
+            cooldown_seconds=_provider_cooldown_seconds(),
+            backoff_seconds=_provider_backoff_seconds(),
+        )
         self._researcher = _create_researcher()
         self._model = ChatGoogleGenerativeAI(
             model=model_name,
@@ -311,8 +463,15 @@ class GeminiPipelineModelProvider:
     async def build_research_context(self, query: str) -> ResearchContext | None:
         if not _web_research_enabled():
             return None
+        if not self._health.can_attempt():
+            return None
         try:
-            return await self._researcher.research(query)
+            return await _invoke_with_resilience(
+                self._health,
+                "retrieval",
+                lambda: self._researcher.research(query),
+                _stage_timeout_seconds("retrieval"),
+            )
         except Exception as exc:
             self._register_fallback(exc)
             return None
@@ -323,6 +482,9 @@ class GeminiPipelineModelProvider:
         query: str,
         research: ResearchContext | None = None,
     ) -> str:
+        if not self._health.can_attempt():
+            return await self._fallback.build_agent_text(agent_id, query, research)
+
         prompts = {
             "advocate": (
                 "You are the Advocate agent for a professional research workflow. "
@@ -360,13 +522,16 @@ class GeminiPipelineModelProvider:
         instruction = prompts.get(agent_id, prompts["oracle"])
         research_block = format_research_context(research)
         try:
-            response = await self._model.ainvoke(
-                f"{instruction}\n\nQuestion: {query.strip()}\n\nLive web research context:\n{research_block}"
+            resolved = await _invoke_with_resilience(
+                self._health,
+                f"agent:{agent_id}",
+                lambda: self._ainvoke(
+                    f"{instruction}\n\nQuestion: {query.strip()}\n\nLive web research context:\n{research_block}"
+                ),
+                _stage_timeout_seconds("agent"),
+                lambda text: _is_agent_research_grade(text, minimum_length=260, research=research),
             )
-            content = getattr(response, "content", "")
-            resolved = str(content).strip()
-            if _is_agent_research_grade(resolved, minimum_length=260, research=research):
-                return resolved
+            return resolved
         except Exception as exc:
             self._register_fallback(exc)
 
@@ -378,48 +543,61 @@ class GeminiPipelineModelProvider:
         outputs: dict[str, str],
         research: ResearchContext | None = None,
     ) -> str:
+        if not self._health.can_attempt():
+            return await self._fallback.compose_final_answer(query, outputs, research)
+
         research_block = format_research_context(research)
         try:
-            response = await self._model.ainvoke(
-                "You are the final synthesiser for a professional multi-agent research pipeline. "
-                "Return a thesis-style markdown report with EXACT sections: "
-                "'## Executive Summary', '## Research Scope', '## Evidence Snapshot', "
-                "'## Analytical Breakdown', '## Decision Recommendation', '## Action Plan', "
-                "'## Confidence and Open Questions', '## Source Inventory'. "
-                "Use numbered subsections, bullet lists, and cite source IDs inline like [S1]. "
-                "Include a subsection named '### Claim-to-Citation Map' under Analytical Breakdown. "
-                "If evidence is weak, state the gap explicitly instead of speculating. "
-                "The report should be detailed enough to fill a full A4 page and avoid generic wording.\n\n"
-                f"Question: {query.strip()}\n\n"
-                f"Support: {outputs.get('advocate', '')}\n"
-                f"Risks: {outputs.get('skeptic', '')}\n"
-                f"Synthesis: {outputs.get('synthesiser', '')}\n"
-                f"Outlook: {outputs.get('oracle', '')}"
-                f"\n\nLive web research context:\n{research_block}"
+            resolved = await _invoke_with_resilience(
+                self._health,
+                "final",
+                lambda: self._ainvoke(
+                    "You are the final synthesiser for a professional multi-agent research pipeline. "
+                    "Return a thesis-style markdown report with EXACT sections: "
+                    "'## Executive Summary', '## Research Scope', '## Evidence Snapshot', "
+                    "'## Analytical Breakdown', '## Decision Recommendation', '## Action Plan', "
+                    "'## Confidence and Open Questions', '## Source Inventory'. "
+                    "Use numbered subsections, bullet lists, and cite source IDs inline like [S1]. "
+                    "Include a subsection named '### Claim-to-Citation Map' under Analytical Breakdown. "
+                    "If evidence is weak, state the gap explicitly instead of speculating. "
+                    "The report should be detailed enough to fill a full A4 page and avoid generic wording.\n\n"
+                    f"Question: {query.strip()}\n\n"
+                    f"Support: {outputs.get('advocate', '')}\n"
+                    f"Risks: {outputs.get('skeptic', '')}\n"
+                    f"Synthesis: {outputs.get('synthesiser', '')}\n"
+                    f"Outlook: {outputs.get('oracle', '')}"
+                    f"\n\nLive web research context:\n{research_block}"
+                ),
+                _stage_timeout_seconds("final"),
+                lambda text: _is_final_research_grade(text, minimum_length=900, research=research),
             )
-            content = getattr(response, "content", "")
-            resolved = str(content).strip()
-            if _is_final_research_grade(resolved, minimum_length=900, research=research):
-                return resolved
+            return resolved
         except Exception as exc:
             self._register_fallback(exc)
 
         return await self._fallback.compose_final_answer(query, outputs, research)
 
     def diagnostics(self) -> dict[str, str | int | bool]:
+        breaker_state = self._health.snapshot()
         return {
             "configuredProvider": "gemini",
-            "activeProvider": "gemini",
+            "activeProvider": "deterministic-fallback" if self._health.is_open() else "gemini",
             "modelName": self._model_name,
             "isFallback": self._fallback_count > 0,
             "fallbackCount": self._fallback_count,
             "lastError": self._last_error,
+            **breaker_state,
         }
 
     def _register_fallback(self, exc: Exception) -> None:
         self._fallback_count += 1
         message = f"{type(exc).__name__}: {exc}".strip()
         self._last_error = message[:240]
+
+    async def _ainvoke(self, prompt: str) -> str:
+        response = await self._model.ainvoke(prompt)
+        content = getattr(response, "content", "")
+        return str(content).strip()
 
 
 class OpenRouterPipelineModelProvider:
@@ -431,6 +609,13 @@ class OpenRouterPipelineModelProvider:
         self._default_model = default_model
         self._fallback_count = 0
         self._last_error = ""
+        self._health = _ProviderHealthManager(
+            provider_name="openrouter",
+            retry_budget=_provider_retry_budget(),
+            failure_threshold=_provider_failure_threshold(),
+            cooldown_seconds=_provider_cooldown_seconds(),
+            backoff_seconds=_provider_backoff_seconds(),
+        )
         self._base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
         self._timeout_seconds = float(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "35"))
         self._cost_mode = _cost_mode()
@@ -457,8 +642,15 @@ class OpenRouterPipelineModelProvider:
     async def build_research_context(self, query: str) -> ResearchContext | None:
         if not _web_research_enabled():
             return None
+        if not self._health.can_attempt():
+            return None
         try:
-            return await self._researcher.research(query)
+            return await _invoke_with_resilience(
+                self._health,
+                "retrieval",
+                lambda: self._researcher.research(query),
+                _stage_timeout_seconds("retrieval"),
+            )
         except Exception as exc:
             self._register_fallback(exc)
             return None
@@ -469,6 +661,9 @@ class OpenRouterPipelineModelProvider:
         query: str,
         research: ResearchContext | None = None,
     ) -> str:
+        if not self._health.can_attempt():
+            return await self._fallback.build_agent_text(agent_id, query, research)
+
         prompts = {
             "advocate": (
                 "You are Advocate in ARIA deep-research mode. Output markdown with EXACT sections: "
@@ -498,25 +693,18 @@ class OpenRouterPipelineModelProvider:
         model_name = self._model_by_role.get(agent_id, self._default_model)
 
         try:
-            resolved = await self._chat(
-                model=model_name,
-                system_prompt=system_prompt,
-                user_prompt=f"Question: {query.strip()}\n\nLive web research context:\n{research_block}",
-            )
-            if _is_agent_research_grade(resolved, minimum_length=280, research=research):
-                return resolved
-
-            repaired = await self._chat(
-                model=model_name,
-                system_prompt=system_prompt,
-                user_prompt=(
-                    "Regenerate with stronger grounding. Add explicit [Sx] citations to all major claims "
-                    "and ensure each section has evidence support.\n\n"
-                    f"Question: {query.strip()}\n\nLive web research context:\n{research_block}"
+            resolved = await _invoke_with_resilience(
+                self._health,
+                f"agent:{agent_id}",
+                lambda: self._chat(
+                    model=model_name,
+                    system_prompt=system_prompt,
+                    user_prompt=f"Question: {query.strip()}\n\nLive web research context:\n{research_block}",
                 ),
+                _stage_timeout_seconds("agent"),
+                lambda text: _is_agent_research_grade(text, minimum_length=280, research=research),
             )
-            if _is_agent_research_grade(repaired, minimum_length=280, research=research):
-                return repaired
+            return resolved
         except Exception as exc:
             self._register_fallback(exc)
 
@@ -528,46 +716,56 @@ class OpenRouterPipelineModelProvider:
         outputs: dict[str, str],
         research: ResearchContext | None = None,
     ) -> str:
+        if not self._health.can_attempt():
+            return await self._fallback.compose_final_answer(query, outputs, research)
+
         research_block = format_research_context(research)
         model_name = self._model_by_role.get("final", self._default_model)
 
         try:
-            resolved = await self._chat(
-                model=model_name,
-                system_prompt=(
-                    "You are ARIA final synthesiser in deep-research mode. Return markdown with EXACT sections: "
-                    "'## Executive Summary', '## Research Scope', '## Evidence Snapshot', "
-                    "'## Analytical Breakdown', '## Decision Recommendation', '## Action Plan', "
-                    "'## Confidence and Open Questions', '## Source Inventory'. Under '## Analytical Breakdown' "
-                    "include '### Claim-to-Citation Map' and '### Contradictions and Uncertainty'. "
-                    "Every key claim must cite [Sx]. If evidence is weak, state the evidence gap explicitly."
+            resolved = await _invoke_with_resilience(
+                self._health,
+                "final",
+                lambda: self._chat(
+                    model=model_name,
+                    system_prompt=(
+                        "You are ARIA final synthesiser in deep-research mode. Return markdown with EXACT sections: "
+                        "'## Executive Summary', '## Research Scope', '## Evidence Snapshot', "
+                        "'## Analytical Breakdown', '## Decision Recommendation', '## Action Plan', "
+                        "'## Confidence and Open Questions', '## Source Inventory'. Under '## Analytical Breakdown' "
+                        "include '### Claim-to-Citation Map' and '### Contradictions and Uncertainty'. "
+                        "Every key claim must cite [Sx]. If evidence is weak, state the evidence gap explicitly."
+                    ),
+                    user_prompt=(
+                        f"Question: {query.strip()}\n\n"
+                        f"Advocate output:\n{outputs.get('advocate', '')}\n\n"
+                        f"Skeptic output:\n{outputs.get('skeptic', '')}\n\n"
+                        f"Synthesiser output:\n{outputs.get('synthesiser', '')}\n\n"
+                        f"Oracle output:\n{outputs.get('oracle', '')}\n\n"
+                        f"Live web research context:\n{research_block}"
+                    ),
                 ),
-                user_prompt=(
-                    f"Question: {query.strip()}\n\n"
-                    f"Advocate output:\n{outputs.get('advocate', '')}\n\n"
-                    f"Skeptic output:\n{outputs.get('skeptic', '')}\n\n"
-                    f"Synthesiser output:\n{outputs.get('synthesiser', '')}\n\n"
-                    f"Oracle output:\n{outputs.get('oracle', '')}\n\n"
-                    f"Live web research context:\n{research_block}"
-                ),
+                _stage_timeout_seconds("final"),
+                lambda text: _is_final_research_grade(text, minimum_length=920, research=research),
             )
-            if _is_final_research_grade(resolved, minimum_length=920, research=research):
-                return resolved
+            return resolved
         except Exception as exc:
             self._register_fallback(exc)
 
         return await self._fallback.compose_final_answer(query, outputs, research)
 
     def diagnostics(self) -> dict[str, str | int | bool]:
+        breaker_state = self._health.snapshot()
         return {
             "configuredProvider": "openrouter",
-            "activeProvider": "openrouter",
+            "activeProvider": "deterministic-fallback" if self._health.is_open() else "openrouter",
             "modelName": self._default_model,
             "costMode": self._cost_mode,
             "isFallback": self._fallback_count > 0,
             "fallbackCount": self._fallback_count,
             "lastError": self._last_error,
             "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
+            **breaker_state,
         }
 
     async def _chat(self, model: str, system_prompt: str, user_prompt: str) -> str:
@@ -610,6 +808,13 @@ class LocalPipelineModelProvider:
         self._default_model = default_model
         self._fallback_count = 0
         self._last_error = ""
+        self._health = _ProviderHealthManager(
+            provider_name="local",
+            retry_budget=_provider_retry_budget(),
+            failure_threshold=_provider_failure_threshold(),
+            cooldown_seconds=_provider_cooldown_seconds(),
+            backoff_seconds=_provider_backoff_seconds(),
+        )
         self._base_url = os.getenv("HEXAMIND_LOCAL_BASE_URL", "http://127.0.0.1:11434/v1").rstrip("/")
         self._timeout_seconds = float(os.getenv("HEXAMIND_LOCAL_TIMEOUT_SECONDS", "45"))
         self._researcher = _create_researcher()
@@ -630,8 +835,15 @@ class LocalPipelineModelProvider:
     async def build_research_context(self, query: str) -> ResearchContext | None:
         if not _web_research_enabled():
             return None
+        if not self._health.can_attempt():
+            return None
         try:
-            return await self._researcher.research(query)
+            return await _invoke_with_resilience(
+                self._health,
+                "retrieval",
+                lambda: self._researcher.research(query),
+                _stage_timeout_seconds("retrieval"),
+            )
         except Exception as exc:
             self._register_fallback(exc)
             return None
@@ -642,6 +854,9 @@ class LocalPipelineModelProvider:
         query: str,
         research: ResearchContext | None = None,
     ) -> str:
+        if not self._health.can_attempt():
+            return await self._fallback.build_agent_text(agent_id, query, research)
+
         prompts = {
             "advocate": (
                 "You are the Advocate agent in local deep-research mode. Use the provided live evidence only. "
@@ -674,27 +889,19 @@ class LocalPipelineModelProvider:
 
         if self._local_available:
             try:
-                resolved = await self._chat(
-                    model=model_name,
-                    system_prompt=system_prompt,
-                    user_prompt=f"Question: {query.strip()}\n\nLive web research context:\n{research_block}",
-                    max_tokens=1400,
-                )
-                if _is_agent_research_grade(resolved, minimum_length=280, research=research):
-                    return resolved
-
-                repaired = await self._chat(
-                    model=model_name,
-                    system_prompt=system_prompt,
-                    user_prompt=(
-                        "Regenerate with stronger grounding. Add explicit [Sx] citations to all major claims, "
-                        "avoid generic filler, and ensure each section has evidence support.\n\n"
-                        f"Question: {query.strip()}\n\nLive web research context:\n{research_block}"
+                resolved = await _invoke_with_resilience(
+                    self._health,
+                    f"agent:{agent_id}",
+                    lambda: self._chat(
+                        model=model_name,
+                        system_prompt=system_prompt,
+                        user_prompt=f"Question: {query.strip()}\n\nLive web research context:\n{research_block}",
+                        max_tokens=1400,
                     ),
-                    max_tokens=1400,
+                    _stage_timeout_seconds("agent"),
+                    lambda text: _is_agent_research_grade(text, minimum_length=280, research=research),
                 )
-                if _is_agent_research_grade(repaired, minimum_length=280, research=research):
-                    return repaired
+                return resolved
             except Exception as exc:
                 self._register_fallback(exc)
 
@@ -706,41 +913,50 @@ class LocalPipelineModelProvider:
         outputs: dict[str, str],
         research: ResearchContext | None = None,
     ) -> str:
+        if not self._health.can_attempt():
+            return await self._fallback.compose_final_answer(query, outputs, research)
+
         research_block = format_research_context(research)
         model_name = self._model_by_role.get("final", self._default_model)
 
         if self._local_available:
             try:
-                resolved = await self._chat(
-                    model=model_name,
-                    system_prompt=(
-                        "You are the final synthesiser in local deep-research mode. Return markdown with EXACT sections: "
-                        "'## Executive Summary', '## Research Scope', '## Evidence Snapshot', '## Analytical Breakdown', "
-                        "'## Decision Recommendation', '## Action Plan', '## Confidence and Open Questions', '## Source Inventory'. "
-                        "Under '## Analytical Breakdown' include '### Claim-to-Citation Map' and '### Contradictions and Uncertainty'. "
-                        "Use the live evidence only, avoid generic statements, and cite [Sx] for every important claim."
+                resolved = await _invoke_with_resilience(
+                    self._health,
+                    "final",
+                    lambda: self._chat(
+                        model=model_name,
+                        system_prompt=(
+                            "You are the final synthesiser in local deep-research mode. Return markdown with EXACT sections: "
+                            "'## Executive Summary', '## Research Scope', '## Evidence Snapshot', '## Analytical Breakdown', "
+                            "'## Decision Recommendation', '## Action Plan', '## Confidence and Open Questions', '## Source Inventory'. "
+                            "Under '## Analytical Breakdown' include '### Claim-to-Citation Map' and '### Contradictions and Uncertainty'. "
+                            "Use the live evidence only, avoid generic statements, and cite [Sx] for every important claim."
+                        ),
+                        user_prompt=(
+                            f"Question: {query.strip()}\n\n"
+                            f"Advocate output:\n{outputs.get('advocate', '')}\n\n"
+                            f"Skeptic output:\n{outputs.get('skeptic', '')}\n\n"
+                            f"Synthesiser output:\n{outputs.get('synthesiser', '')}\n\n"
+                            f"Oracle output:\n{outputs.get('oracle', '')}\n\n"
+                            f"Live web research context:\n{research_block}"
+                        ),
+                        max_tokens=2200,
                     ),
-                    user_prompt=(
-                        f"Question: {query.strip()}\n\n"
-                        f"Advocate output:\n{outputs.get('advocate', '')}\n\n"
-                        f"Skeptic output:\n{outputs.get('skeptic', '')}\n\n"
-                        f"Synthesiser output:\n{outputs.get('synthesiser', '')}\n\n"
-                        f"Oracle output:\n{outputs.get('oracle', '')}\n\n"
-                        f"Live web research context:\n{research_block}"
-                    ),
-                    max_tokens=2200,
+                    _stage_timeout_seconds("final"),
+                    lambda text: _is_final_research_grade(text, minimum_length=920, research=research),
                 )
-                if _is_final_research_grade(resolved, minimum_length=920, research=research):
-                    return resolved
+                return resolved
             except Exception as exc:
                 self._register_fallback(exc)
 
         return await self._fallback.compose_final_answer(query, outputs, research)
 
     def diagnostics(self) -> dict[str, str | int | bool]:
+        breaker_state = self._health.snapshot()
         return {
             "configuredProvider": "local",
-            "activeProvider": "local" if self._local_available else "deterministic-fallback",
+            "activeProvider": "local" if self._local_available and not self._health.is_open() else "deterministic-fallback",
             "modelName": self._default_model,
             "localBaseUrl": self._base_url,
             "localAvailable": self._local_available,
@@ -748,6 +964,7 @@ class LocalPipelineModelProvider:
             "fallbackCount": self._fallback_count,
             "lastError": self._last_error,
             "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
+            **breaker_state,
         }
 
     async def _chat(self, model: str, system_prompt: str, user_prompt: str, max_tokens: int) -> str:

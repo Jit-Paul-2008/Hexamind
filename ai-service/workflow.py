@@ -23,6 +23,7 @@ class ResearchWorkflowProfile:
     evidence_excerpt_limit: int
     subquestions: tuple[str, ...]
     search_intents: tuple[str, ...]
+    search_passes: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ def build_workflow_profile(query: str) -> ResearchWorkflowProfile:
 
     search_intents = _build_search_intents(normalized, analysis, audience)
     subquestions = _build_subquestions(normalized, analysis, audience)
+    search_passes = _build_search_passes(normalized, analysis, audience)
 
     required_source_mix = 3 if audience in {"phd", "professor"} or analysis.complexity_score >= 0.72 else 2
     requires_primary_sources = analysis.domain_risk_score >= 0.4 or audience in {"phd", "professor"}
@@ -73,6 +75,7 @@ def build_workflow_profile(query: str) -> ResearchWorkflowProfile:
         evidence_excerpt_limit=evidence_excerpt_limit,
         subquestions=tuple(subquestions),
         search_intents=tuple(search_intents),
+        search_passes=tuple(search_passes),
     )
 
 
@@ -251,6 +254,22 @@ def _build_subquestions(query: str, analysis: TopicAnalysis, audience: str) -> l
     if analysis.novelty_score >= 0.28:
         subquestions.append(f"What recent developments may have changed the evidence base for {base}?")
     return _dedupe_preserve_order(subquestions)
+
+
+def _build_search_passes(query: str, analysis: TopicAnalysis, audience: str) -> list[str]:
+    normalized = query.lower()
+    passes = ["official", "recent", "evidence", "failure_modes"]
+
+    if _has_comparison_pattern(query) or analysis.complexity_score >= 0.45:
+        passes.append("comparison")
+    if _has_methodology_pattern(query) or audience in {"phd", "professor"}:
+        passes.append("methodology")
+    if any(token in normalized for token in ("benchmark", "evaluation", "measure", "validate")):
+        passes.append("benchmark")
+    if any(token in normalized for token in ("policy", "law", "regulation", "security", "clinical", "medicine")):
+        passes.append("primary_sources")
+
+    return _dedupe_preserve_order(passes)
 
 
 def _keyword_score(query: str, keywords: tuple[str, ...]) -> float:
