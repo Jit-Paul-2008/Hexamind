@@ -119,6 +119,24 @@ HEXAMIND_AGENT_MODEL_ORACLE=openai/o3-mini
 HEXAMIND_AGENT_MODEL_FINAL=openai/gpt-4.1
 ```
 
+Example root `.env` for fully local mode with an OpenAI-compatible local server:
+
+```bash
+HEXAMIND_MODEL_PROVIDER=local
+HEXAMIND_MODEL_NAME=llama3.1:8b
+HEXAMIND_LOCAL_BASE_URL=http://127.0.0.1:11434/v1
+HEXAMIND_WEB_RESEARCH=1
+```
+
+To use this path, start a local model server first. Ollama is the easiest option:
+
+```bash
+ollama serve
+ollama pull llama3.1:8b
+```
+
+If you already use LM Studio or another OpenAI-compatible local server, set `HEXAMIND_LOCAL_BASE_URL` to that server's `/v1` endpoint and keep `HEXAMIND_MODEL_NAME` aligned with the installed model tag.
+
 Free-power tuning (recommended to maximize quality with free-tier keys):
 
 ```bash

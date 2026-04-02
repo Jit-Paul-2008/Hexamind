@@ -605,6 +605,195 @@ class OpenRouterPipelineModelProvider:
         self._last_error = message[:240]
 
 
+class LocalPipelineModelProvider:
+    def __init__(self, default_model: str) -> None:
+        self._default_model = default_model
+        self._fallback_count = 0
+        self._last_error = ""
+        self._base_url = os.getenv("HEXAMIND_LOCAL_BASE_URL", "http://127.0.0.1:11434/v1").rstrip("/")
+        self._timeout_seconds = float(os.getenv("HEXAMIND_LOCAL_TIMEOUT_SECONDS", "45"))
+        self._researcher = _create_researcher()
+        self._fallback = DeterministicPipelineModelProvider(
+            configured_provider="local",
+            model_name=default_model,
+            reason="Local runtime call failed",
+        )
+        self._model_by_role = {
+            "advocate": os.getenv("HEXAMIND_AGENT_MODEL_ADVOCATE", default_model).strip(),
+            "skeptic": os.getenv("HEXAMIND_AGENT_MODEL_SKEPTIC", default_model).strip(),
+            "synthesiser": os.getenv("HEXAMIND_AGENT_MODEL_SYNTHESIS", default_model).strip(),
+            "oracle": os.getenv("HEXAMIND_AGENT_MODEL_ORACLE", default_model).strip(),
+            "final": os.getenv("HEXAMIND_AGENT_MODEL_FINAL", default_model).strip(),
+        }
+        self._local_available = self._probe_local_service()
+
+    async def build_research_context(self, query: str) -> ResearchContext | None:
+        if not _web_research_enabled():
+            return None
+        try:
+            return await self._researcher.research(query)
+        except Exception as exc:
+            self._register_fallback(exc)
+            return None
+
+    async def build_agent_text(
+        self,
+        agent_id: str,
+        query: str,
+        research: ResearchContext | None = None,
+    ) -> str:
+        prompts = {
+            "advocate": (
+                "You are the Advocate agent in local deep-research mode. Use the provided live evidence only. "
+                "Produce concise markdown with EXACT sections: '## Opportunity Thesis', '## Strategic Upside', "
+                "'## Supporting Logic', '## Actionable Next Step'. Avoid generic filler. Every non-trivial claim "
+                "must cite a source ID like [S1]. End with '## Citations Used' listing each cited source ID and one-line relevance."
+            ),
+            "skeptic": (
+                "You are the Skeptic agent in local deep-research mode. Use the provided live evidence only. "
+                "Produce concise markdown with EXACT sections: '## Risk Thesis', '## Primary Failure Modes', "
+                "'## Risk Severity', '## Mitigation Requirement'. Quantify risk where possible, avoid boilerplate, "
+                "and cite [Sx] on each major risk claim. End with '## Citations Used' listing each cited source ID and one-line relevance."
+            ),
+            "synthesiser": (
+                "You are the Synthesiser agent in local deep-research mode. Use the provided live evidence only. "
+                "Produce concise markdown with EXACT sections: '## Integrated Assessment', '## Tradeoff Resolution', "
+                "'## Decision Rule', '## Guardrails'. Resolve conflicts explicitly, explain why, and cite [Sx] on each major claim. "
+                "End with '## Citations Used' listing each cited source ID and one-line relevance."
+            ),
+            "oracle": (
+                "You are the Oracle agent in local deep-research mode. Use the provided live evidence only. "
+                "Produce concise markdown with EXACT sections: '## Scenario Outlook', '## Most Likely Outcome (60%)', "
+                "'## Upside Scenario (25%)', '## Downside Scenario (15%)', '## Leading Indicators to Track'. "
+                "Forecast conservatively, avoid generic framing, and cite [Sx] for external evidence. End with '## Citations Used' listing each cited source ID and one-line relevance."
+            ),
+        }
+        system_prompt = prompts.get(agent_id, prompts["oracle"])
+        research_block = format_research_context(research)
+        model_name = self._model_by_role.get(agent_id, self._default_model)
+
+        if self._local_available:
+            try:
+                resolved = await self._chat(
+                    model=model_name,
+                    system_prompt=system_prompt,
+                    user_prompt=f"Question: {query.strip()}\n\nLive web research context:\n{research_block}",
+                    max_tokens=1400,
+                )
+                if _is_agent_research_grade(resolved, minimum_length=280, research=research):
+                    return resolved
+
+                repaired = await self._chat(
+                    model=model_name,
+                    system_prompt=system_prompt,
+                    user_prompt=(
+                        "Regenerate with stronger grounding. Add explicit [Sx] citations to all major claims, "
+                        "avoid generic filler, and ensure each section has evidence support.\n\n"
+                        f"Question: {query.strip()}\n\nLive web research context:\n{research_block}"
+                    ),
+                    max_tokens=1400,
+                )
+                if _is_agent_research_grade(repaired, minimum_length=280, research=research):
+                    return repaired
+            except Exception as exc:
+                self._register_fallback(exc)
+
+        return await self._fallback.build_agent_text(agent_id, query, research)
+
+    async def compose_final_answer(
+        self,
+        query: str,
+        outputs: dict[str, str],
+        research: ResearchContext | None = None,
+    ) -> str:
+        research_block = format_research_context(research)
+        model_name = self._model_by_role.get("final", self._default_model)
+
+        if self._local_available:
+            try:
+                resolved = await self._chat(
+                    model=model_name,
+                    system_prompt=(
+                        "You are the final synthesiser in local deep-research mode. Return markdown with EXACT sections: "
+                        "'## Executive Summary', '## Research Scope', '## Evidence Snapshot', '## Analytical Breakdown', "
+                        "'## Decision Recommendation', '## Action Plan', '## Confidence and Open Questions', '## Source Inventory'. "
+                        "Under '## Analytical Breakdown' include '### Claim-to-Citation Map' and '### Contradictions and Uncertainty'. "
+                        "Use the live evidence only, avoid generic statements, and cite [Sx] for every important claim."
+                    ),
+                    user_prompt=(
+                        f"Question: {query.strip()}\n\n"
+                        f"Advocate output:\n{outputs.get('advocate', '')}\n\n"
+                        f"Skeptic output:\n{outputs.get('skeptic', '')}\n\n"
+                        f"Synthesiser output:\n{outputs.get('synthesiser', '')}\n\n"
+                        f"Oracle output:\n{outputs.get('oracle', '')}\n\n"
+                        f"Live web research context:\n{research_block}"
+                    ),
+                    max_tokens=2200,
+                )
+                if _is_final_research_grade(resolved, minimum_length=920, research=research):
+                    return resolved
+            except Exception as exc:
+                self._register_fallback(exc)
+
+        return await self._fallback.compose_final_answer(query, outputs, research)
+
+    def diagnostics(self) -> dict[str, str | int | bool]:
+        return {
+            "configuredProvider": "local",
+            "activeProvider": "local" if self._local_available else "deterministic-fallback",
+            "modelName": self._default_model,
+            "localBaseUrl": self._base_url,
+            "localAvailable": self._local_available,
+            "isFallback": self._fallback_count > 0 or not self._local_available,
+            "fallbackCount": self._fallback_count,
+            "lastError": self._last_error,
+            "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
+        }
+
+    async def _chat(self, model: str, system_prompt: str, user_prompt: str, max_tokens: int) -> str:
+        payload = {
+            "model": model,
+            "temperature": 0.15,
+            "top_p": 0.85,
+            "max_tokens": max_tokens,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+            response = await client.post(
+                f"{self._base_url}/chat/completions",
+                json=payload,
+            )
+            response.raise_for_status()
+            body = response.json()
+
+        choices = body.get("choices") or []
+        if not choices:
+            raise RuntimeError("Local model response missing choices")
+
+        message = choices[0].get("message") or {}
+        content = message.get("content", "")
+        if isinstance(content, list):
+            parts = [part.get("text", "") for part in content if isinstance(part, dict)]
+            return "\n".join(part for part in parts if part).strip()
+        return str(content).strip()
+
+    def _probe_local_service(self) -> bool:
+        try:
+            response = httpx.get(f"{self._base_url}/models", timeout=3.0)
+            response.raise_for_status()
+            return True
+        except Exception:
+            return False
+
+    def _register_fallback(self, exc: Exception) -> None:
+        self._fallback_count += 1
+        message = f"{type(exc).__name__}: {exc}".strip()
+        self._last_error = message[:240]
+
+
 def _citation_count(text: str) -> int:
     return len(set(re.findall(r"\[S\d+\]", text)))
 
@@ -659,6 +848,8 @@ def _default_model_for_provider(provider_name: str) -> str:
     if provider_name in {"openrouter", "router"}:
         # Free-tier oriented default. Override per role with HEXAMIND_AGENT_MODEL_* env vars.
         return "google/gemini-2.0-flash-exp:free"
+    if provider_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
+        return os.getenv("HEXAMIND_LOCAL_MODEL", "llama3.1:8b")
     return "deterministic"
 
 
@@ -670,6 +861,16 @@ def _create_researcher() -> object:
 
 def create_pipeline_model_provider() -> PipelineModelProvider:
     provider_name = os.getenv("HEXAMIND_MODEL_PROVIDER", "deterministic").strip().lower()
+    if provider_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
+        model_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(provider_name))
+        try:
+            return LocalPipelineModelProvider(model_name)
+        except Exception as exc:
+            return DeterministicPipelineModelProvider(
+                configured_provider="local",
+                model_name=model_name,
+                reason=f"Local provider init failed: {type(exc).__name__}",
+            )
     if provider_name in {"gemini", "google", "google-genai"}:
         model_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(provider_name))
         try:
