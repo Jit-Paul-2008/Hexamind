@@ -80,13 +80,14 @@ class SarvamService:
             )
         except Exception as exc:
             transformed = _apply_instruction_fallback(cleaned_text, normalized_instruction)
+            error_note = _trim_error_message(exc)
             return SarvamTransformResult(
                 text=transformed,
                 language_code=target,
                 instruction_applied=bool(normalized_instruction),
                 provider="sarvam-fallback",
                 fallback=True,
-                notes=(f"Sarvam translation failed: {type(exc).__name__}",),
+                notes=(f"Sarvam translation failed: {type(exc).__name__}: {error_note}",),
             )
 
     async def build_docx(
@@ -104,16 +105,20 @@ class SarvamService:
         from sarvamai import SarvamAI
 
         client = SarvamAI(api_subscription_key=self._api_key)
-        response = client.text.translate(
-            input=text,
-            source_language_code="auto",
-            target_language_code=target_language_code,
-            speaker_gender=self._default_gender,
-        )
-        resolved = _extract_translation_text(response)
-        if resolved:
-            return resolved
-        raise RuntimeError("Sarvam translation returned empty text")
+        # Translate in chunks to avoid provider-side payload limits on long reports.
+        chunks = _chunk_text_for_translation(text)
+        translated_chunks: list[str] = []
+        for chunk in chunks:
+            response = client.text.translate(
+                input=chunk,
+                source_language_code="auto",
+                target_language_code=target_language_code,
+            )
+            resolved = _extract_translation_text(response)
+            if not resolved:
+                raise RuntimeError("Sarvam translation returned empty text")
+            translated_chunks.append(resolved)
+        return "\n\n".join(translated_chunks).strip()
 
 
 def _extract_translation_text(response: Any) -> str:
@@ -216,3 +221,62 @@ def _to_docx_bytes(title: str, body: str) -> bytes:
     buffer = BytesIO()
     document.save(buffer)
     return buffer.getvalue()
+
+
+def docx_supported() -> bool:
+    return Document is not None
+
+
+def _chunk_text_for_translation(text: str, max_chars: int = 900) -> list[str]:
+    cleaned = text.strip()
+    if len(cleaned) <= max_chars:
+        return [cleaned]
+
+    paragraphs = [segment.strip() for segment in cleaned.split("\n\n") if segment.strip()]
+    if not paragraphs:
+        return [cleaned]
+
+    chunks: list[str] = []
+    current = ""
+    for para in paragraphs:
+        candidate = para if not current else f"{current}\n\n{para}"
+        if len(candidate) <= max_chars:
+            current = candidate
+            continue
+
+        if current:
+            chunks.append(current)
+            current = ""
+
+        if len(para) <= max_chars:
+            current = para
+            continue
+
+        # Split oversized paragraph into sentence-like fragments.
+        parts = re.split(r"(?<=[.!?])\s+", para)
+        buffer = ""
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            candidate_part = part if not buffer else f"{buffer} {part}"
+            if len(candidate_part) <= max_chars:
+                buffer = candidate_part
+                continue
+            if buffer:
+                chunks.append(buffer)
+            buffer = part
+        if buffer:
+            current = buffer
+
+    if current:
+        chunks.append(current)
+
+    return chunks or [cleaned]
+
+
+def _trim_error_message(exc: Exception, limit: int = 180) -> str:
+    message = str(exc).strip() or "no error details"
+    if len(message) <= limit:
+        return message
+    return message[: limit - 3].rstrip() + "..."

@@ -646,7 +646,8 @@ def format_research_context(context: ResearchContext | None) -> str:
         "",
         "Source pack:",
     ]
-    for source in context.sources[: context.workflow_profile.context_source_cap]:
+    source_cap = min(context.workflow_profile.context_source_cap, 6)
+    for source in context.sources[:source_cap]:
         lines.extend(
             [
                 f"[{source.id}] {source.title}",
@@ -654,7 +655,7 @@ def format_research_context(context: ResearchContext | None) -> str:
                 f"Domain: {source.domain} | Authority: {source.authority} | Credibility: {source.credibility_score:.2f}",
                 f"Pass: {source.discovery_pass or 'n/a'} | Recency: {source.recency_score:.2f}",
                 f"Snippet: {source.snippet or 'n/a'}",
-                f"Excerpt: {_trim_text(source.excerpt, context.workflow_profile.evidence_excerpt_limit)}",
+                f"Excerpt: {_trim_text(source.excerpt, min(context.workflow_profile.evidence_excerpt_limit, 280))}",
                 "",
             ]
         )
@@ -662,7 +663,7 @@ def format_research_context(context: ResearchContext | None) -> str:
         lines.extend(["", "Contradictions:"])
         for source_a, source_b, reason in context.contradictions[:5]:
             lines.append(f"- {source_a} vs {source_b}: {reason}")
-    return "\n".join(lines).strip()
+    return _trim_text("\n".join(lines).strip(), 7200)
 
 
 def source_inventory_markdown(context: ResearchContext | None) -> str:

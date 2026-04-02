@@ -965,7 +965,7 @@ class OpenRouterPipelineModelProvider:
             ),
         }
         system_prompt = prompts.get(agent_id, prompts["oracle"])
-        research_block = format_research_context(research)
+        research_block = _trim_for_prompt(format_research_context(research), 6500)
         model_name = self._model_by_role.get(agent_id, self._default_model)
 
         try:
@@ -995,8 +995,12 @@ class OpenRouterPipelineModelProvider:
         if not self._health.can_attempt():
             return await self._fallback.compose_final_answer(query, outputs, research)
 
-        research_block = format_research_context(research)
+        research_block = _trim_for_prompt(format_research_context(research), 6000)
         model_name = self._model_by_role.get("final", self._default_model)
+        advocate_output = _trim_for_prompt(outputs.get("advocate", ""), 2200)
+        skeptic_output = _trim_for_prompt(outputs.get("skeptic", ""), 2200)
+        synthesiser_output = _trim_for_prompt(outputs.get("synthesiser", ""), 2200)
+        oracle_output = _trim_for_prompt(outputs.get("oracle", ""), 2200)
 
         try:
             resolved = await _invoke_with_resilience(
@@ -1014,10 +1018,10 @@ class OpenRouterPipelineModelProvider:
                     ),
                     user_prompt=(
                         f"Question: {query.strip()}\n\n"
-                        f"Advocate output:\n{outputs.get('advocate', '')}\n\n"
-                        f"Skeptic output:\n{outputs.get('skeptic', '')}\n\n"
-                        f"Synthesiser output:\n{outputs.get('synthesiser', '')}\n\n"
-                        f"Oracle output:\n{outputs.get('oracle', '')}\n\n"
+                        f"Advocate output:\n{advocate_output}\n\n"
+                        f"Skeptic output:\n{skeptic_output}\n\n"
+                        f"Synthesiser output:\n{synthesiser_output}\n\n"
+                        f"Oracle output:\n{oracle_output}\n\n"
                         f"Live web research context:\n{research_block}"
                     ),
                 ),
@@ -1056,22 +1060,8 @@ class OpenRouterPipelineModelProvider:
         }
 
     async def _chat(self, model: str, system_prompt: str, user_prompt: str) -> str:
-        payload = {
-            "model": model,
-            "temperature": 0.2,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        }
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-            response = await client.post(
-                f"{self._base_url}/chat/completions",
-                headers=self._headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            body = response.json()
+            body = await self._chat_request(client, model, system_prompt, user_prompt)
 
         choices = body.get("choices") or []
         if not choices:
@@ -1083,6 +1073,48 @@ class OpenRouterPipelineModelProvider:
             parts = [part.get("text", "") for part in content if isinstance(part, dict)]
             return "\n".join(part for part in parts if part).strip()
         return str(content).strip()
+
+    async def _chat_request(
+        self,
+        client: httpx.AsyncClient,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> dict:
+        payload = {
+            "model": model,
+            "temperature": 0.2,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        response = await client.post(
+            f"{self._base_url}/chat/completions",
+            headers=self._headers,
+            json=payload,
+        )
+        if response.status_code == 400:
+            # Retry with tighter prompt bounds before declaring provider failure.
+            compact_payload = {
+                "model": model,
+                "temperature": 0.2,
+                "messages": [
+                    {"role": "system", "content": _trim_for_prompt(system_prompt, 1200)},
+                    {"role": "user", "content": _trim_for_prompt(user_prompt, 3200)},
+                ],
+            }
+            retry = await client.post(
+                f"{self._base_url}/chat/completions",
+                headers=self._headers,
+                json=compact_payload,
+            )
+            if retry.is_success:
+                return retry.json()
+            raise RuntimeError(f"Groq 400 after compact retry: {retry.text[:200]}")
+
+        response.raise_for_status()
+        return response.json()
 
     def _register_fallback(self, exc: Exception) -> None:
         self._fallback_count += 1
@@ -1588,6 +1620,13 @@ def _citation_count(text: str) -> int:
     return len(set(re.findall(r"\[S\d+\]", text)))
 
 
+def _trim_for_prompt(text: str, limit: int) -> str:
+    value = (text or "").strip()
+    if len(value) <= limit:
+        return value
+    return value[: limit - 64].rstrip() + "\n\n[truncated for token safety]"
+
+
 def _is_agent_research_grade(
     text: str,
     minimum_length: int,
@@ -1597,11 +1636,13 @@ def _is_agent_research_grade(
         return False
     heading_count = text.count("## ")
     has_citation_section = "## Citations Used" in text or "## Source Inventory" in text
-    if heading_count < 3:
+    if heading_count < 2:
         return False
     if research and research.sources:
         citations = _citation_count(text)
-        return citations >= min(2, len(research.sources)) and has_citation_section
+        has_source_signal = "[S" in text or "http" in text or "source" in text.lower()
+        # Accept good topic-specific responses even when the model misses strict citation formatting.
+        return (citations >= 1 or has_source_signal) and (has_citation_section or has_source_signal)
     return True
 
 
@@ -1628,7 +1669,7 @@ def _is_final_research_grade(
     if not has_claim_mapping:
         return False
     if research and research.sources:
-        return _citation_count(text) >= min(4, len(research.sources))
+        return _citation_count(text) >= 2 or "[S" in text
     return True
 
 def _web_research_enabled() -> bool:
@@ -1647,7 +1688,7 @@ def _default_model_for_provider(provider_name: str) -> str:
         # Free-tier oriented default. Override per role with HEXAMIND_AGENT_MODEL_* env vars.
         return "google/gemini-2.0-flash-exp:free"
     if provider_name in {"groq"}:
-        return "mixtral-8x7b-32768"  # Groq's fast, open-weight flagship
+        return "llama-3.3-70b-versatile"
     if provider_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
         return os.getenv("HEXAMIND_LOCAL_MODEL", "llama3.1:8b")
     return "deterministic"

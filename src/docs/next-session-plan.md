@@ -1,5 +1,29 @@
 # Next Session Plan
 
+## Today Checkpoint (2026-04-02)
+
+- Runtime status revalidated with live stack:
+- Backend health is `ok` at `http://127.0.0.1:8000/health`.
+- Active provider is `groq` with `mixtral-8x7b-32768`.
+- `webResearchEnabled` is `true` and hard-fail on missing sources is disabled.
+- Frontend served at `http://localhost:3000` for interactive testing.
+- Fresh end-to-end smoke test completed:
+- Session: `session_38ae0c334b`
+- Query: `impact of small modular reactors on grid reliability`
+- Quality status: `ready`
+- Overall score: `90.55`
+- Sources: `10`, citations: `6`, verified claims: `7`
+
+## Continuation Clues For Tomorrow
+
+1. Start backend and frontend first, then verify `/health` before any research run.
+2. Reuse smoke test pattern:
+3. `POST /api/pipeline/start` with a random topic.
+4. Poll `GET /api/pipeline/{sessionId}/quality` until `status = ready`.
+5. Inspect `GET /api/pipeline/{sessionId}/stream` if quality remains pending.
+6. Prioritize quality track over export tracks, per project focus.
+7. Keep Groq as default unless a deliberate provider benchmark is planned.
+
 ## Session Handoff Snapshot
 
 - Backend and frontend are integrated with live SSE pipeline flow.

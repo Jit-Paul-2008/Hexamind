@@ -17,7 +17,7 @@ load_dotenv()
 
 from agents import AGENTS
 from pipeline import pipeline_service
-from sarvam_service import SarvamService
+from sarvam_service import SarvamService, docx_supported
 from schemas import (
     Agent,
     SarvamTransformRequest,
@@ -181,15 +181,23 @@ async def pipeline_export_docx(
         target_language_code=payload.targetLanguageCode,
         instruction=payload.instruction,
     )
-    filename = f"hexamind-{session_id}-{result.language_code}.docx"
+    has_real_docx = docx_supported()
+    extension = "docx" if has_real_docx else "txt"
+    media_type = (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if has_real_docx
+        else "text/plain; charset=utf-8"
+    )
+    filename = f"hexamind-{session_id}-{result.language_code}.{extension}"
     headers = {
         "Content-Disposition": f'attachment; filename="{filename}"',
         "X-Hexamind-Transform-Provider": result.provider,
         "X-Hexamind-Transform-Fallback": str(result.fallback).lower(),
+        "X-Hexamind-Export-Format": extension,
     }
     return Response(
         content=docx_bytes,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        media_type=media_type,
         headers=headers,
     )
 
