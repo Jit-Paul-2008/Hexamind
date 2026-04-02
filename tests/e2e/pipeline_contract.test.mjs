@@ -47,8 +47,10 @@ async function waitForBackendReady() {
 }
 
 before(async () => {
+  const pythonExecutable = process.env.HEXAMIND_PYTHON ?? '.venv/bin/python';
+
   backendProcess = spawn(
-    'python3',
+    pythonExecutable,
     ['-m', 'uvicorn', 'main:app', '--app-dir', 'ai-service', '--host', '127.0.0.1', '--port', String(port)],
     {
       env: {
