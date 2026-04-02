@@ -8,9 +8,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:frontend": "vitest run tests/unit/pipelineClient.test.ts",
     "test:backend": "python3 -m unittest discover -s ai-service/tests -p 'test_*.py'",
     "test:e2e": "node --test tests/e2e/pipeline_contract.test.mjs",
-    "test": "npm run test:backend && npm run test:e2e"
+    "test": "npm run test:frontend && npm run test:backend && npm run test:e2e"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -32,6 +33,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.2"
   }
 }

@@ -5,9 +5,11 @@ import json
 import time
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
 from agents import AGENTS
 from schemas import PipelineEvent, PipelineEventType
+from model_provider import PipelineModelProvider, create_pipeline_model_provider
 
 
 @dataclass
@@ -18,8 +20,16 @@ class PipelineSession:
 
 
 class PipelineService:
-    def __init__(self) -> None:
-        self._sessions: dict[str, PipelineSession] = {}
+    def __init__(
+        self,
+        storage_path: Path | None = None,
+        model_provider: PipelineModelProvider | None = None,
+    ) -> None:
+        self._storage_path = storage_path or Path(__file__).resolve().with_name(
+            ".data"
+        ).joinpath("pipeline-sessions.json")
+        self._model_provider = model_provider or create_pipeline_model_provider()
+        self._sessions: dict[str, PipelineSession] = self._load_sessions()
 
     def start(self, query: str) -> str:
         session_id = f"session_{uuid.uuid4().hex[:10]}"
@@ -28,13 +38,18 @@ class PipelineService:
             query=query,
             created_at=time.time(),
         )
+        self._save_sessions()
         return session_id
 
     def has_session(self, session_id: str) -> bool:
+        if session_id in self._sessions:
+            return True
+
+        self._sessions = self._load_sessions()
         return session_id in self._sessions
 
     async def stream_events(self, session_id: str):
-        session = self._sessions[session_id]
+        session = self._get_session(session_id)
         assembled: dict[str, str] = {}
 
         for agent in AGENTS:
@@ -48,7 +63,7 @@ class PipelineService:
             }
             await asyncio.sleep(0.12)
 
-            content = self._build_agent_text(agent.id, session.query)
+            content = await self._model_provider.build_agent_text(agent.id, session.query)
             words = content.split(" ")
             full = ""
             for idx, word in enumerate(words):
@@ -77,7 +92,9 @@ class PipelineService:
             }
             await asyncio.sleep(0.18)
 
-        final_answer = self._compose_final_answer(session.query, assembled)
+        final_answer = await self._model_provider.compose_final_answer(
+            session.query, assembled
+        )
         final_event = PipelineEvent(
             type=PipelineEventType.PIPELINE_DONE,
             agentId="output",
@@ -89,39 +106,48 @@ class PipelineService:
         }
         await asyncio.sleep(0)
 
-    def _build_agent_text(self, agent_id: str, query: str) -> str:
-        q = query.strip()
-        if agent_id == "advocate":
-            return (
-                f"Strongest case for '{q}': measurable upside exists if scope is narrow, "
-                "constraints are explicit, and early metrics are tracked from day one."
-            )
-        if agent_id == "skeptic":
-            return (
-                f"Primary risks for '{q}': noisy assumptions, hidden dependency costs, "
-                "and unclear ownership can break delivery quality and reliability."
-            )
-        if agent_id == "synthesiser":
-            return (
-                f"Balanced synthesis for '{q}': proceed in phased slices with guardrails, "
-                "validate each increment, and stop expansion if confidence regresses."
-            )
-        return (
-            f"Forecast for '{q}': likely positive outcome under controlled rollout, "
-            "with biggest gains from fast feedback loops and strict review checkpoints."
-        )
+    def _get_session(self, session_id: str) -> PipelineSession:
+        if session_id not in self._sessions:
+            self._sessions = self._load_sessions()
 
-    def _compose_final_answer(self, query: str, outputs: dict[str, str]) -> str:
-        advocate = outputs.get("advocate", "")
-        skeptic = outputs.get("skeptic", "")
-        synthesis = outputs.get("synthesiser", "")
-        oracle = outputs.get("oracle", "")
-        return (
-            f"Final synthesis for '{query}': {synthesis} "
-            f"Support: {advocate} "
-            f"Risks: {skeptic} "
-            f"Outlook: {oracle}"
-        )
+        return self._sessions[session_id]
+
+    def _load_sessions(self) -> dict[str, PipelineSession]:
+        if not self._storage_path.exists():
+            return {}
+
+        try:
+            payload = json.loads(self._storage_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+        sessions: dict[str, PipelineSession] = {}
+        for session_id, item in payload.items():
+            try:
+                sessions[session_id] = PipelineSession(
+                    id=item["id"],
+                    query=item["query"],
+                    created_at=float(item["created_at"]),
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+
+        return sessions
+
+    def _save_sessions(self) -> None:
+        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            session_id: {
+                "id": session.id,
+                "query": session.query,
+                "created_at": session.created_at,
+            }
+            for session_id, session in self._sessions.items()
+        }
+
+        temp_path = self._storage_path.with_suffix(".tmp")
+        temp_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        temp_path.replace(self._storage_path)
 
 
 pipeline_service = PipelineService()

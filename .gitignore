@@ -37,6 +37,7 @@ yarn-error.log*
 **/.venv/
 __pycache__/
 *.pyc
+ai-service/.data/
 
 # vercel
 .vercel
