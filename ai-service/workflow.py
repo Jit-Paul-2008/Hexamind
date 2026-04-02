@@ -18,6 +18,9 @@ class ResearchWorkflowProfile:
     required_source_mix: int
     requires_primary_sources: bool
     requires_contradiction_check: bool
+    token_mode: str
+    context_source_cap: int
+    evidence_excerpt_limit: int
     subquestions: tuple[str, ...]
     search_intents: tuple[str, ...]
 
@@ -37,11 +40,14 @@ def build_workflow_profile(query: str) -> ResearchWorkflowProfile:
     audience = _select_audience(normalized, analysis)
     depth_label = _depth_label(analysis.complexity_score, audience)
 
+    token_mode = _token_mode()
     max_terms, max_sources, max_hits_per_term, fetch_concurrency, min_relevance = _depth_settings(
         depth_label=depth_label,
         audience=audience,
         analysis=analysis,
+        token_mode=token_mode,
     )
+    context_source_cap, evidence_excerpt_limit = _token_context_settings(depth_label, token_mode)
 
     search_intents = _build_search_intents(normalized, analysis, audience)
     subquestions = _build_subquestions(normalized, analysis, audience)
@@ -62,6 +68,9 @@ def build_workflow_profile(query: str) -> ResearchWorkflowProfile:
         required_source_mix=required_source_mix,
         requires_primary_sources=requires_primary_sources,
         requires_contradiction_check=requires_contradiction_check,
+        token_mode=token_mode,
+        context_source_cap=context_source_cap,
+        evidence_excerpt_limit=evidence_excerpt_limit,
         subquestions=tuple(subquestions),
         search_intents=tuple(search_intents),
     )
@@ -132,14 +141,60 @@ def _depth_settings(
     depth_label: str,
     audience: str,
     analysis: TopicAnalysis,
+    token_mode: str,
 ) -> tuple[int, int, int, int, float]:
     if depth_label == "maximal":
-        return 14, 12, 10, 6, 0.18
-    if depth_label == "deep":
-        return 12, 10, 8, 5, 0.22
-    if depth_label == "balanced":
-        return 10, 8, 7, 4, 0.24
-    return 8, 6, 5, 3, 0.28
+        settings = [14, 12, 10, 6, 0.18]
+    elif depth_label == "deep":
+        settings = [12, 10, 8, 5, 0.22]
+    elif depth_label == "balanced":
+        settings = [10, 8, 7, 4, 0.24]
+    else:
+        settings = [8, 6, 5, 3, 0.28]
+
+    if token_mode == "lean":
+        settings[0] = max(6, settings[0] - 2)
+        settings[1] = max(5, settings[1] - 2)
+        settings[2] = max(4, settings[2] - 2)
+        settings[4] = min(0.35, settings[4] + 0.04)
+    elif token_mode == "max-quality":
+        settings[0] += 2
+        settings[1] += 2
+        settings[2] += 1
+        settings[4] = max(0.14, settings[4] - 0.03)
+
+    return int(settings[0]), int(settings[1]), int(settings[2]), int(settings[3]), float(settings[4])
+
+
+def _token_context_settings(depth_label: str, token_mode: str) -> tuple[int, int]:
+    if depth_label == "maximal":
+        source_cap = 10
+        excerpt_limit = 900
+    elif depth_label == "deep":
+        source_cap = 8
+        excerpt_limit = 760
+    elif depth_label == "balanced":
+        source_cap = 6
+        excerpt_limit = 620
+    else:
+        source_cap = 5
+        excerpt_limit = 520
+
+    if token_mode == "lean":
+        source_cap = max(4, source_cap - 2)
+        excerpt_limit = max(380, excerpt_limit - 200)
+    elif token_mode == "max-quality":
+        source_cap += 1
+        excerpt_limit += 120
+
+    return source_cap, excerpt_limit
+
+
+def _token_mode() -> str:
+    value = os.getenv("HEXAMIND_TOKEN_MODE", "smart").strip().lower()
+    if value in {"lean", "smart", "max-quality"}:
+        return value
+    return "smart"
 
 
 def _build_search_intents(query: str, analysis: TopicAnalysis, audience: str) -> list[str]:

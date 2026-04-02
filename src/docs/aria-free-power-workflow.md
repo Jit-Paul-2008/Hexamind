@@ -35,6 +35,13 @@ Audience-aware workflow:
 - phd mode maximizes rigor and contradiction handling.
 - professor mode maximizes source authority, theoretical depth, and assumption stress-testing.
 
+Token-efficiency workflow:
+
+- HEXAMIND_TOKEN_MODE=lean | smart | max-quality
+- lean: lower token spend with stricter relevance filtering and smaller context payload.
+- smart: adaptive default balancing cost and evidence depth.
+- max-quality: larger context and deeper retrieval for hardest topics.
+
 ## Pipeline Blueprint
 
 1. Query decomposition
@@ -89,6 +96,7 @@ ARIA can outperform by combining adversarial multi-agent reasoning with hard evi
 
 - HEXAMIND_COST_MODE=free
 - HEXAMIND_WEB_RESEARCH=1
+- HEXAMIND_TOKEN_MODE=max-quality
 - HEXAMIND_RESEARCH_MAX_SOURCES=10
 - HEXAMIND_MAX_SOURCES_PER_DOMAIN=2
 - HEXAMIND_AUTO_REGENERATE_ON_FAIL=1
@@ -98,6 +106,7 @@ ARIA can outperform by combining adversarial multi-agent reasoning with hard evi
 
 - HEXAMIND_COST_MODE=free
 - HEXAMIND_WEB_RESEARCH=1
+- HEXAMIND_TOKEN_MODE=lean
 - HEXAMIND_RESEARCH_MAX_SOURCES=6
 - HEXAMIND_MAX_SOURCES_PER_DOMAIN=2
 - HEXAMIND_STREAM_CHUNK_DELAY_MS=2

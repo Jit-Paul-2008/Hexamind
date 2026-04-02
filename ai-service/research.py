@@ -256,7 +256,11 @@ class InternetResearcher:
 
         authority = _classify_authority(canonical_url)
         credibility_score = _credibility_score(canonical_url)
-        excerpt = _extract_evidence_excerpt(page_text or hit.snippet, query, 900)
+        excerpt = _extract_evidence_excerpt(
+            page_text or hit.snippet,
+            query,
+            workflow_profile.evidence_excerpt_limit,
+        )
         if not excerpt:
             return None
 
@@ -320,19 +324,20 @@ def format_research_context(context: ResearchContext | None) -> str:
         f"Audience profile: {context.workflow_profile.audience}",
         f"Depth profile: {context.workflow_profile.depth_label}",
         f"Topic complexity: {context.workflow_profile.complexity_score:.2f}",
+        f"Token mode: {context.workflow_profile.token_mode}",
         f"Search terms: {', '.join(context.search_terms)}",
         f"Subquestions: {' | '.join(context.workflow_profile.subquestions)}",
         "",
         "Source pack:",
     ]
-    for source in context.sources:
+    for source in context.sources[: context.workflow_profile.context_source_cap]:
         lines.extend(
             [
                 f"[{source.id}] {source.title}",
                 f"URL: {source.url}",
                 f"Domain: {source.domain} | Authority: {source.authority} | Credibility: {source.credibility_score:.2f}",
                 f"Snippet: {source.snippet or 'n/a'}",
-                f"Excerpt: {source.excerpt}",
+                f"Excerpt: {_trim_text(source.excerpt, context.workflow_profile.evidence_excerpt_limit)}",
                 "",
             ]
         )

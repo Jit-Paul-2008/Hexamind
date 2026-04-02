@@ -32,6 +32,10 @@ export interface PipelineQualityMetrics {
   contradictionCount: number;
   hasClaimToCitationMap: boolean;
   hasUncertaintyDisclosure: boolean;
+  verifiedClaimCount: number;
+  contestedClaimCount: number;
+  unverifiedClaimCount: number;
+  claimVerificationRate: number;
 }
 
 export interface PipelineContradictionFinding {
@@ -47,8 +51,16 @@ export interface PipelineQualityReport {
   passing: boolean;
   regenerated?: boolean;
   metrics: PipelineQualityMetrics;
+  claimVerifications: PipelineClaimVerification[];
   contradictionFindings: PipelineContradictionFinding[];
   notes: string[];
+}
+
+export interface PipelineClaimVerification {
+  claim: string;
+  status: "verified" | "contested" | "unverified";
+  evidence: string[];
+  rationale: string;
 }
 
 // Backend SSE event shape — matches what the FastAPI backend will emit

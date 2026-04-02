@@ -85,7 +85,12 @@ class PipelineService:
                 "contradictionCount": 0,
                 "hasClaimToCitationMap": False,
                 "hasUncertaintyDisclosure": False,
+                "verifiedClaimCount": 0,
+                "contestedClaimCount": 0,
+                "unverifiedClaimCount": 0,
+                "claimVerificationRate": 0.0,
             },
+            "claimVerifications": [],
             "contradictionFindings": [],
             "notes": ["Pipeline has not produced a completed report yet."],
         }

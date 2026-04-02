@@ -109,6 +109,10 @@ export default function OutputNode({}: NodeProps) {
                     <div>Sources: {qualityReport.metrics.sourceCount}</div>
                     <div>Domains: {qualityReport.metrics.uniqueDomains}</div>
                     <div>Contradictions: {qualityReport.metrics.contradictionCount}</div>
+                    <div>Verified claims: {qualityReport.metrics.verifiedClaimCount}</div>
+                    <div>
+                      Verification rate: {(qualityReport.metrics.claimVerificationRate * 100).toFixed(0)}%
+                    </div>
                   </div>
                   {qualityReport.regenerated ? (
                     <div className="text-[10px] text-cyan-300/90">
@@ -118,6 +122,11 @@ export default function OutputNode({}: NodeProps) {
                   {qualityReport.contradictionFindings.length > 0 ? (
                     <div className="text-[10px] text-amber-200/90">
                       Top contradiction: {qualityReport.contradictionFindings[0]?.sourceA} vs {qualityReport.contradictionFindings[0]?.sourceB}
+                    </div>
+                  ) : null}
+                  {qualityReport.claimVerifications?.length > 0 ? (
+                    <div className="text-[10px] text-white/60">
+                      Claim check: {qualityReport.claimVerifications[0]?.status.toUpperCase()} - {qualityReport.claimVerifications[0]?.rationale}
                     </div>
                   ) : null}
                 </div>

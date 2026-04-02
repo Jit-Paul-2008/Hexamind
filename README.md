@@ -134,11 +134,13 @@ HEXAMIND_RESEARCH_MAX_HITS_PER_TERM=8
 HEXAMIND_RESEARCH_FETCH_CONCURRENCY=5
 HEXAMIND_RESEARCH_MIN_RELEVANCE=0.24
 HEXAMIND_RESEARCH_AUDIENCE=auto
+HEXAMIND_TOKEN_MODE=smart
 ```
 
 Workflow design reference:
 
 - `src/docs/aria-free-power-workflow.md`
+- `src/docs/free-api-setup-and-smoke-test.md`
 
 Quality API for each completed session:
 
