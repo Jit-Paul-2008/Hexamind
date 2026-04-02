@@ -12,6 +12,8 @@
     "test:frontend": "vitest run tests/unit/pipelineClient.test.ts",
     "test:backend": "python3 -m unittest discover -s ai-service/tests -p 'test_*.py'",
     "test:e2e": "node --test tests/e2e/pipeline_contract.test.mjs",
+    "bench:run": "python3 scripts/run_benchmarks.py --suite extended",
+    "bench:regression": "python3 scripts/run_benchmarks.py --suite extended --compare-with ai-service/.data/benchmark-latest.json",
     "test": "npm run test:frontend && npm run test:backend && npm run test:e2e"
   },
   "dependencies": {

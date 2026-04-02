@@ -242,6 +242,10 @@ def _deterministic_prompt_text(agent_id: str) -> str:
             "## Scenario Outlook\n"
             "Produce a concise forward-looking assessment with likely, upside, and downside scenarios plus leading indicators."
         ),
+        "verifier": (
+            "## Claim Verification\n"
+            "Audit key claims for support quality. Classify each as verified, weakly-supported, contested, or unverified with citation references."
+        ),
         "final": (
             "## Executive Summary\n"
             "Produce a thesis-style report with evidence snapshot, claim graph, contradictions, recommendation, action plan, and source inventory."
@@ -318,6 +322,8 @@ class DeterministicPipelineModelProvider:
             return self._structured_skeptic(q, source_block)
         if agent_id == "synthesiser":
             return self._structured_synthesiser(q, source_block)
+        if agent_id == "verifier":
+            return self._structured_verifier(q, source_block)
         return self._structured_oracle(q, source_block)
 
     async def compose_final_answer(
@@ -351,6 +357,8 @@ class DeterministicPipelineModelProvider:
             f"- Risk case: {self._extract_section_summary(outputs.get('skeptic', ''), '## Primary Failure Modes', '## Risk Severity')}\n"
             f"- Integrated position: {self._extract_section_summary(outputs.get('synthesiser', ''), '## Tradeoff Resolution', '## Decision Rule')}\n"
             f"- Forecast signal: {self._extract_section_summary(outputs.get('oracle', ''), '## Most Likely Outcome (60%)', '## Upside Scenario (25%)')}\n\n"
+            "### Verification Findings\n"
+            f"{self._extract_section_summary(outputs.get('verifier', ''), '## Verification Summary', '## Claim Verification')}\n\n"
             "### Claim Graph\n"
             f"{claim_graph}\n\n"
             "### Contradictions and Uncertainty\n"
@@ -589,6 +597,22 @@ class DeterministicPipelineModelProvider:
             "- Cycle-time improvement vs baseline\n"
             "- Defect/reliability trend\n"
             "- User adoption and retention signal"
+        )
+
+    def _structured_verifier(self, query: str, source_block: str) -> str:
+        return (
+            "## Claim Verification\n"
+            f"Question: {query}\n\n"
+            "## Verification Summary\n"
+            "- Verified: core operational claims have source support.\n"
+            "- Weakly-supported: medium-confidence assumptions require stronger corroboration.\n"
+            "- Contested: contradictory evidence should remain visible in final report.\n"
+            "- Unverified: speculative claims must be labeled as provisional.\n\n"
+            "## Evidence Mapping\n"
+            "- Claim set traced to available source IDs where possible.\n"
+            f"- Source quality reference: {source_block}\n\n"
+            "## Verification Recommendation\n"
+            "Raise confidence only when at least two independent sources support each critical claim."
         )
 
     def _source_block(self, research: ResearchContext | None) -> str:

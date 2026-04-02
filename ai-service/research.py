@@ -182,6 +182,10 @@ class InternetResearcher:
         passes = list(workflow_profile.search_passes)
         if not passes:
             passes = ["official", "recent", "evidence", "failure_modes"]
+        # Beast workflow default: enforce 5-pass retrieval backbone.
+        for required in ("official", "recent", "counter_evidence", "implementation", "disagreement"):
+            if required not in passes:
+                passes.append(required)
         if any(token in query.lower() for token in ("comparison", "vs", "versus", "tradeoff")) and "comparison" not in passes:
             passes.append("comparison")
         deduped: list[str] = []
@@ -362,7 +366,7 @@ class InternetResearcher:
         base = _clean_text(query)
         core_terms = _top_query_terms(base, max(5, workflow_profile.max_terms // 2))
         core_joined = " ".join(core_terms)
-        terms = list(workflow_profile.search_intents) + [
+        terms = list(workflow_profile.search_intents) + list(workflow_profile.adversarial_queries) + [
             f"{core_joined} systematic review",
             f"{core_joined} case study",
         ]
@@ -373,6 +377,30 @@ class InternetResearcher:
             terms.extend([f"{base} latest", f"{base} recent review", f"{base} current evidence"])
         if pass_set.intersection({"failure_modes", "comparison"}):
             terms.extend([f"{base} limitations", f"{base} failures", f"{base} tradeoff analysis"])
+        if "counter_evidence" in pass_set:
+            terms.extend(
+                [
+                    f"{base} counter evidence",
+                    f"{base} criticism limitations",
+                    f"{base} failure analysis",
+                ]
+            )
+        if "implementation" in pass_set:
+            terms.extend(
+                [
+                    f"{base} implementation guide",
+                    f"{base} practical case study",
+                    f"{base} benchmark results",
+                ]
+            )
+        if "disagreement" in pass_set:
+            terms.extend(
+                [
+                    f"{base} conflicting evidence",
+                    f"{base} expert debate",
+                    f"{base} disputed findings",
+                ]
+            )
         seen: set[str] = set()
         deduped: list[str] = []
         for term in terms:
@@ -903,6 +931,12 @@ def _term_matches_pass(term: str, pass_name: str) -> bool:
         return any(token in lowered for token in ("benchmark", "evaluation", "dataset", "metric", "measure", "test"))
     if pass_name == "primary_sources":
         return any(token in lowered for token in ("official", "primary", "docs", "site:.gov", "site:.edu", "specification"))
+    if pass_name == "counter_evidence":
+        return any(token in lowered for token in ("counter", "criticism", "limitations", "fail", "risk", "disputed"))
+    if pass_name == "implementation":
+        return any(token in lowered for token in ("implementation", "guide", "case study", "benchmark", "practical", "how to"))
+    if pass_name == "disagreement":
+        return any(token in lowered for token in ("conflicting", "debate", "disagreement", "disputed", "versus", "tradeoff"))
     return True
 
 
@@ -916,6 +950,9 @@ def _pass_weight(pass_name: str) -> float:
         "methodology": 1.03,
         "benchmark": 1.05,
         "primary_sources": 1.07,
+        "counter_evidence": 1.03,
+        "implementation": 1.02,
+        "disagreement": 1.02,
     }
     return weights.get(pass_name, 1.0)
 

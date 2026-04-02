@@ -93,8 +93,8 @@ test('backend health and agents endpoint are available', async () => {
   const agentsResponse = await fetch(`${baseUrl}/api/agents`);
   assert.equal(agentsResponse.status, 200);
   const agents = await agentsResponse.json();
-  assert.equal(agents.length, 4);
-  assert.deepEqual(agents.map((agent) => agent.id), ['advocate', 'skeptic', 'synthesiser', 'oracle']);
+  assert.equal(agents.length, 5);
+  assert.deepEqual(agents.map((agent) => agent.id), ['advocate', 'skeptic', 'synthesiser', 'oracle', 'verifier']);
 });
 
 test('pipeline stream emits a final synthesis for the submitted query', async () => {

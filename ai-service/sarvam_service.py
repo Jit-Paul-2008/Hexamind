@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Any
 
-from docx import Document
+try:
+    from docx import Document
+except Exception:  # pragma: no cover - optional dependency fallback
+    Document = None
 
 
 @dataclass(frozen=True)
@@ -183,6 +186,14 @@ def _bullets_from_paragraphs(text: str) -> str:
 
 
 def _to_docx_bytes(title: str, body: str) -> bytes:
+    if Document is None:
+        fallback = (
+            f"{title.strip() or 'Hexamind Research Report'}\n\n"
+            f"{body}\n\n"
+            "Note: python-docx is not installed in this runtime, so this is a fallback payload."
+        )
+        return fallback.encode("utf-8")
+
     document = Document()
     document.add_heading(title.strip() or "Hexamind Research Report", level=1)
 

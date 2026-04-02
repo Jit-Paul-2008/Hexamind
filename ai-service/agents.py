@@ -54,4 +54,14 @@ AGENTS: tuple[AgentConfig, ...] = (
         shape="box",
         processing_order=4,
     ),
+    AgentConfig(
+        id="verifier",
+        codename="Verifier",
+        role="Claim Validation and Evidence Audit",
+        purpose="Checks whether major claims are verified, weakly-supported, contested, or unverified.",
+        accent_color="#60a5fa",
+        glow_color="rgba(59, 130, 246, 0.28)",
+        shape="octahedron",
+        processing_order=5,
+    ),
 )
