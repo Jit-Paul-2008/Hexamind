@@ -150,6 +150,10 @@ def _provider_backoff_seconds() -> float:
     return max(0.05, _env_float("HEXAMIND_PROVIDER_BACKOFF_SECONDS", 0.25))
 
 
+def _local_strict_mode() -> bool:
+    return os.getenv("HEXAMIND_LOCAL_STRICT", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _query_complexity_score(query: str) -> float:
     words = re.findall(r"[a-zA-Z0-9]{3,}", query.lower())
     unique_words = set(words)
@@ -1089,6 +1093,7 @@ class OpenRouterPipelineModelProvider:
 class LocalPipelineModelProvider:
     def __init__(self, default_model: str) -> None:
         self._default_model = default_model
+        self._strict_local = _local_strict_mode()
         self._fallback_count = 0
         self._last_error = ""
         self._health = _ProviderHealthManager(
@@ -1101,11 +1106,13 @@ class LocalPipelineModelProvider:
         self._base_url = os.getenv("HEXAMIND_LOCAL_BASE_URL", "http://127.0.0.1:11434/v1").rstrip("/")
         self._timeout_seconds = float(os.getenv("HEXAMIND_LOCAL_TIMEOUT_SECONDS", "45"))
         self._researcher = _create_researcher()
-        self._fallback = DeterministicPipelineModelProvider(
-            configured_provider="local",
-            model_name=default_model,
-            reason="Local runtime call failed",
-        )
+        self._fallback = None
+        if not self._strict_local:
+            self._fallback = DeterministicPipelineModelProvider(
+                configured_provider="local",
+                model_name=default_model,
+                reason="Local runtime call failed",
+            )
         self._tier_models = {
             "small": os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", default_model).strip() or default_model,
             "medium": os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", default_model).strip() or default_model,
@@ -1119,6 +1126,10 @@ class LocalPipelineModelProvider:
             "final": os.getenv("HEXAMIND_AGENT_MODEL_FINAL", default_model).strip(),
         }
         self._local_available = self._probe_local_service()
+        if self._strict_local and not self._local_available:
+            raise RuntimeError(
+                f"Strict local mode is enabled but local provider is unavailable at {self._base_url}."
+            )
 
     async def build_research_context(self, query: str) -> ResearchContext | None:
         if not _web_research_enabled():
@@ -1143,6 +1154,10 @@ class LocalPipelineModelProvider:
         research: ResearchContext | None = None,
     ) -> str:
         if not self._health.can_attempt():
+            if self._strict_local:
+                raise RuntimeError("Local provider circuit is open in strict local mode.")
+            if not self._fallback:
+                raise RuntimeError("Local provider fallback is unavailable.")
             return await self._fallback.build_agent_text(agent_id, query, research)
 
         prompts = {
@@ -1194,7 +1209,13 @@ class LocalPipelineModelProvider:
                 return resolved
             except Exception as exc:
                 self._register_fallback(exc)
+                if self._strict_local:
+                    raise
 
+        if self._strict_local:
+            raise RuntimeError("Local provider is unavailable in strict local mode.")
+        if not self._fallback:
+            raise RuntimeError("Local provider fallback is unavailable.")
         return await self._fallback.build_agent_text(agent_id, query, research)
 
     async def compose_final_answer(
@@ -1204,6 +1225,10 @@ class LocalPipelineModelProvider:
         research: ResearchContext | None = None,
     ) -> str:
         if not self._health.can_attempt():
+            if self._strict_local:
+                raise RuntimeError("Local provider circuit is open in strict local mode.")
+            if not self._fallback:
+                raise RuntimeError("Local provider fallback is unavailable.")
             return await self._fallback.compose_final_answer(query, outputs, research)
 
         tier = _local_model_tier(query, research)
@@ -1241,7 +1266,13 @@ class LocalPipelineModelProvider:
                 return resolved
             except Exception as exc:
                 self._register_fallback(exc)
+                if self._strict_local:
+                    raise
 
+        if self._strict_local:
+            raise RuntimeError("Local provider is unavailable in strict local mode.")
+        if not self._fallback:
+            raise RuntimeError("Local provider fallback is unavailable.")
         return await self._fallback.compose_final_answer(query, outputs, research)
 
     def diagnostics(self) -> dict[str, str | int | bool]:
@@ -1257,12 +1288,17 @@ class LocalPipelineModelProvider:
         )
         return {
             "configuredProvider": "local",
-            "activeProvider": "local" if self._local_available and not self._health.is_open() else "deterministic-fallback",
+            "activeProvider": (
+                "local"
+                if self._local_available and not self._health.is_open()
+                else ("local-unavailable" if self._strict_local else "deterministic-fallback")
+            ),
             "modelName": self._default_model,
             "localBaseUrl": self._base_url,
             "localAvailable": self._local_available,
             "isFallback": self._fallback_count > 0 or not self._local_available,
             "fallbackCount": self._fallback_count,
+            "strictLocal": self._strict_local,
             "lastError": self._last_error,
             "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
             "promptRegistryVersion": registry["registryVersion"],
@@ -1392,6 +1428,8 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
         try:
             return LocalPipelineModelProvider(model_name)
         except Exception as exc:
+            if _local_strict_mode():
+                raise
             return DeterministicPipelineModelProvider(
                 configured_provider="local",
                 model_name=model_name,

@@ -176,8 +176,11 @@ Example root `.env` for fully local mode with an OpenAI-compatible local server:
 HEXAMIND_MODEL_PROVIDER=local
 HEXAMIND_MODEL_NAME=llama3.1:8b
 HEXAMIND_LOCAL_BASE_URL=http://127.0.0.1:11434/v1
+HEXAMIND_LOCAL_STRICT=1
 HEXAMIND_WEB_RESEARCH=1
 ```
+
+Set `HEXAMIND_LOCAL_STRICT=1` to force Ollama/local-only generation and fail fast on local errors instead of falling back to deterministic output.
 
 To use this path, start a local model server first. Ollama is the easiest option:
 
