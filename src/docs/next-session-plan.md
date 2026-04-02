@@ -43,6 +43,12 @@
 - Detect source disagreement and render explicit contradiction notes.
 - Add confidence calibration based on source quality and agreement.
 
+4. Free-key power profile (active)
+- Use free-tier model routing per agent role.
+- Increase retrieval breadth while limiting per-domain concentration.
+- Enforce claim-to-citation map as hard quality gate in final synthesis.
+- Use fast rerun path when quality gates fail (regenerate with stronger grounding).
+
 ### Track C: Frontend UX for Research Fidelity
 
 1. Add evidence quality widget: citation count, authority mix, contradiction count.
@@ -63,3 +69,7 @@
 - Prompt-injection or low-trust content in remote pages.
 - Model-routing cost spikes across multi-agent calls.
 - Source overfitting (too many claims from one domain).
+
+## Execution Reference
+
+- See `src/docs/aria-free-power-workflow.md` for runtime profiles and acceptance criteria.

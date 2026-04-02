@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html as html_lib
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ class ResearchSource:
     snippet: str
     excerpt: str
     authority: str
+    credibility_score: float
 
 
 @dataclass(frozen=True)
@@ -112,9 +114,11 @@ class _VisibleTextExtractor(HTMLParser):
 
 
 class InternetResearcher:
-    def __init__(self, timeout_seconds: float = 12.0, max_sources: int = 4) -> None:
+    def __init__(self, timeout_seconds: float = 12.0, max_sources: int = 8) -> None:
         self._timeout_seconds = timeout_seconds
-        self._max_sources = max(1, max_sources)
+        configured_max_sources = _env_int("HEXAMIND_RESEARCH_MAX_SOURCES", max_sources)
+        self._max_sources = max(1, configured_max_sources)
+        self._max_sources_per_domain = max(1, _env_int("HEXAMIND_MAX_SOURCES_PER_DOMAIN", 2))
 
     async def research(self, query: str) -> ResearchContext:
         search_terms = self._build_search_terms(query)
@@ -122,6 +126,7 @@ class InternetResearcher:
 
         sources: list[ResearchSource] = []
         seen_urls: set[str] = set()
+        domain_counts: dict[str, int] = {}
         async with httpx.AsyncClient(
             timeout=self._timeout_seconds,
             follow_redirects=True,
@@ -133,8 +138,13 @@ class InternetResearcher:
                     continue
                 seen_urls.add(canonical_url)
 
+                domain = urlparse(canonical_url).netloc or canonical_url
+                if domain_counts.get(domain, 0) >= self._max_sources_per_domain:
+                    continue
+
                 page_text = await self._fetch_page_text(client, canonical_url)
                 authority = _classify_authority(canonical_url)
+                credibility_score = _credibility_score(canonical_url)
                 excerpt = _trim_text(page_text or hit.snippet, 900)
                 if not excerpt:
                     continue
@@ -144,12 +154,14 @@ class InternetResearcher:
                         id=f"S{len(sources) + 1}",
                         title=_trim_text(hit.title, 140),
                         url=canonical_url,
-                        domain=urlparse(canonical_url).netloc or canonical_url,
+                        domain=domain,
                         snippet=_trim_text(hit.snippet, 220),
                         excerpt=excerpt,
                         authority=authority,
+                        credibility_score=credibility_score,
                     )
                 )
+                domain_counts[domain] = domain_counts.get(domain, 0) + 1
 
                 if len(sources) >= self._max_sources:
                     break
@@ -213,11 +225,24 @@ class InternetResearcher:
 
     def _build_search_terms(self, query: str) -> list[str]:
         base = _clean_text(query)
-        return [
+        terms = [
             base,
             f"{base} latest evidence",
             f"{base} analysis research",
+            f"{base} official documentation",
+            f"{base} benchmark evaluation",
+            f"{base} failure modes limitations",
+            f"{base} implementation guide",
         ]
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for term in terms:
+            key = term.lower().strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(term)
+        return deduped
 
 
 def format_research_context(context: ResearchContext | None) -> str:
@@ -235,7 +260,7 @@ def format_research_context(context: ResearchContext | None) -> str:
             [
                 f"[{source.id}] {source.title}",
                 f"URL: {source.url}",
-                f"Domain: {source.domain} | Authority: {source.authority}",
+                f"Domain: {source.domain} | Authority: {source.authority} | Credibility: {source.credibility_score:.2f}",
                 f"Snippet: {source.snippet or 'n/a'}",
                 f"Excerpt: {source.excerpt}",
                 "",
@@ -246,12 +271,12 @@ def format_research_context(context: ResearchContext | None) -> str:
 
 def source_inventory_markdown(context: ResearchContext | None) -> str:
     if not context or not context.sources:
-        return "| ID | Title | Domain | Authority | URL |\n| --- | --- | --- | --- | --- |\n| - | No live sources retrieved | - | - | - |"
+        return "| ID | Title | Domain | Authority | Credibility | URL |\n| --- | --- | --- | --- | --- | --- |\n| - | No live sources retrieved | - | - | - | - |"
 
-    rows = ["| ID | Title | Domain | Authority | URL |", "| --- | --- | --- | --- | --- |"]
+    rows = ["| ID | Title | Domain | Authority | Credibility | URL |", "| --- | --- | --- | --- | --- | --- |"]
     for source in context.sources:
         rows.append(
-            f"| {source.id} | {source.title.replace('|', '/') } | {source.domain} | {source.authority} | {source.url} |"
+            f"| {source.id} | {source.title.replace('|', '/') } | {source.domain} | {source.authority} | {source.credibility_score:.2f} | {source.url} |"
         )
     return "\n".join(rows)
 
@@ -281,6 +306,18 @@ def _classify_authority(url: str) -> str:
     return "secondary"
 
 
+def _credibility_score(url: str) -> float:
+    domain = urlparse(url).netloc.lower()
+    score = 0.45
+    if domain.endswith(".gov") or domain.endswith(".edu"):
+        score += 0.45
+    if any(token in domain for token in ("docs", "developer", "research", "acm", "ieee", "nature", "science")):
+        score += 0.3
+    if any(token in domain for token in ("wikipedia", "medium", "substack", "blog", "forum", "reddit")):
+        score -= 0.15
+    return max(0.05, min(1.0, score))
+
+
 def _clean_text(text: str) -> str:
     return _trim_text(html_lib.unescape(re.sub(r"\s+", " ", text)).strip(), 10000)
 
@@ -290,3 +327,13 @@ def _trim_text(text: str, limit: int) -> str:
     if len(collapsed) <= limit:
         return collapsed
     return collapsed[: limit - 1].rstrip() + "…"
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default

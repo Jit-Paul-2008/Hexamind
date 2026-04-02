@@ -119,6 +119,19 @@ HEXAMIND_AGENT_MODEL_ORACLE=openai/o3-mini
 HEXAMIND_AGENT_MODEL_FINAL=openai/gpt-4.1
 ```
 
+Free-power tuning (recommended to maximize quality with free-tier keys):
+
+```bash
+HEXAMIND_COST_MODE=free
+HEXAMIND_WEB_RESEARCH=1
+HEXAMIND_RESEARCH_MAX_SOURCES=10
+HEXAMIND_MAX_SOURCES_PER_DOMAIN=2
+```
+
+Workflow design reference:
+
+- `src/docs/aria-free-power-workflow.md`
+
 ## Quality Checks
 
 ```bash

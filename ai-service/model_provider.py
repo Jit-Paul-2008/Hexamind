@@ -396,6 +396,7 @@ class OpenRouterPipelineModelProvider:
         self._last_error = ""
         self._base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
         self._timeout_seconds = float(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "35"))
+        self._cost_mode = _cost_mode()
         self._headers = {
             "Authorization": f"Bearer {api_key}",
             "HTTP-Referer": os.getenv("OPENROUTER_HTTP_REFERER", "https://hexamind.local"),
@@ -525,6 +526,7 @@ class OpenRouterPipelineModelProvider:
             "configuredProvider": "openrouter",
             "activeProvider": "openrouter",
             "modelName": self._default_model,
+            "costMode": self._cost_mode,
             "isFallback": self._fallback_count > 0,
             "fallbackCount": self._fallback_count,
             "lastError": self._last_error,
@@ -609,6 +611,20 @@ def _web_research_enabled() -> bool:
     return os.getenv("HEXAMIND_WEB_RESEARCH", "1").strip().lower() not in {"0", "false", "no"}
 
 
+def _cost_mode() -> str:
+    value = os.getenv("HEXAMIND_COST_MODE", "free").strip().lower()
+    return value if value in {"free", "balanced", "max"} else "free"
+
+
+def _default_model_for_provider(provider_name: str) -> str:
+    if provider_name in {"gemini", "google", "google-genai"}:
+        return "gemini-2.0-flash"
+    if provider_name in {"openrouter", "router"}:
+        # Free-tier oriented default. Override per role with HEXAMIND_AGENT_MODEL_* env vars.
+        return "google/gemini-2.0-flash-exp:free"
+    return "deterministic"
+
+
 def _create_researcher() -> object:
     from research import InternetResearcher
 
@@ -618,7 +634,7 @@ def _create_researcher() -> object:
 def create_pipeline_model_provider() -> PipelineModelProvider:
     provider_name = os.getenv("HEXAMIND_MODEL_PROVIDER", "deterministic").strip().lower()
     if provider_name in {"gemini", "google", "google-genai"}:
-        model_name = os.getenv("HEXAMIND_MODEL_NAME", "gemini-2.0-flash")
+        model_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(provider_name))
         try:
             return GeminiPipelineModelProvider(model_name)
         except Exception as exc:
@@ -628,7 +644,7 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
                 reason=f"Gemini init failed: {type(exc).__name__}",
             )
     if provider_name in {"openrouter", "router"}:
-        model_name = os.getenv("HEXAMIND_MODEL_NAME", "openai/gpt-4.1-mini")
+        model_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(provider_name))
         try:
             return OpenRouterPipelineModelProvider(model_name)
         except Exception as exc:
