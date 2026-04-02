@@ -46,6 +46,23 @@ Frontend defaults to backend `http://localhost:8000`. Override with:
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
 
+For local development, put frontend values in a root `.env.local` file and backend
+values in a root `.env` file. The backend loads `.env` automatically on startup.
+
+Example root `.env.local`:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+Example root `.env` for the free Gemini path:
+
+```bash
+HEXAMIND_MODEL_PROVIDER=gemini
+HEXAMIND_MODEL_NAME=gemini-1.5-flash
+GOOGLE_API_KEY=your_free_google_ai_studio_key
+```
+
 ## Quality Checks
 
 ```bash
