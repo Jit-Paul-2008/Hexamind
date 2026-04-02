@@ -27,7 +27,10 @@ class PipelineApiTests(unittest.TestCase):
     def test_health_and_agents(self) -> None:
         health_response = self.client.get("/health")
         self.assertEqual(health_response.status_code, 200)
-        self.assertEqual(health_response.json(), {"status": "ok"})
+        health_payload = health_response.json()
+        self.assertEqual(health_payload["status"], "ok")
+        self.assertIn("activeProvider", health_payload)
+        self.assertIn("isFallback", health_payload)
 
         agents_response = self.client.get("/api/agents")
         self.assertEqual(agents_response.status_code, 200)

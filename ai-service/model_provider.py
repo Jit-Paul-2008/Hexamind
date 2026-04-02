@@ -12,9 +12,16 @@ class PipelineModelProvider(Protocol):
     async def compose_final_answer(self, query: str, outputs: dict[str, str]) -> str:
         ...
 
+    def diagnostics(self) -> dict[str, str | int | bool]:
+        ...
 
-@dataclass(frozen=True)
+
+@dataclass
 class DeterministicPipelineModelProvider:
+    configured_provider: str = "deterministic"
+    model_name: str = "deterministic"
+    reason: str = ""
+
     async def build_agent_text(self, agent_id: str, query: str) -> str:
         q = query.strip()
         if agent_id == "advocate":
@@ -49,16 +56,33 @@ class DeterministicPipelineModelProvider:
             f"Outlook: {oracle}"
         )
 
+    def diagnostics(self) -> dict[str, str | int | bool]:
+        return {
+            "configuredProvider": self.configured_provider,
+            "activeProvider": "deterministic",
+            "modelName": self.model_name,
+            "isFallback": self.configured_provider != "deterministic",
+            "fallbackCount": 0,
+            "lastError": self.reason,
+        }
+
 
 class GeminiPipelineModelProvider:
     def __init__(self, model_name: str) -> None:
         from langchain_google_genai import ChatGoogleGenerativeAI
 
+        self._model_name = model_name
+        self._fallback_count = 0
+        self._last_error = ""
         self._model = ChatGoogleGenerativeAI(
             model=model_name,
             temperature=0.35,
         )
-        self._fallback = DeterministicPipelineModelProvider()
+        self._fallback = DeterministicPipelineModelProvider(
+            configured_provider="gemini",
+            model_name=model_name,
+            reason="Gemini runtime call failed",
+        )
 
     async def build_agent_text(self, agent_id: str, query: str) -> str:
         prompts = {
@@ -89,8 +113,8 @@ class GeminiPipelineModelProvider:
             resolved = str(content).strip()
             if resolved:
                 return resolved
-        except Exception:
-            pass
+        except Exception as exc:
+            self._register_fallback(exc)
 
         return await self._fallback.build_agent_text(agent_id, query)
 
@@ -110,19 +134,41 @@ class GeminiPipelineModelProvider:
             resolved = str(content).strip()
             if resolved:
                 return resolved
-        except Exception:
-            pass
+        except Exception as exc:
+            self._register_fallback(exc)
 
         return await self._fallback.compose_final_answer(query, outputs)
+
+    def diagnostics(self) -> dict[str, str | int | bool]:
+        return {
+            "configuredProvider": "gemini",
+            "activeProvider": "gemini",
+            "modelName": self._model_name,
+            "isFallback": self._fallback_count > 0,
+            "fallbackCount": self._fallback_count,
+            "lastError": self._last_error,
+        }
+
+    def _register_fallback(self, exc: Exception) -> None:
+        self._fallback_count += 1
+        message = f"{type(exc).__name__}: {exc}".strip()
+        self._last_error = message[:240]
 
 
 def create_pipeline_model_provider() -> PipelineModelProvider:
     provider_name = os.getenv("HEXAMIND_MODEL_PROVIDER", "deterministic").strip().lower()
     if provider_name in {"gemini", "google", "google-genai"}:
-        model_name = os.getenv("HEXAMIND_MODEL_NAME", "gemini-1.5-flash")
+        model_name = os.getenv("HEXAMIND_MODEL_NAME", "gemini-2.0-flash")
         try:
             return GeminiPipelineModelProvider(model_name)
-        except Exception:
-            return DeterministicPipelineModelProvider()
+        except Exception as exc:
+            return DeterministicPipelineModelProvider(
+                configured_provider="gemini",
+                model_name=model_name,
+                reason=f"Gemini init failed: {type(exc).__name__}",
+            )
 
-    return DeterministicPipelineModelProvider()
+    return DeterministicPipelineModelProvider(
+        configured_provider=provider_name,
+        model_name=os.getenv("HEXAMIND_MODEL_NAME", "deterministic"),
+    )

@@ -82,7 +82,10 @@ after(async () => {
 test('backend health and agents endpoint are available', async () => {
   const healthResponse = await fetch(`${baseUrl}/health`);
   assert.equal(healthResponse.status, 200);
-  assert.deepEqual(await healthResponse.json(), { status: 'ok' });
+  const healthPayload = await healthResponse.json();
+  assert.equal(healthPayload.status, 'ok');
+  assert.ok(Object.hasOwn(healthPayload, 'activeProvider'));
+  assert.ok(Object.hasOwn(healthPayload, 'isFallback'));
 
   const agentsResponse = await fetch(`${baseUrl}/api/agents`);
   assert.equal(agentsResponse.status, 200);

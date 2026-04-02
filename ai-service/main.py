@@ -24,8 +24,8 @@ app.add_middleware(
 
 
 @app.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+def health_check() -> dict[str, str | int | bool]:
+    return pipeline_service.health()
 
 
 @app.get("/api/agents", response_model=list[Agent])

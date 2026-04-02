@@ -74,7 +74,7 @@ Paste this into `.env` if you want Gemini:
 
 ```bash
 HEXAMIND_MODEL_PROVIDER=gemini
-HEXAMIND_MODEL_NAME=gemini-1.5-flash
+HEXAMIND_MODEL_NAME=gemini-2.0-flash
 GOOGLE_API_KEY=your_free_google_ai_studio_key
 ```
 
@@ -97,7 +97,7 @@ Example root `.env` for the free Gemini path:
 
 ```bash
 HEXAMIND_MODEL_PROVIDER=gemini
-HEXAMIND_MODEL_NAME=gemini-1.5-flash
+HEXAMIND_MODEL_NAME=gemini-2.0-flash
 GOOGLE_API_KEY=your_free_google_ai_studio_key
 ```
 

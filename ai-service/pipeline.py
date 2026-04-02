@@ -49,6 +49,14 @@ class PipelineService:
         self._sessions = self._load_sessions()
         return session_id in self._sessions
 
+    def health(self) -> dict[str, str | int | bool]:
+        diagnostics = self._model_provider.diagnostics()
+        return {
+            "status": "ok",
+            "sessions": len(self._sessions),
+            **diagnostics,
+        }
+
     async def stream_events(self, session_id: str):
         session = self._get_session(session_id)
         assembled: dict[str, str] = {}

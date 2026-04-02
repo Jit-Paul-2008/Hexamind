@@ -10,6 +10,7 @@ const API_BASE_URL =
 export default function StatusIndicator() {
   const pipelineStatus = usePipelineStore((s) => s.session?.status);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [modelLabel, setModelLabel] = useState("Model ...");
 
   useEffect(() => {
     let active = true;
@@ -17,12 +18,28 @@ export default function StatusIndicator() {
     const checkBackend = async () => {
       try {
         const response = await fetch(`${API_BASE_URL}/health`);
+        const payload = response.ok ? await response.json() : null;
         if (active) {
           setBackendOnline(response.ok);
+          if (payload && typeof payload === "object") {
+            const activeProvider =
+              typeof payload.activeProvider === "string"
+                ? payload.activeProvider
+                : "unknown";
+            const isFallback = payload.isFallback === true;
+            setModelLabel(
+              isFallback
+                ? `${activeProvider} fallback`
+                : `${activeProvider} live`
+            );
+          } else {
+            setModelLabel("Model unknown");
+          }
         }
       } catch {
         if (active) {
           setBackendOnline(false);
+          setModelLabel("Model offline");
         }
       }
     };
@@ -89,6 +106,12 @@ export default function StatusIndicator() {
         />
         <span className="font-sans text-[10px] tracking-[0.25em] uppercase text-white/40">
           API {backendText}
+        </span>
+      </div>
+      <div className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/8 backdrop-blur-xl flex items-center gap-2">
+        <div className="w-1.5 h-1.5 rounded-full bg-cyan-300/80 shadow-[0_0_6px_rgba(103,232,249,0.8)]" />
+        <span className="font-sans text-[10px] tracking-[0.12em] uppercase text-white/45">
+          {modelLabel}
         </span>
       </div>
     </motion.div>
