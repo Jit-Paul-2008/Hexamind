@@ -34,6 +34,7 @@ class PipelineModelProvider(Protocol):
         query: str,
         outputs: dict[str, str],
         research: ResearchContext | None = None,
+        refinement_note: str | None = None,
     ) -> str:
         ...
 
@@ -335,9 +336,11 @@ class DeterministicPipelineModelProvider:
         query: str,
         outputs: dict[str, str],
         research: ResearchContext | None = None,
+        refinement_note: str | None = None,
     ) -> str:
         q = query.strip()
         report_mode = self._report_mode(q, research)
+        refinement_block = f"\n- Refinement focus: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else ""
         source_inventory = source_inventory_markdown(research)
         evidence_snapshot = self._evidence_snapshot_markdown(research)
         report_plan = self._report_plan_markdown(q, research, report_mode)
@@ -349,7 +352,7 @@ class DeterministicPipelineModelProvider:
             "## Executive Summary\n"
             f"This report addresses '{q}' using live retrieval evidence when available. It combines supportive and skeptical views, then converts them into a testable plan rather than a generic recommendation.\n\n"
             "## Research Scope\n"
-            f"- Core question: {q}\n"
+            f"- Core question: {q}{refinement_block}\n"
             "- Method: retrieval-first synthesis with explicit citations and uncertainty disclosure.\n"
             f"- Output objective: a {report_mode} decision memo that can be validated in staged execution.\n"
             f"### Report Plan\n{report_plan}\n\n"
@@ -807,9 +810,10 @@ class GeminiPipelineModelProvider:
         query: str,
         outputs: dict[str, str],
         research: ResearchContext | None = None,
+        refinement_note: str | None = None,
     ) -> str:
         if not self._health.can_attempt():
-            return await self._fallback.compose_final_answer(query, outputs, research)
+            return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
 
         research_block = format_research_context(research)
         try:
@@ -832,6 +836,7 @@ class GeminiPipelineModelProvider:
                     f"Synthesis: {outputs.get('synthesiser', '')}\n"
                     f"Outlook: {outputs.get('oracle', '')}"
                     f"\n\nLive web research context:\n{research_block}"
+                    + (f"\n\nRefinement focus: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else "")
                 ),
                 _stage_timeout_seconds("final"),
                 lambda text: _is_final_research_grade(text, minimum_length=900, research=research),
@@ -840,7 +845,7 @@ class GeminiPipelineModelProvider:
         except Exception as exc:
             self._register_fallback(exc)
 
-        return await self._fallback.compose_final_answer(query, outputs, research)
+        return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
 
     def diagnostics(self) -> dict[str, str | int | bool]:
         breaker_state = self._health.snapshot()
@@ -991,16 +996,17 @@ class OpenRouterPipelineModelProvider:
         query: str,
         outputs: dict[str, str],
         research: ResearchContext | None = None,
+        refinement_note: str | None = None,
     ) -> str:
         if not self._health.can_attempt():
-            return await self._fallback.compose_final_answer(query, outputs, research)
+            return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
 
-        research_block = _trim_for_prompt(format_research_context(research), 6000)
+        research_block = _trim_for_prompt(format_research_context(research), 4200)
         model_name = self._model_by_role.get("final", self._default_model)
-        advocate_output = _trim_for_prompt(outputs.get("advocate", ""), 2200)
-        skeptic_output = _trim_for_prompt(outputs.get("skeptic", ""), 2200)
-        synthesiser_output = _trim_for_prompt(outputs.get("synthesiser", ""), 2200)
-        oracle_output = _trim_for_prompt(outputs.get("oracle", ""), 2200)
+        advocate_output = _trim_for_prompt(outputs.get("advocate", ""), 1400)
+        skeptic_output = _trim_for_prompt(outputs.get("skeptic", ""), 1400)
+        synthesiser_output = _trim_for_prompt(outputs.get("synthesiser", ""), 1400)
+        oracle_output = _trim_for_prompt(outputs.get("oracle", ""), 1400)
 
         try:
             resolved = await _invoke_with_resilience(
@@ -1014,7 +1020,8 @@ class OpenRouterPipelineModelProvider:
                         "'## Analytical Breakdown', '## Decision Recommendation', '## Action Plan', "
                         "'## Confidence and Open Questions', '## Source Inventory'. Under '## Analytical Breakdown' "
                         "include a dynamic '### Report Plan', '### Claim Graph', and '### Contradictions and Uncertainty'. "
-                        "Every key claim must cite [Sx]. If evidence is weak, state the evidence gap explicitly."
+                        "Every key claim must cite [Sx]. If evidence is weak, state the evidence gap explicitly. "
+                        "Do not use boilerplate phrases; the decision recommendation must name the exact policy choice, concrete trigger conditions, and evidence-backed thresholds."
                     ),
                     user_prompt=(
                         f"Question: {query.strip()}\n\n"
@@ -1023,6 +1030,7 @@ class OpenRouterPipelineModelProvider:
                         f"Synthesiser output:\n{synthesiser_output}\n\n"
                         f"Oracle output:\n{oracle_output}\n\n"
                         f"Live web research context:\n{research_block}"
+                        + (f"\n\nRefinement focus: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else "")
                     ),
                 ),
                 _stage_timeout_seconds("final"),
@@ -1032,7 +1040,7 @@ class OpenRouterPipelineModelProvider:
         except Exception as exc:
             self._register_fallback(exc)
 
-        return await self._fallback.compose_final_answer(query, outputs, research)
+        return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
 
     def diagnostics(self) -> dict[str, str | int | bool]:
         breaker_state = self._health.snapshot()
@@ -1234,9 +1242,10 @@ class GroqPipelineModelProvider:
         query: str,
         outputs: dict[str, str],
         research: ResearchContext | None = None,
+        refinement_note: str | None = None,
     ) -> str:
         if not self._health.can_attempt():
-            return await self._fallback.compose_final_answer(query, outputs, research)
+            return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
 
         research_block = format_research_context(research)
         model_name = self._model_by_role.get("final", self._default_model)
@@ -1253,7 +1262,8 @@ class GroqPipelineModelProvider:
                         "'## Analytical Breakdown', '## Decision Recommendation', '## Action Plan', "
                         "'## Confidence and Open Questions', '## Source Inventory'. Under '## Analytical Breakdown' "
                         "include a dynamic '### Report Plan', '### Claim Graph', and '### Contradictions and Uncertainty'. "
-                        "Every key claim must cite [Sx]. If evidence is weak, state the evidence gap explicitly."
+                        "Every key claim must cite [Sx]. If evidence is weak, state the evidence gap explicitly. "
+                        "Do not use boilerplate phrases; the decision recommendation must name the exact policy choice, concrete trigger conditions, and evidence-backed thresholds."
                     ),
                     user_prompt=(
                         f"Question: {query.strip()}\n\n"
@@ -1262,6 +1272,7 @@ class GroqPipelineModelProvider:
                         f"Synthesiser output:\n{outputs.get('synthesiser', '')}\n\n"
                         f"Oracle output:\n{outputs.get('oracle', '')}\n\n"
                         f"Live web research context:\n{research_block}"
+                        + (f"\n\nRefinement focus: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else "")
                     ),
                 ),
                 _stage_timeout_seconds("final"),
@@ -1271,7 +1282,7 @@ class GroqPipelineModelProvider:
         except Exception as exc:
             self._register_fallback(exc)
 
-        return await self._fallback.compose_final_answer(query, outputs, research)
+        return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
 
     def diagnostics(self) -> dict[str, str | int | bool]:
         breaker_state = self._health.snapshot()
@@ -1298,22 +1309,8 @@ class GroqPipelineModelProvider:
         }
 
     async def _chat(self, model: str, system_prompt: str, user_prompt: str) -> str:
-        payload = {
-            "model": model,
-            "temperature": 0.2,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        }
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
-            response = await client.post(
-                f"{self._base_url}/chat/completions",
-                headers=self._headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            body = response.json()
+            body = await self._chat_request(client, model, system_prompt, user_prompt)
 
         choices = body.get("choices") or []
         if not choices:
@@ -1325,6 +1322,49 @@ class GroqPipelineModelProvider:
             parts = [part.get("text", "") for part in content if isinstance(part, dict)]
             return "\n".join(part for part in parts if part).strip()
         return str(content).strip()
+
+    async def _chat_request(
+        self,
+        client: httpx.AsyncClient,
+        model: str,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> dict:
+        base_payload = {
+            "model": model,
+            "temperature": 0.2,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        response = await client.post(
+            f"{self._base_url}/chat/completions",
+            headers=self._headers,
+            json=base_payload,
+        )
+        if response.status_code in {400, 429}:
+            if response.status_code == 429:
+                await asyncio.sleep(1.0)
+            compact_payload = {
+                "model": model,
+                "temperature": 0.1,
+                "messages": [
+                    {"role": "system", "content": _trim_for_prompt(system_prompt, 1100)},
+                    {"role": "user", "content": _trim_for_prompt(user_prompt, 3000)},
+                ],
+            }
+            retry = await client.post(
+                f"{self._base_url}/chat/completions",
+                headers=self._headers,
+                json=compact_payload,
+            )
+            if retry.is_success:
+                return retry.json()
+            raise RuntimeError(f"Groq request failed after compact retry: {retry.status_code} {retry.text[:200]}")
+
+        response.raise_for_status()
+        return response.json()
 
     def _register_fallback(self, exc: Exception) -> None:
         self._fallback_count += 1
@@ -1474,13 +1514,14 @@ class LocalPipelineModelProvider:
         query: str,
         outputs: dict[str, str],
         research: ResearchContext | None = None,
+        refinement_note: str | None = None,
     ) -> str:
         if not self._health.can_attempt():
             if self._strict_local:
                 raise RuntimeError("Local provider circuit is open in strict local mode.")
             if not self._fallback:
                 raise RuntimeError("Local provider fallback is unavailable.")
-            return await self._fallback.compose_final_answer(query, outputs, research)
+            return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
 
         tier = _local_model_tier(query, research)
         min_length_by_tier = {
@@ -1504,7 +1545,8 @@ class LocalPipelineModelProvider:
                             "'## Executive Summary', '## Research Scope', '## Evidence Snapshot', '## Analytical Breakdown', "
                             "'## Decision Recommendation', '## Action Plan', '## Confidence and Open Questions', '## Source Inventory'. "
                             "Under '## Analytical Breakdown' include '### Claim-to-Citation Map' and '### Contradictions and Uncertainty'. "
-                            "Use the live evidence only, avoid generic statements, and include a dynamic report plan plus claim graph."
+                            "Use the live evidence only, avoid generic statements, and include a dynamic report plan plus claim graph. "
+                            "Do not use template boilerplate; the decision recommendation must name the exact policy choice, concrete trigger conditions, and evidence-backed thresholds."
                         ),
                         user_prompt=(
                             f"Question: {query.strip()}\n\n"
@@ -1513,6 +1555,7 @@ class LocalPipelineModelProvider:
                             f"Synthesiser output:\n{outputs.get('synthesiser', '')}\n\n"
                             f"Oracle output:\n{outputs.get('oracle', '')}\n\n"
                             f"Live web research context:\n{research_block}"
+                            + (f"\n\nRefinement focus: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else "")
                         ),
                         max_tokens=token_budget,
                     ),
@@ -1533,7 +1576,7 @@ class LocalPipelineModelProvider:
             raise RuntimeError("Local provider is unavailable in strict local mode.")
         if not self._fallback:
             raise RuntimeError("Local provider fallback is unavailable.")
-        return await self._fallback.compose_final_answer(query, outputs, research)
+        return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
 
     def diagnostics(self) -> dict[str, str | int | bool]:
         breaker_state = self._health.snapshot()
@@ -1688,7 +1731,7 @@ def _default_model_for_provider(provider_name: str) -> str:
         # Free-tier oriented default. Override per role with HEXAMIND_AGENT_MODEL_* env vars.
         return "google/gemini-2.0-flash-exp:free"
     if provider_name in {"groq"}:
-        return "llama-3.3-70b-versatile"
+        return "llama-3.1-8b-instant"
     if provider_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
         return os.getenv("HEXAMIND_LOCAL_MODEL", "llama3.1:8b")
     return "deterministic"

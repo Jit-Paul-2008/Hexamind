@@ -289,17 +289,18 @@ class PipelineService:
             regenerated = False
             if _env_bool("HEXAMIND_AUTO_REGENERATE_ON_FAIL", True) and not bool(quality_report.get("passing", False)):
                 regenerated = True
-                strengthened_query = (
-                    f"{session.query}\n\n"
+                refinement_note = (
                     "Regenerate with stronger grounding. Requirements: include a claim-to-citation map, "
-                    "surface contradictions explicitly, include uncertainty disclosure, and use at least 4 unique source IDs when available."
+                    "surface contradictions explicitly, include uncertainty disclosure, use at least 4 unique source IDs when available, "
+                    "and avoid repeating generic template language."
                 )
                 try:
                     final_answer = await asyncio.wait_for(
                         self._model_provider.compose_final_answer(
-                            strengthened_query,
+                            session.query,
                             assembled,
                             research_context,
+                            refinement_note=refinement_note,
                         ),
                         timeout=self._final_timeout_seconds,
                     )
@@ -327,7 +328,7 @@ class PipelineService:
                     final_answer=final_answer,
                     research=research_context,
                 )
-                quality_report["passing"] = True
+                quality_report["recoveredFromFailure"] = True
                 quality_report["overallScore"] = max(float(quality_report.get("overallScore", 0.0)), 70.0)
                 notes = list(quality_report.get("notes", []))
                 notes.append("Auto-recovery mode delivered a report even though quality gates initially failed.")

@@ -169,9 +169,10 @@ def analyze_pipeline_quality(
         and citation_count >= (5 if source_count > 0 else 0)  # Raised bar
         and (source_count == 0 or unique_domains >= min(3, source_count))
         and contradiction_covered
-        and (not claim_verifications or claim_verification_rate >= 0.60)  # Raised bar
+        and (not claim_verifications or claim_verification_rate >= 0.75)
         and trust_score >= 55  # Trust score gate
         and high_severity_contradictions == 0  # No high-severity unaddressed contradictions
+        and generic_template_hits == 0
     )
     if has_report_plan and generic_template_hits >= 5:  # Stricter
         passing = False
@@ -883,7 +884,7 @@ def _run_quality_gates(
         structural_issues.append("Missing uncertainty/limitations disclosure")
         structural_recs.append("Add section discussing limitations, caveats, and open questions")
     
-    if generic_template_hits < 3:
+    if generic_template_hits == 0:
         structural_score += 7.0
     else:
         structural_issues.append(f"Too many generic template phrases ({generic_template_hits})")
@@ -968,7 +969,7 @@ def _run_quality_gates(
     
     gates.append(QualityGateResult(
         gate_name="verification",
-        passed=verification_score >= 18.0,
+        passed=verification_score >= 20.0,
         score=verification_score,
         max_score=verification_max,
         issues=tuple(verification_issues),
@@ -1003,7 +1004,7 @@ def _run_quality_gates(
     else:
         nongeneric_score += 4.0
     
-    if generic_template_hits < 2:
+    if generic_template_hits == 0:
         nongeneric_score += 4.0
     elif generic_template_hits < 4:
         nongeneric_score += 2.0
