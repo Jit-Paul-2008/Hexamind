@@ -51,7 +51,7 @@ class _DuckDuckGoResultParser(HTMLParser):
         if tag == "a" and "result__a" in classes:
             self._current = {
                 "title": "",
-                "url": _normalize_url(attr_map.get("href", "")),
+                "url": _canonicalize_url(attr_map.get("href", "")),
                 "snippet": "",
             }
             self._in_title = True

@@ -69,6 +69,8 @@ class DeterministicPipelineModelProvider:
         risk = outputs.get("skeptic", "")
         synthesis = outputs.get("synthesiser", "")
         outlook = outputs.get("oracle", "")
+        research_findings = self._research_findings(research)
+        tool_analysis = self._tool_analysis_markdown(research)
         return (
             "## Executive Summary\n"
             f"The decision on '{q}' should be treated as a bounded research problem: gather current evidence, separate primary from secondary sources, and validate the recommendation through staged execution.\n\n"
@@ -77,32 +79,36 @@ class DeterministicPipelineModelProvider:
             "- Scope: current public evidence, implementation implications, and decision risks.\n"
             "- Method: internet search, page retrieval, source comparison, and structured synthesis.\n\n"
             "## 2. Evidence Snapshot\n"
-            f"- Opportunity case: {self._extract_one_line(support, 'Strategic Upside', 'Opportunity Thesis')}\n"
-            f"- Risk case: {self._extract_one_line(risk, 'Primary Failure Modes', 'Risk Thesis')}\n"
-            f"- Integrated position: {self._extract_one_line(synthesis, 'Decision Rule', 'Integrated Assessment')}\n"
-            f"- Forecast: {self._extract_one_line(outlook, 'Most Likely Outcome (60%)', 'Scenario Outlook')}\n\n"
+            f"- Opportunity case: {self._extract_section_summary(support, '## Strategic Upside', '## Supporting Logic')}\n"
+            f"- Risk case: {self._extract_section_summary(risk, '## Primary Failure Modes', '## Risk Severity')}\n"
+            f"- Integrated position: {self._extract_section_summary(synthesis, '## Tradeoff Resolution', '## Decision Rule')}\n"
+            f"- Forecast: {self._extract_section_summary(outlook, '## Most Likely Outcome (60%)', '## Upside Scenario (25%)')}\n\n"
             "## 3. Comparative Analysis\n"
             "### 3.1 What the evidence supports\n"
-            f"- The live source pack indicates how the question is discussed on the web and where direct evidence exists. {source_block}\n"
+            f"- The live source pack indicates where the question is discussed on the web and which pages are directly relevant. {source_block}\n"
             "- The strongest conclusion is not absolute certainty; it is a controlled path that preserves optionality.\n"
             "- The most defensible move is a pilot with measurable gates, not unconstrained scale.\n\n"
-            "### 3.2 Where uncertainty remains\n"
+            "### 3.2 Tool-by-tool assessment\n"
+            f"{tool_analysis}\n"
+            "### 3.3 Where uncertainty remains\n"
             "- Source quality can vary widely across summaries, forums, and vendor material.\n"
             "- If current public evidence is thin, the report should explicitly label those gaps rather than infer them.\n"
             "- Operational risk remains material whenever ownership, dependencies, or measurement are unclear.\n\n"
-            "## 4. Recommendation\n"
+            "## 4. Missing Steps in the Current App\n"
+            f"{research_findings}\n\n"
+            "## 5. Recommendation\n"
             "1. Proceed only with a narrow pilot and written success criteria.\n"
             "2. Require one owner per risk category and one metric per success claim.\n"
             "3. Expand only after the pilot meets the baseline and no critical triggers are active.\n\n"
-            "## 5. 30-Day Action Plan\n"
+            "## 6. 30-Day Action Plan\n"
             "- Week 1: confirm baseline, collect sources, and document assumptions.\n"
             "- Week 2: run a constrained pilot or desk evaluation.\n"
             "- Week 3: review performance, risks, and source contradictions.\n"
             "- Week 4: decide whether to scale, hold, or stop.\n\n"
-            "## 6. Confidence and Open Questions\n"
+            "## 7. Confidence and Open Questions\n"
             "- Confidence: Moderate, because the recommendation is grounded but still depends on the quality of current web evidence.\n"
             "- Open questions: whether the newest sources materially change the baseline, and which external dependencies are most fragile.\n\n"
-            "## 7. Source Inventory\n"
+            "## 8. Source Inventory\n"
             f"{source_inventory}"
         )
 
@@ -180,14 +186,57 @@ class DeterministicPipelineModelProvider:
         top = research.sources[0]
         return f"{top.id} {top.title} ({top.domain})"
 
-    def _extract_one_line(self, text: str, preferred: str, fallback: str) -> str:
-        for marker in (preferred, fallback):
-            marker_index = text.find(marker)
-            if marker_index != -1:
-                tail = text[marker_index:]
-                line = tail.split("\n", 1)[0]
-                return line.replace("##", "").strip(" -:")
+    def _extract_section_summary(self, text: str, preferred: str, fallback: str) -> str:
+        lines = text.splitlines()
+        section_indexes = [i for i, line in enumerate(lines) if line.strip() in {preferred, fallback}]
+        for index in section_indexes:
+            for candidate in lines[index + 1 :]:
+                stripped = candidate.strip()
+                if not stripped:
+                    continue
+                if stripped.startswith("## "):
+                    break
+                if stripped.startswith("-") or stripped[0].isdigit():
+                    return stripped.lstrip("- ").strip()
+                return stripped
         return text.split("\n", 1)[0].strip() or "Not available"
+
+    def _research_findings(self, research: ResearchContext | None) -> str:
+        if not research or not research.sources:
+            return "- No live web retrieval was available, so the report should flag that gap explicitly.\n- The app still needs a retrieval layer before generation to qualify as a research model.\n- Final claims should be marked as provisional when they are not source-backed."
+
+        lines = [
+            "- The app now has an actual web-retrieval prepass and should no longer rely only on model memory.",
+            "- Source inventory and source pack should be displayed alongside the answer so users can audit the claims.",
+            "- Claims should be tied to source IDs and the report should include a section that explains which sources were used and why they matter.",
+        ]
+        if any(source.authority == "primary" for source in research.sources):
+            lines.append("- Primary sources should be preferred whenever the question asks for current specifications or official guidance.")
+        if len(research.sources) >= 3:
+            lines.append("- A mixed source set is healthier than a single-source answer because it reveals disagreements and gaps.")
+        return "\n".join(lines)
+
+    def _tool_analysis_markdown(self, research: ResearchContext | None) -> str:
+        source_note = self._source_block(research)
+        return (
+            "#### 3.2.1 Google Search\n"
+            "- Best for current facts, news, policy changes, and broad discovery.\n"
+            "- Missing step in the app: a live grounding pass before synthesis.\n"
+            "- What to do: search first, then pass the top results into the model with explicit source IDs.\n\n"
+            "#### 3.2.2 URL Context\n"
+            "- Best for deep reading of specific pages or docs discovered during search.\n"
+            "- Missing step in the app: direct page retrieval and page-level evidence extraction.\n"
+            "- What to do: fetch the most relevant URLs, extract the visible text, and use it as page-grounding context.\n\n"
+            "#### 3.2.3 File Search\n"
+            "- Best for private knowledge bases, manuals, and repeatable retrieval over your own documents.\n"
+            "- Missing step in the app: a private-data retrieval lane for uploaded files or internal notes.\n"
+            "- What to do: keep File Search as a separate lane from public web search and cite retrieved document chunks.\n\n"
+            "#### 3.2.4 Code Execution\n"
+            "- Best for numeric checks, comparisons, calculations, and small data transformations.\n"
+            "- Missing step in the app: any verification stage that computes derived values instead of trusting model prose.\n"
+            "- What to do: run code when a query needs aggregation, scoring, or repeatable analysis.\n\n"
+            f"- Current grounding note: {source_note}"
+        )
 
     def diagnostics(self) -> dict[str, str | int | bool]:
         return {
