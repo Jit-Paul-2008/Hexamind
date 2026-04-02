@@ -24,6 +24,19 @@ export interface PipelineSession {
   qualityReport?: PipelineQualityReport;
 }
 
+export interface PipelineRunMetadata {
+  sessionId: string;
+  createdAt: number;
+  queryHash: string;
+  queryLength: number;
+  sourceCount: number;
+  traceCoverage: boolean;
+  providerDiagnostics: Record<string, string | number | boolean>;
+  stageTimings: Record<string, number>;
+  reportDigest: string;
+  agentOutputCount: number;
+}
+
 export interface PipelineQualityMetrics {
   citationCount: number;
   sourceCount: number;
@@ -50,6 +63,7 @@ export interface PipelineQualityReport {
   overallScore: number;
   passing: boolean;
   regenerated?: boolean;
+  runMetadata?: PipelineRunMetadata;
   metrics: PipelineQualityMetrics;
   claimVerifications: PipelineClaimVerification[];
   contradictionFindings: PipelineContradictionFinding[];

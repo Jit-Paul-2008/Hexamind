@@ -11,6 +11,7 @@ export default function StatusIndicator() {
   const pipelineStatus = usePipelineStore((s) => s.session?.status);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [modelLabel, setModelLabel] = useState("Model ...");
+  const [circuitLabel, setCircuitLabel] = useState("Circuit unknown");
 
   useEffect(() => {
     let active = true;
@@ -27,19 +28,26 @@ export default function StatusIndicator() {
                 ? payload.activeProvider
                 : "unknown";
             const isFallback = payload.isFallback === true;
+            const circuitState =
+              typeof payload.circuitState === "string"
+                ? payload.circuitState
+                : "closed";
             setModelLabel(
               isFallback
                 ? `${activeProvider} fallback`
                 : `${activeProvider} live`
             );
+            setCircuitLabel(`Circuit ${circuitState}`);
           } else {
             setModelLabel("Model unknown");
+            setCircuitLabel("Circuit unknown");
           }
         }
       } catch {
         if (active) {
           setBackendOnline(false);
           setModelLabel("Model offline");
+          setCircuitLabel("Circuit offline");
         }
       }
     };
@@ -112,6 +120,12 @@ export default function StatusIndicator() {
         <div className="w-1.5 h-1.5 rounded-full bg-cyan-300/80 shadow-[0_0_6px_rgba(103,232,249,0.8)]" />
         <span className="font-sans text-[10px] tracking-[0.12em] uppercase text-white/45">
           {modelLabel}
+        </span>
+      </div>
+      <div className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/8 backdrop-blur-xl flex items-center gap-2">
+        <div className="w-1.5 h-1.5 rounded-full bg-amber-300/80 shadow-[0_0_6px_rgba(252,211,77,0.8)]" />
+        <span className="font-sans text-[10px] tracking-[0.12em] uppercase text-white/45">
+          {circuitLabel}
         </span>
       </div>
     </motion.div>

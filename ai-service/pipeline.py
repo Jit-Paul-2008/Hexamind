@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import time
@@ -121,6 +122,7 @@ class PipelineService:
     async def stream_events(self, session_id: str):
         session = self._get_session(session_id)
         assembled: dict[str, str] = {}
+        started_at = time.perf_counter()
         fallback_provider = DeterministicPipelineModelProvider(
             configured_provider="failsafe",
             model_name="deterministic",
@@ -131,8 +133,18 @@ class PipelineService:
         step_delay = max(0, _env_ms("HEXAMIND_STREAM_STEP_DELAY_MS", 20))
         research_context: ResearchContext | None = None
 
+        queue_wait_started = time.perf_counter()
         await asyncio.wait_for(self._stream_semaphore.acquire(), timeout=self._queue_wait_timeout_seconds)
+        queue_wait_seconds = time.perf_counter() - queue_wait_started
         self._active_streams += 1
+
+        timings = {
+            "queueWaitSeconds": queue_wait_seconds,
+            "retrievalSeconds": 0.0,
+            "agentSeconds": 0.0,
+            "finalSeconds": 0.0,
+            "qualitySeconds": 0.0,
+        }
 
         try:
             research_task = asyncio.create_task(self._model_provider.build_research_context(session.query))
@@ -160,12 +172,15 @@ class PipelineService:
 
                 if research_context is None and research_task is not None:
                     try:
+                        retrieval_started = time.perf_counter()
                         research_context = await asyncio.wait_for(research_task, timeout=self._retrieval_timeout_seconds)
+                        timings["retrievalSeconds"] += time.perf_counter() - retrieval_started
                     except Exception:
                         research_context = None
                         research_task = None
 
                 try:
+                    agent_started = time.perf_counter()
                     content = await asyncio.wait_for(
                         self._model_provider.build_agent_text(
                             agent.id,
@@ -174,10 +189,12 @@ class PipelineService:
                         ),
                         timeout=self._agent_timeout_seconds,
                     )
+                    timings["agentSeconds"] += time.perf_counter() - agent_started
                 except Exception:
                     content = ""
 
                 if not content.strip():
+                    agent_started = time.perf_counter()
                     content = await asyncio.wait_for(
                         fallback_provider.build_agent_text(
                             agent.id,
@@ -186,6 +203,7 @@ class PipelineService:
                         ),
                         timeout=self._agent_timeout_seconds,
                     )
+                    timings["agentSeconds"] += time.perf_counter() - agent_started
                 words = content.split(" ")
                 full = ""
                 for idx, word in enumerate(words):
@@ -215,6 +233,7 @@ class PipelineService:
                 await asyncio.sleep(step_delay / 1000)
 
             try:
+                final_started = time.perf_counter()
                 final_answer = await asyncio.wait_for(
                     self._model_provider.compose_final_answer(
                         session.query,
@@ -223,10 +242,12 @@ class PipelineService:
                     ),
                     timeout=self._final_timeout_seconds,
                 )
+                timings["finalSeconds"] += time.perf_counter() - final_started
             except Exception:
                 final_answer = ""
 
             if not final_answer.strip():
+                final_started = time.perf_counter()
                 final_answer = await asyncio.wait_for(
                     fallback_provider.compose_final_answer(
                         session.query,
@@ -235,13 +256,16 @@ class PipelineService:
                     ),
                     timeout=self._final_timeout_seconds,
                 )
+                timings["finalSeconds"] += time.perf_counter() - final_started
 
+            quality_started = time.perf_counter()
             quality_report = analyze_pipeline_quality(
                 query=session.query,
                 assembled=assembled,
                 final_answer=final_answer,
                 research=research_context,
             )
+            timings["qualitySeconds"] += time.perf_counter() - quality_started
 
             regenerated = False
             if _env_bool("HEXAMIND_AUTO_REGENERATE_ON_FAIL", True) and not bool(quality_report.get("passing", False)):
@@ -290,6 +314,15 @@ class PipelineService:
                 notes.append("Auto-recovery mode delivered a report even though quality gates initially failed.")
                 quality_report["notes"] = notes
 
+            quality_report["runMetadata"] = self._build_run_metadata(
+                session=session,
+                timings=timings,
+                research=research_context,
+                final_answer=final_answer,
+                assembled=assembled,
+                provider_state=self._model_provider.diagnostics(),
+                started_at=started_at,
+            )
             quality_report["regenerated"] = regenerated
 
             final_event = PipelineEvent(
@@ -309,6 +342,36 @@ class PipelineService:
         finally:
             self._active_streams = max(0, self._active_streams - 1)
             self._stream_semaphore.release()
+
+    def _build_run_metadata(
+        self,
+        *,
+        session: PipelineSession,
+        timings: dict[str, float],
+        research: ResearchContext | None,
+        final_answer: str,
+        assembled: dict[str, str],
+        provider_state: dict[str, str | int | bool],
+        started_at: float,
+    ) -> dict[str, object]:
+        query_hash = hashlib.sha256(session.query.strip().encode("utf-8")).hexdigest()[:16]
+        stage_timings = {name: round(value, 3) for name, value in timings.items()}
+        stage_timings["totalSeconds"] = round(time.perf_counter() - started_at, 3)
+        source_count = len(research.sources) if research else 0
+        trace_coverage = all(value >= 0.0 for value in timings.values()) and bool(final_answer.strip())
+
+        return {
+            "sessionId": session.id,
+            "createdAt": session.created_at,
+            "queryHash": query_hash,
+            "queryLength": len(session.query),
+            "sourceCount": source_count,
+            "traceCoverage": trace_coverage,
+            "providerDiagnostics": provider_state,
+            "stageTimings": stage_timings,
+            "reportDigest": hashlib.sha256(final_answer.strip().encode("utf-8")).hexdigest()[:16],
+            "agentOutputCount": len([text for text in assembled.values() if text.strip()]),
+        }
 
     def _get_session(self, session_id: str) -> PipelineSession:
         if session_id not in self._sessions:

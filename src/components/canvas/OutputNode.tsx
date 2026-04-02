@@ -210,6 +210,20 @@ export default function OutputNode({}: NodeProps) {
                       Claim check: {qualityReport.claimVerifications[0]?.status.toUpperCase()} - {qualityReport.claimVerifications[0]?.rationale}
                     </div>
                   ) : null}
+                  {qualityReport.runMetadata ? (
+                    <div className="rounded-xl border border-white/8 bg-black/20 p-3 text-[10px] text-white/55 space-y-1">
+                      <div className="uppercase tracking-[0.2em] text-white/35">Run telemetry</div>
+                      <div>Session: {qualityReport.runMetadata.sessionId}</div>
+                      <div>Trace coverage: {qualityReport.runMetadata.traceCoverage ? "Complete" : "Partial"}</div>
+                      <div>Query hash: {qualityReport.runMetadata.queryHash}</div>
+                      <div>
+                        Timings: queue {qualityReport.runMetadata.stageTimings.queueWaitSeconds?.toFixed(2)}s, retrieval {qualityReport.runMetadata.stageTimings.retrievalSeconds?.toFixed(2)}s, agent {qualityReport.runMetadata.stageTimings.agentSeconds?.toFixed(2)}s, final {qualityReport.runMetadata.stageTimings.finalSeconds?.toFixed(2)}s, quality {qualityReport.runMetadata.stageTimings.qualitySeconds?.toFixed(2)}s
+                      </div>
+                      <div>
+                        Provider: {String(qualityReport.runMetadata.providerDiagnostics.activeProvider || "unknown")} · circuit {String(qualityReport.runMetadata.providerDiagnostics.circuitState || "closed")}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>
