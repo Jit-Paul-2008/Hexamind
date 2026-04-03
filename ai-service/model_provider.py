@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -214,6 +215,65 @@ def _research_compression_level() -> str:
     level = os.getenv("HEXAMIND_RESEARCH_COMPRESSION", "medium").strip().lower()
     valid_levels = {"none", "light", "medium", "aggressive"}
     return level if level in valid_levels else "medium"
+
+
+_PROMPT_RESPONSE_CACHE: dict[str, tuple[float, str]] = {}
+_PROMPT_RESPONSE_CACHE_TTL_SECONDS = max(120.0, _env_float("HEXAMIND_PROMPT_CACHE_TTL_SECONDS", 3600.0))
+_PROMPT_RESPONSE_CACHE_MAX_ENTRIES = max(32, _env_int("HEXAMIND_PROMPT_CACHE_MAX_ENTRIES", 128))
+
+
+def _estimate_tokens(text: str) -> int:
+    return max(1, (len(text or "") + 3) // 4)
+
+
+def _prompt_cache_key(
+    provider_name: str,
+    stage: str,
+    model_name: str,
+    system_prompt: str,
+    user_prompt: str,
+) -> str:
+    payload = "|".join(
+        [
+            provider_name.strip().lower(),
+            stage.strip().lower(),
+            model_name.strip(),
+            system_prompt.strip(),
+            user_prompt.strip()[:500],
+        ]
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _load_prompt_cache(cache_key: str) -> str | None:
+    cached = _PROMPT_RESPONSE_CACHE.get(cache_key)
+    if not cached:
+        return None
+
+    cached_at, response = cached
+    if time.time() - cached_at > _PROMPT_RESPONSE_CACHE_TTL_SECONDS:
+        _PROMPT_RESPONSE_CACHE.pop(cache_key, None)
+        return None
+    return response
+
+
+def _store_prompt_cache(cache_key: str, response: str) -> None:
+    _PROMPT_RESPONSE_CACHE[cache_key] = (time.time(), response)
+    while len(_PROMPT_RESPONSE_CACHE) > _PROMPT_RESPONSE_CACHE_MAX_ENTRIES:
+        oldest_key = next(iter(_PROMPT_RESPONSE_CACHE))
+        _PROMPT_RESPONSE_CACHE.pop(oldest_key, None)
+
+
+def _agent_model_override(agent_id: str, default_model: str) -> str:
+    env_names = [f"HEXAMIND_AGENT_MODEL_{agent_id.upper()}"]
+    if agent_id == "synthesiser":
+        env_names.append("HEXAMIND_AGENT_MODEL_SYNTHESIS")
+
+    for env_name in env_names:
+        value = os.getenv(env_name, "").strip()
+        if value:
+            return value
+    return default_model
 
 
 # Prompt Deduplication: Base prompt shared across all agents
@@ -1819,12 +1879,13 @@ class OpenRouterPipelineModelProvider:
             reason="OpenRouter runtime call failed",
         )
         self._model_by_role = {
-            "advocate": os.getenv("HEXAMIND_AGENT_MODEL_ADVOCATE", default_model).strip(),
-            "skeptic": os.getenv("HEXAMIND_AGENT_MODEL_SKEPTIC", default_model).strip(),
-            "synthesiser": os.getenv("HEXAMIND_AGENT_MODEL_SYNTHESIS", default_model).strip(),
-            "oracle": os.getenv("HEXAMIND_AGENT_MODEL_ORACLE", default_model).strip(),
-            "final": os.getenv("HEXAMIND_AGENT_MODEL_FINAL", default_model).strip(),
+            "advocate": _agent_model_override("advocate", default_model),
+            "skeptic": _agent_model_override("skeptic", default_model),
+            "synthesiser": _agent_model_override("synthesiser", default_model),
+            "oracle": _agent_model_override("oracle", default_model),
+            "final": _agent_model_override("final", default_model),
         }
+        self._token_budget = TokenBudget()
 
     async def build_research_context(self, query: str) -> ResearchContext | None:
         if not _web_research_enabled():
@@ -1851,8 +1912,10 @@ class OpenRouterPipelineModelProvider:
         if not self._health.can_attempt():
             return await self._fallback.build_agent_text(agent_id, query, research)
 
-        # Use deduplicated prompts (30-40% token savings)
-        system_prompt = _build_agent_prompt(agent_id)
+        complexity_score = research.workflow_profile.complexity_score if research else _query_complexity_score(query)
+
+        # Use deduplicated prompts with query-aware pruning.
+        system_prompt = _build_agent_prompt(agent_id, complexity_score)
         
         # Use compressed research context (60% token reduction)
         compression_level = _research_compression_level()
@@ -1862,6 +1925,15 @@ class OpenRouterPipelineModelProvider:
             research_block = _compress_research_context(research, compression_level)
         
         model_name = self._model_by_role.get(agent_id, self._default_model)
+        user_prompt = f"Question: {query.strip()}\n\nLive web research context:\n{research_block}"
+        cache_key = _prompt_cache_key("openrouter", f"agent:{agent_id}", model_name, system_prompt, user_prompt)
+        cached_response = _load_prompt_cache(cache_key)
+        if cached_response is not None:
+            return cached_response
+
+        estimated_tokens = _estimate_tokens(system_prompt) + _estimate_tokens(user_prompt)
+        if not self._token_budget.can_afford(estimated_tokens):
+            return await self._fallback.build_agent_text(agent_id, query, research)
 
         try:
             resolved = await _invoke_with_resilience(
@@ -1870,11 +1942,13 @@ class OpenRouterPipelineModelProvider:
                 lambda: self._chat(
                     model=model_name,
                     system_prompt=system_prompt,
-                    user_prompt=f"Question: {query.strip()}\n\nLive web research context:\n{research_block}",
+                    user_prompt=user_prompt,
                 ),
                 _stage_timeout_seconds("agent"),
                 lambda text: _is_agent_research_grade(text, minimum_length=280, research=research),
             )
+            _store_prompt_cache(cache_key, resolved)
+            self._token_budget.charge(estimated_tokens + _estimate_tokens(resolved))
             return resolved
         except Exception as exc:
             self._register_fallback(exc)
@@ -1968,6 +2042,9 @@ class OpenRouterPipelineModelProvider:
             "fallbackCount": self._fallback_count,
             "lastError": self._last_error,
             "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
+            "tokenBudgetLimit": self._token_budget.total_limit,
+            "tokenBudgetUsed": self._token_budget.used,
+            "tokenBudgetRemaining": self._token_budget.remaining(),
             "promptRegistryVersion": registry["registryVersion"],
             "promptRegistrySize": len(registry["prompts"]),
             **breaker_state,
@@ -2065,12 +2142,13 @@ class GroqPipelineModelProvider:
             reason="Groq runtime call failed",
         )
         self._model_by_role = {
-            "advocate": os.getenv("HEXAMIND_AGENT_MODEL_ADVOCATE", default_model).strip(),
-            "skeptic": os.getenv("HEXAMIND_AGENT_MODEL_SKEPTIC", default_model).strip(),
-            "synthesiser": os.getenv("HEXAMIND_AGENT_MODEL_SYNTHESIS", default_model).strip(),
-            "oracle": os.getenv("HEXAMIND_AGENT_MODEL_ORACLE", default_model).strip(),
-            "final": os.getenv("HEXAMIND_AGENT_MODEL_FINAL", default_model).strip(),
+            "advocate": _agent_model_override("advocate", default_model),
+            "skeptic": _agent_model_override("skeptic", default_model),
+            "synthesiser": _agent_model_override("synthesiser", default_model),
+            "oracle": _agent_model_override("oracle", default_model),
+            "final": _agent_model_override("final", default_model),
         }
+        self._token_budget = TokenBudget()
 
     async def build_research_context(self, query: str) -> ResearchContext | None:
         if not _web_research_enabled():
@@ -2097,8 +2175,10 @@ class GroqPipelineModelProvider:
         if not self._health.can_attempt():
             return await self._fallback.build_agent_text(agent_id, query, research)
 
-        # Use deduplicated prompts (30-40% token savings)
-        system_prompt = _build_agent_prompt(agent_id)
+        complexity_score = research.workflow_profile.complexity_score if research else _query_complexity_score(query)
+
+        # Use deduplicated prompts with query-aware pruning.
+        system_prompt = _build_agent_prompt(agent_id, complexity_score)
         
         # Use compressed research context (60% token reduction)
         compression_level = _research_compression_level()
@@ -2108,6 +2188,15 @@ class GroqPipelineModelProvider:
             research_block = _compress_research_context(research, compression_level)
         
         model_name = self._model_by_role.get(agent_id, self._default_model)
+        user_prompt = f"Question: {query.strip()}\n\nLive web research context:\n{research_block}"
+        cache_key = _prompt_cache_key("groq", f"agent:{agent_id}", model_name, system_prompt, user_prompt)
+        cached_response = _load_prompt_cache(cache_key)
+        if cached_response is not None:
+            return cached_response
+
+        estimated_tokens = _estimate_tokens(system_prompt) + _estimate_tokens(user_prompt)
+        if not self._token_budget.can_afford(estimated_tokens):
+            return await self._fallback.build_agent_text(agent_id, query, research)
 
         try:
             resolved = await _invoke_with_resilience(
@@ -2116,11 +2205,13 @@ class GroqPipelineModelProvider:
                 lambda: self._chat(
                     model=model_name,
                     system_prompt=system_prompt,
-                    user_prompt=f"Question: {query.strip()}\n\nLive web research context:\n{research_block}",
+                    user_prompt=user_prompt,
                 ),
                 _stage_timeout_seconds("agent"),
                 lambda text: _is_agent_research_grade(text, minimum_length=280, research=research),
             )
+            _store_prompt_cache(cache_key, resolved)
+            self._token_budget.charge(estimated_tokens + _estimate_tokens(resolved))
             return resolved
         except Exception as exc:
             self._register_fallback(exc)
@@ -2192,6 +2283,9 @@ class GroqPipelineModelProvider:
             "fallbackCount": self._fallback_count,
             "lastError": self._last_error,
             "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
+            "tokenBudgetLimit": self._token_budget.total_limit,
+            "tokenBudgetUsed": self._token_budget.used,
+            "tokenBudgetRemaining": self._token_budget.remaining(),
             "promptRegistryVersion": registry["registryVersion"],
             "promptRegistrySize": len(registry["prompts"]),
             **breaker_state,
@@ -2290,12 +2384,13 @@ class LocalPipelineModelProvider:
             "large": os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", default_model).strip() or default_model,
         }
         self._model_by_role = {
-            "advocate": os.getenv("HEXAMIND_AGENT_MODEL_ADVOCATE", default_model).strip(),
-            "skeptic": os.getenv("HEXAMIND_AGENT_MODEL_SKEPTIC", default_model).strip(),
-            "synthesiser": os.getenv("HEXAMIND_AGENT_MODEL_SYNTHESIS", default_model).strip(),
-            "oracle": os.getenv("HEXAMIND_AGENT_MODEL_ORACLE", default_model).strip(),
-            "final": os.getenv("HEXAMIND_AGENT_MODEL_FINAL", default_model).strip(),
+            "advocate": _agent_model_override("advocate", default_model),
+            "skeptic": _agent_model_override("skeptic", default_model),
+            "synthesiser": _agent_model_override("synthesiser", default_model),
+            "oracle": _agent_model_override("oracle", default_model),
+            "final": _agent_model_override("final", default_model),
         }
+        self._token_budget = TokenBudget()
         self._local_available = self._probe_local_service()
         if self._strict_local and not self._local_available:
             raise RuntimeError(
@@ -2360,7 +2455,8 @@ class LocalPipelineModelProvider:
                 "Audit 5+ claims."
             ),
         }
-        system_prompt = prompts.get(agent_id, prompts.get("verifier", prompts["oracle"]))
+        complexity_score = research.workflow_profile.complexity_score if research else _query_complexity_score(query)
+        system_prompt = _build_agent_prompt(agent_id, complexity_score)
         tier = _local_model_tier(query, research)
         min_length_by_tier = {
             "small": 190,
@@ -2370,6 +2466,19 @@ class LocalPipelineModelProvider:
         research_block = _compressed_research_block(research, _local_context_budget("agent", tier, research))
         model_name = self._resolve_local_model(agent_id, tier)
         token_budget = _local_token_budget("agent", tier, research)
+        user_prompt = f"Question: {query.strip()}\n\nLive research:\n{research_block}"
+        cache_key = _prompt_cache_key("local", f"agent:{agent_id}", model_name, system_prompt, user_prompt)
+        cached_response = _load_prompt_cache(cache_key)
+        if cached_response is not None:
+            return cached_response
+
+        estimated_tokens = _estimate_tokens(system_prompt) + _estimate_tokens(user_prompt)
+        if not self._token_budget.can_afford(estimated_tokens):
+            if self._strict_local:
+                raise RuntimeError("Local provider token budget exhausted in strict local mode.")
+            if not self._fallback:
+                raise RuntimeError("Local provider fallback is unavailable.")
+            return await self._fallback.build_agent_text(agent_id, query, research)
 
         if self._local_available:
             try:
@@ -2379,7 +2488,7 @@ class LocalPipelineModelProvider:
                     lambda: self._chat(
                         model=model_name,
                         system_prompt=system_prompt,
-                        user_prompt=f"Question: {query.strip()}\n\nLive research:\n{research_block}",
+                        user_prompt=user_prompt,
                         max_tokens=token_budget,
                     ),
                     _stage_timeout_seconds("agent"),
@@ -2389,6 +2498,8 @@ class LocalPipelineModelProvider:
                         research=research,
                     ),
                 )
+                _store_prompt_cache(cache_key, resolved)
+                self._token_budget.charge(estimated_tokens + _estimate_tokens(resolved))
                 return resolved
             except Exception as exc:
                 self._register_fallback(exc)
@@ -2496,6 +2607,9 @@ class LocalPipelineModelProvider:
             "strictLocal": self._strict_local,
             "lastError": self._last_error,
             "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
+            "tokenBudgetLimit": self._token_budget.total_limit,
+            "tokenBudgetUsed": self._token_budget.used,
+            "tokenBudgetRemaining": self._token_budget.remaining(),
             "promptRegistryVersion": registry["registryVersion"],
             "promptRegistrySize": len(registry["prompts"]),
             **breaker_state,
