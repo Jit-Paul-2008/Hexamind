@@ -26,6 +26,7 @@ The UI is a single full-window experience at `/` with the existing 4 agents:
 - `GET /api/pipeline/{sessionId}/quality` -> structured quality diagnostics + trust metrics
 - `GET /api/models/status` -> local Ollama/OpenAI-compatible model inventory and readiness
 - `GET /api/benchmark/local` -> local model benchmark summary for the current tiered routing setup
+- `GET /api/benchmark/competitive` -> latest consolidated ARIA/Gemini/GPT batch summary
 - `POST /api/pipeline/{sessionId}/sarvam-transform` -> optional language/instruction transform of final report
 - `POST /api/pipeline/{sessionId}/export-docx` -> optional DOCX export of transformed final report
 
@@ -103,6 +104,14 @@ If you want the easiest local check, do this:
 ```bash
 npm run dev:all
 ```
+
+For the competitive comparison workflow, run:
+
+```bash
+npm run bench:competitive
+```
+
+That writes one consolidated markdown report to `ai-service/.data/competitive-research/competitive-research-latest.md` and updates `src/docs/aria-competitive-results.md`.
 
 3. Open this in your browser after it starts:
 

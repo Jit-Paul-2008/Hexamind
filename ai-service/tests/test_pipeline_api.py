@@ -50,6 +50,11 @@ class PipelineApiTests(unittest.TestCase):
         self.assertTrue(benchmark_payload["ready"])
         self.assertEqual(benchmark_payload["benchmarks"][0]["model"], "llama3.1:8b")
 
+        competitive_response = self.client.get("/api/benchmark/competitive")
+        self.assertEqual(competitive_response.status_code, 200)
+        competitive_payload = competitive_response.json()
+        self.assertIn("status", competitive_payload)
+
         agents_response = self.client.get("/api/agents")
         self.assertEqual(agents_response.status_code, 200)
         agents = agents_response.json()

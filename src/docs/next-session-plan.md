@@ -99,3 +99,4 @@
 ## Execution Reference
 
 - See `src/docs/aria-free-power-workflow.md` for runtime profiles and acceptance criteria.
+- See `src/docs/aria-competitive-results.md` for the local comparison ledger and critic-loop workflow.

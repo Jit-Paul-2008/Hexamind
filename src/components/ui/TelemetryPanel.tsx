@@ -20,22 +20,47 @@ type HealthPayload = {
   finalTimeoutSeconds?: number;
 };
 
+type CompetitiveSummary = {
+  status?: string;
+  batchName?: string;
+  topicCount?: number;
+  providerStats?: Record<
+    string,
+    {
+      wins?: number;
+      topics?: number;
+      averageScore?: number;
+      averageTrust?: number;
+    }
+  >;
+  notes?: string[];
+};
+
 export default function TelemetryPanel() {
   const [payload, setPayload] = useState<HealthPayload | null>(null);
+  const [competitiveSummary, setCompetitiveSummary] = useState<CompetitiveSummary | null>(null);
 
   useEffect(() => {
     let active = true;
 
     const load = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/health`);
-        const json = response.ok ? ((await response.json()) as HealthPayload) : null;
+        const [healthResponse, competitiveResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/health`),
+          fetch(`${API_BASE_URL}/api/benchmark/competitive`),
+        ]);
+        const json = healthResponse.ok ? ((await healthResponse.json()) as HealthPayload) : null;
+        const competitiveJson = competitiveResponse.ok
+          ? ((await competitiveResponse.json()) as CompetitiveSummary)
+          : null;
         if (active) {
           setPayload(json);
+          setCompetitiveSummary(competitiveJson);
         }
       } catch {
         if (active) {
           setPayload(null);
+          setCompetitiveSummary(null);
         }
       }
     };
@@ -73,6 +98,18 @@ export default function TelemetryPanel() {
         <div>Queue wait: {payload.queueWaitTimeoutSeconds ?? 0}s</div>
         <div>Final timeout: {payload.finalTimeoutSeconds ?? 0}s</div>
       </div>
+      {competitiveSummary?.status === "ready" ? (
+        <div className="mt-3 rounded-xl border border-white/8 bg-black/20 p-3 text-[10px] text-white/62 space-y-1">
+          <div className="uppercase tracking-[0.2em] text-white/35">Competitive batch</div>
+          <div>{competitiveSummary.batchName || "latest batch"} • {competitiveSummary.topicCount ?? 0} topics</div>
+          <div>
+            ARIA {competitiveSummary.providerStats?.ARIA?.averageScore?.toFixed(1) ?? "n/a"} / Gemini {competitiveSummary.providerStats?.Gemini?.averageScore?.toFixed(1) ?? "n/a"} / GPT {competitiveSummary.providerStats?.GPT?.averageScore?.toFixed(1) ?? "n/a"}
+          </div>
+          <div>
+            Wins: ARIA {competitiveSummary.providerStats?.ARIA?.wins ?? 0} | Gemini {competitiveSummary.providerStats?.Gemini?.wins ?? 0} | GPT {competitiveSummary.providerStats?.GPT?.wins ?? 0}
+          </div>
+        </div>
+      ) : null}
     </motion.div>
   );
 }

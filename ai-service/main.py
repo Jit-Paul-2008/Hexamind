@@ -20,6 +20,7 @@ from agents import AGENTS
 from governance import resolve_tenant_resolution
 from pipeline import pipeline_service
 from sarvam_service import SarvamService, docx_supported
+from competitive_research import load_latest_competitive_batch_report
 from schemas import (
     Agent,
     SarvamTransformRequest,
@@ -112,6 +113,11 @@ async def model_status() -> dict[str, object]:
 @app.get("/api/benchmark/local")
 async def benchmark_local_models() -> dict[str, object]:
     return await _benchmark_local_models()
+
+
+@app.get("/api/benchmark/competitive")
+def competitive_benchmark_report() -> dict[str, object]:
+    return load_latest_competitive_batch_report()
 
 
 @app.get("/api/agents", response_model=list[Agent])
