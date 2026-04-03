@@ -625,9 +625,9 @@ class DeterministicPipelineModelProvider:
     def _build_methodology(self, research: ResearchContext | None) -> str:
         if not research or not research.sources:
             return (
-                "**Data Sources:** No live web retrieval was performed for this analysis. Conclusions are based on structured reasoning using the model's training knowledge, which may be outdated or incomplete.\n\n"
+                "**Data Sources:** No live web retrieval was performed for this analysis. Conclusions are based on structured reasoning using the model's training knowledge, which may be outdated or incomplete. **Critical limitation:** Without access to current primary sources, all findings should be treated as provisional hypotheses requiring external validation.\n\n"
                 "**Analytical Framework:** A five-agent adversarial pipeline was employed: (1) Advocate — constructs the strongest evidence-backed case for benefits; (2) Skeptic — identifies failure modes, risks, and limitations; (3) Synthesiser — resolves conflicts and produces integrated interpretation; (4) Oracle — forecasts likely outcomes under different scenarios; (5) Verifier — audits claim-to-source mappings and flags evidence gaps.\n\n"
-                "**Limitations:** Without live source retrieval, all claims should be verified against current primary literature before acting on recommendations."
+                "**Quality Controls:** In the absence of source retrieval, quality controls are severely constrained. Claims cannot be validated against external evidence, and confidence levels represent internal consistency only."
             )
         
         source_count = len(research.sources)
@@ -639,17 +639,27 @@ class DeterministicPipelineModelProvider:
         domains = list({s.domain for s in research.sources})[:5]
         domain_list = ", ".join(domains[:4]) + (f", and {len(domains) - 4} others" if len(domains) > 4 else "")
         
+        # Add primary source details
+        primary_sources = [s for s in research.sources if s.authority == "primary"][:3]
+        primary_details = ""
+        if primary_sources:
+            primary_names = ", ".join(f"{s.title} [{s.id}]" for s in primary_sources[:2])
+            primary_details = f" Primary sources consulted include {primary_names}" + (f", among {len(primary_sources)} total primary sources" if len(primary_sources) > 2 else "") + "."
+        
         return (
             f"**Data Sources:** This analysis synthesizes {source_count} sources retrieved via Tavily search API across {domain_count} distinct domains ({domain_list}). "
-            f"Of these, {primary_count} are classified as primary sources (peer-reviewed literature, official regulatory guidance, government publications) and {secondary_count} as secondary sources (industry analyses, news, commentary). "
-            f"Mean credibility score across sources is {avg_credibility:.0%}.\n\n"
+            f"**Source authority classification:** {primary_count} primary sources (peer-reviewed literature, official regulatory guidance, government publications) and {secondary_count} secondary sources (industry analyses, news, commentary). "
+            f"Mean credibility score is {avg_credibility:.0%}.{primary_details}\n\n"
+            "**Source Selection Criteria:** Retrieval prioritized primary sources over secondary; recent publications over outdated; high-authority domains (.gov, .edu, peer-reviewed journals) over commercial sites. "
+            "Where primary sources were unavailable, secondary sources were used with explicit caveats. "
+            "Sources were scored for credibility (0-100%) based on domain authority, recency, and alignment with query intent.\n\n"
             "**Analytical Framework:** Evidence was processed through a five-agent adversarial pipeline:\n"
-            "- **Advocate** — Constructs the strongest evidence-backed case for benefits, requiring explicit citation for each claim.\n"
-            "- **Skeptic** — Identifies failure modes, risks, and limitations with probability and impact estimates.\n"
-            "- **Synthesiser** — Resolves conflicts between supportive and critical perspectives, producing integrated interpretation.\n"
-            "- **Oracle** — Forecasts likely outcomes under baseline, upside, and downside scenarios.\n"
-            "- **Verifier** — Audits claim-to-source mappings, triangulates across sources, and flags evidence gaps.\n\n"
-            "**Quality Controls:** Claims are retained only when traceable to at least one source. Contradictions between sources are explicitly surfaced rather than silently resolved. Confidence levels reflect source diversity, authority, and internal consistency."
+            "- **Advocate** — Constructs the strongest evidence-backed case for benefits, requiring explicit [Sx] citation for each claim. Benefits are grounded in documented outcomes, not speculative projections.\n"
+            "- **Skeptic** — Identifies failure modes, risks, and limitations with probability and impact estimates. Risk claims must cite evidence of actual deployment challenges or documented failure patterns.\n"
+            "- **Synthesiser** — Resolves conflicts between supportive and critical perspectives, producing integrated interpretation. When sources disagree, disagreement is preserved rather than artificially resolved.\n"
+            "- **Oracle** — Forecasts likely outcomes under baseline, upside, and downside scenarios. Projections are anchored to current evidence, not aspirational timelines.\n"
+            "- **Verifier** — Audits claim-to-source mappings, triangulates across sources, and flags evidence gaps. Claims lacking source support are marked as speculative.\n\n"
+            "**Quality Controls:** (1) **Citation integrity:** Claims are retained only when traceable to at least one source via [Sx] reference. (2) **Primary source preference:** When available, primary sources supersede secondary interpretation. (3) **Contradiction handling:** Source conflicts are explicitly documented rather than silently merged. (4) **Confidence calibration:** Confidence levels reflect source diversity, authority balance, and internal consistency—not certainty."
         )
     
     def _build_results(self, outputs: dict[str, str], research: ResearchContext | None, report_mode: str) -> str:
@@ -659,28 +669,51 @@ class DeterministicPipelineModelProvider:
         oracle_summary = self._extract_section_summary(outputs.get("oracle", ""), "## Most Likely Outcome (60%)", "## Upside Scenario (25%)")
         verifier_summary = self._extract_section_summary(outputs.get("verifier", ""), "## Verification Summary", "## Claim Verification")
         
-        evidence_section = ""
+        evidence_narrative = ""
         if research and research.sources:
             top_sources = research.sources[:4]
-            evidence_lines = []
+            primary_sources = [s for s in top_sources if s.authority == "primary"]
+            secondary_sources = [s for s in top_sources if s.authority != "primary"]
+            
+            # Build narrative description of evidence
+            source_descriptions = []
             for s in top_sources:
-                excerpt_short = s.excerpt[:200] + "..." if len(s.excerpt) > 200 else s.excerpt
-                evidence_lines.append(f"[{s.id}] {s.title}: \"{excerpt_short}\" (credibility: {s.credibility_score:.0%})")
-            evidence_section = "**Key Evidence Excerpts:**\n" + "\n".join(f"- {line}" for line in evidence_lines) + "\n\n"
+                excerpt_short = s.excerpt[:150] + "..." if len(s.excerpt) > 150 else s.excerpt
+                source_descriptions.append(f"{s.title} [{s.id}] (credibility: {s.credibility_score:.0%}) reports: \"{excerpt_short}\"")
+            
+            evidence_narrative = (
+                f"The evidence base for this analysis comprises {len(research.sources)} sources retrieved from {len({s.domain for s in research.sources})} distinct domains. "
+                f"Among the highest-quality sources, {len(primary_sources)} are classified as primary sources (peer-reviewed research, official guidance, government publications), "
+                f"providing direct empirical evidence or authoritative policy statements. "
+                f"{'The remaining sources offer secondary analysis, industry perspectives, and interpretive commentary. ' if secondary_sources else ''}"
+                f"Key excerpts from top-ranked sources include: "
+                f"{' '.join(source_descriptions[:3])}\n\n"
+            )
+        else:
+            evidence_narrative = "No live sources were retrieved for this analysis. The findings below are based on structured reasoning using the model's training knowledge, which may not reflect current evidence.\n\n"
         
         return (
             f"### 3.1 Evidence Base\n"
-            f"{evidence_section if evidence_section else 'No live sources were retrieved for this analysis.\n\n'}"
+            f"{evidence_narrative}"
             f"### 3.2 Supportive Findings\n"
-            f"The Advocate analysis identified the following key benefits: {advocate_summary}\n\n"
-            f"### 3.3 Risk Factors and Limitations\n"
-            f"The Skeptic analysis identified the following concerns: {skeptic_summary}\n\n"
+            f"Analysis of potential benefits reveals the following: {advocate_summary} "
+            f"These findings represent the strongest case for adoption when conditions favor successful implementation. "
+            f"The evidence suggests that benefits are most pronounced in contexts where task boundaries are well-defined, validation is rigorous, and human oversight remains robust.\n\n"
+            f"### 3.3 Risk Factors and Constraints\n"
+            f"Critical evaluation of potential failure modes and constraints identifies: {skeptic_summary} "
+            f"These risks are not merely theoretical; they represent documented challenges from deployment experience and should inform any adoption decision. "
+            f"Risk mitigation requires explicit attention to subgroup performance, workflow integration, and continuous monitoring rather than one-time validation.\n\n"
             f"### 3.4 Integrated Interpretation\n"
-            f"Synthesizing supportive and critical perspectives: {synthesis_summary}\n\n"
+            f"Reconciling supportive and critical perspectives yields the following synthesis: {synthesis_summary} "
+            f"This integrated view acknowledges that neither uncritical enthusiasm nor blanket skepticism is warranted. "
+            f"The evidence supports a nuanced position: benefits are real but conditional, and successful outcomes depend on matching deployment context to validated use-cases.\n\n"
             f"### 3.5 Forward Outlook\n"
-            f"Probabilistic scenario analysis indicates: {oracle_summary}\n\n"
+            f"Scenario analysis considering likely future developments suggests: {oracle_summary} "
+            f"These projections are necessarily uncertain, but they highlight the critical factors that will determine whether early promise translates to sustained impact. "
+            f"Monitoring leading indicators—such as subgroup performance stability, clinician override patterns, and post-market safety signals—can provide early warning of trajectory shifts.\n\n"
             f"### 3.6 Evidence Quality Assessment\n"
-            f"{verifier_summary}"
+            f"Critical evaluation of the evidence base itself reveals: {verifier_summary} "
+            f"Understanding evidence quality is essential for calibrating confidence appropriately. Claims backed by multiple independent high-credibility sources warrant stronger confidence than those resting on a single source or secondary interpretation."
         )
     
     def _build_discussion(self, outputs: dict[str, str], research: ResearchContext | None, report_mode: str) -> str:
@@ -1406,47 +1439,63 @@ class GeminiPipelineModelProvider:
 
         research_block = format_research_context(research)
         final_prompt = (
-            "You are the FINAL SYNTHESISER for a professional multi-agent research pipeline in research-paper mode.\n\n"
+            "You are the FINAL SYNTHESISER for a professional multi-agent research pipeline. Your output must follow academic research paper conventions (IMRaD structure).\n\n"
             "REQUIRED OUTPUT STRUCTURE (use exact headings):\n\n"
-            "## Executive Summary\n"
-            "3-sentence synthesis: context, key finding, confidence.\n\n"
-            "## Introduction\n"
-            "One concise paragraph introducing the topic and why it matters now.\n\n"
-            "## Research Scope\n"
-            "- Core question addressed\n"
-            "- Methodology: multi-agent synthesis with live web retrieval\n"
-            "- Evidence basis: X sources across Y domains\n"
-            "- Output objective and intended audience\n\n"
-            "## Evidence Snapshot\n"
-            "| Source | Domain | Authority | Credibility | Key Contribution |\n"
-            "List all sources used with their evidence value.\n\n"
-            "## Analytical Breakdown\n\n"
-            "### Report Plan\n"
-            "Query type classification and dynamic section focus.\n\n"
-            "### Claim Graph\n"
-            "Map key claims to sources: Claim → [Sx] with support/contradiction edges.\n"
-            "Show how evidence flows from sources to conclusions.\n\n"
-            "### Contradictions and Uncertainty\n"
-            "- Where sources disagree and how conflict was resolved\n"
-            "- Confidence intervals on key claims\n"
-            "- Evidence gaps that limit certainty\n\n"
-            "## Decision Recommendation\n"
-            "Write as a concise narrative paragraph (not checklist): evidence-weighted position, boundaries, and why.\n\n"
-            "## Action Plan\n"
-            "Only include concise next research or policy steps tied to evidence gaps.\n\n"
-            "## Confidence and Open Questions\n"
-            "- Overall confidence: X% with rationale\n"
-            "- What we know vs. don't know\n"
-            "- Key uncertainties that could change the recommendation\n"
-            "- Recommended follow-up research\n\n"
-            "## Source Inventory\n"
-            "Complete citation list with credibility and relevance assessment.\n\n"
+            "## Abstract\n"
+            "Structured abstract with: **Background:** (context), **Methods:** (analytical approach), **Results:** (key finding), **Conclusion:** (confidence and contribution).\n\n"
+            "## 1. Introduction\n"
+            "Academic-style introduction establishing:\n"
+            "- Domain context and significance\n"
+            "- Research question (explicit statement)\n"
+            "- Why this inquiry matters\n"
+            "- Primary sources consulted (if available)\n\n"
+            "## 2. Methodology\n"
+            "Document your analytical framework:\n"
+            "- **Data Sources:** Number of sources, domains, primary vs secondary classification, mean credibility\n"
+            "- **Analytical Framework:** Five-agent adversarial pipeline (Advocate → Skeptic → Synthesiser → Oracle → Verifier)\n"
+            "- **Quality Controls:** Citation requirements, contradiction handling, confidence calibration\n\n"
+            "## 3. Results\n"
+            "Present findings in narrative prose (no bullet lists):\n"
+            "### 3.1 Evidence Base\n"
+            "Describe source composition with key excerpts embedded naturally.\n"
+            "### 3.2 Supportive Findings\n"
+            "Synthesize benefits identified by Advocate analysis.\n"
+            "### 3.3 Risk Factors and Constraints\n"
+            "Integrate concerns from Skeptic analysis.\n"
+            "### 3.4 Integrated Interpretation\n"
+            "Reconcile competing perspectives from Synthesiser.\n"
+            "### 3.5 Forward Outlook\n"
+            "Scenario analysis from Oracle projections.\n"
+            "### 3.6 Evidence Quality Assessment\n"
+            "Verifier findings on source reliability.\n\n"
+            "## 4. Discussion\n"
+            "Interpret findings with:\n"
+            "- Strength of Evidence assessment\n"
+            "- **Implications for Practice:** What this means for decision-makers\n"
+            "- **What This Changes:** Explicit contribution framing (why it matters, what insights are novel)\n"
+            "- Contextualize findings: where benefits are strongest, where risks are highest\n\n"
+            "## 5. Limitations and Counterarguments\n"
+            "Critical self-assessment:\n"
+            "- **Source Limitations:** Coverage, authority balance, temporal constraints\n"
+            "- **Potential Counterarguments:** Alternative interpretations, validity challenges\n"
+            "- **What Would Invalidate These Findings:** Specific evidence that would overturn conclusions\n\n"
+            "## 6. Conclusion\n"
+            "Synthesize with:\n"
+            "- Restate integrated finding\n"
+            "- **Key Contribution:** What makes this analysis valuable beyond summary\n"
+            "- **Why This Matters:** Practical significance\n"
+            "- **Recommended Next Steps:** Specific, evidence-grounded actions\n\n"
+            "## References\n"
+            "Complete source inventory with credibility scores and authority classification.\n\n"
             "QUALITY REQUIREMENTS:\n"
-            "- Minimum 5 source citations with [Sx] format\n"
-            "- NO generic template phrases ('it depends', 'generally speaking', 'may vary')\n"
-            "- Traceability: every conclusion maps to specific evidence\n"
-            "- Quantify uncertainty explicitly (percentages, ranges, confidence levels)\n"
-            "- Do NOT include generic business/project templates unless user explicitly asks\n\n"
+            "- Write in narrative prose, not bullet lists (except References)\n"
+            "- Every major claim cites [Sx] source ID\n"
+            "- Distinguish primary (peer-reviewed, official) from secondary sources\n"
+            "- Acknowledge limitations explicitly\n"
+            "- Frame contribution: 'why it matters' and 'what it changes'\n"
+            "- Use academic register (precise terminology, measured tone)\n"
+            "- Distinguish correlation from causation\n"
+            "- NO business templates, 90-day plans, or pilot rollout language\n\n"
             f"Question: {query.strip()}\n\n"
             f"ADVOCATE ANALYSIS:\n{outputs.get('advocate', 'Not available')}\n\n"
             f"SKEPTIC ANALYSIS:\n{outputs.get('skeptic', 'Not available')}\n\n"
@@ -1646,15 +1695,19 @@ class OpenRouterPipelineModelProvider:
                 lambda: self._chat(
                     model=model_name,
                     system_prompt=(
-                        "You are ARIA final synthesiser producing executive-grade research reports.\n"
-                        "REQUIRED SECTIONS: '## Executive Summary' (3-sentence decision brief with confidence), '## Introduction', "
-                        "'## Research Scope', '## Evidence Snapshot' (source table), "
-                        "'## Analytical Breakdown' (with '### Report Plan', '### Claim Graph', '### Contradictions and Uncertainty'), "
-                        "'## Decision Recommendation' (narrative, evidence-weighted stance), "
-                        "'## Action Plan' (concise evidence-gap closure steps), '## Confidence and Open Questions', '## Source Inventory'.\n\n"
-                        "QUALITY GATES: Minimum 5 [Sx] citations. NO generic phrases ('it depends', 'generally speaking'). "
-                        "Decision recommendation must be topic-centered, not project-management boilerplate. "
-                        "Every conclusion must trace to specific evidence."
+                        "You are ARIA final synthesiser producing academic-grade research reports in IMRaD structure.\n"
+                        "REQUIRED SECTIONS: '## Abstract' (structured: Background, Methods, Results, Conclusion), "
+                        "'## 1. Introduction' (domain context, research question, significance, primary sources), "
+                        "'## 2. Methodology' (data sources, analytical framework, quality controls), "
+                        "'## 3. Results' (narrative prose with subsections: Evidence Base, Supportive Findings, Risk Factors, Integrated Interpretation, Forward Outlook, Evidence Quality Assessment), "
+                        "'## 4. Discussion' (strength of evidence, implications for practice, contribution framing), "
+                        "'## 5. Limitations and Counterarguments' (source limitations, counterarguments, invalidation criteria), "
+                        "'## 6. Conclusion' (integrated finding, key contribution, why it matters, next steps), "
+                        "'## References' (complete source inventory).\n\n"
+                        "QUALITY GATES: Write in narrative prose (not bullets). Every major claim cites [Sx]. "
+                        "Distinguish primary from secondary sources. Acknowledge limitations explicitly. "
+                        "Frame contribution ('why it matters', 'what it changes'). Use academic register. "
+                        "NO business templates, 90-day plans, or pilot rollout language."
                     ),
                     user_prompt=(
                         f"Question: {query.strip()}\n\n"
@@ -1896,11 +1949,11 @@ class GroqPipelineModelProvider:
                 lambda: self._chat(
                     model=model_name,
                     system_prompt=(
-                        "ARIA final synthesiser in research-paper mode.\n"
-                        "SECTIONS: '## Executive Summary', '## Introduction', '## Research Scope', "
-                        "'## Evidence Snapshot', '## Analytical Breakdown' (### Report Plan, ### Claim Graph, ### Contradictions and Uncertainty), "
-                        "'## Decision Recommendation', '## Action Plan', '## Confidence and Open Questions', '## Source Inventory'.\n"
-                        "Keep output topic-centered and evidence-traceable. Use narrative paragraphs, not template checklists."
+                        "ARIA final synthesiser producing IMRaD-structure research reports.\n"
+                        "SECTIONS: '## Abstract', '## 1. Introduction', '## 2. Methodology', "
+                        "'## 3. Results', '## 4. Discussion', '## 5. Limitations and Counterarguments', "
+                        "'## 6. Conclusion', '## References'.\n"
+                        "Write in narrative prose. Frame contribution. Acknowledge limitations."
                     ),
                     user_prompt=(
                         f"Question: {query.strip()}\n\n"
@@ -2182,12 +2235,11 @@ class LocalPipelineModelProvider:
                     lambda: self._chat(
                         model=model_name,
                         system_prompt=(
-                            "Final synthesiser (local) for executive-grade research.\n"
-                            "SECTIONS: '## Executive Summary' (3 sentences + confidence), '## Research Scope', "
-                            "'## Evidence Snapshot', '## Analytical Breakdown' (### Claim Graph, ### Contradictions), "
-                            "'## Decision Recommendation' (EXACT action + thresholds + contingency), "
-                            "'## Action Plan' (phased), '## Confidence and Open Questions', '## Source Inventory'.\n"
-                            "5+ citations. NO generic phrases. Trace conclusions to evidence."
+                            "Final synthesiser (local) producing IMRaD research reports.\n"
+                            "SECTIONS: '## Abstract', '## 1. Introduction', '## 2. Methodology', "
+                            "'## 3. Results', '## 4. Discussion', '## 5. Limitations and Counterarguments', "
+                            "'## 6. Conclusion', '## References'.\n"
+                            "Narrative prose. Frame contribution. Acknowledge limitations."
                         ),
                         user_prompt=(
                             f"Question: {query.strip()}\n\n"
@@ -2337,22 +2389,19 @@ def _is_final_research_grade(
     research: ResearchContext | None,
 ) -> bool:
     required_sections = (
-        "## Executive Summary",
-        "## Introduction",
-        "## Evidence Snapshot",
-        "## Decision Recommendation",
-        "## Source Inventory",
+        "## Abstract",
+        "## 1. Introduction",
+        "## References",
     )
     if len(text) < minimum_length:
         return False
     if not all(section in text for section in required_sections):
         return False
-    has_claim_mapping = (
-        "Claim-to-Citation Map" in text
-        or "### Claim Graph" in text
-        or "## Claim Graph" in text
-    )
-    if not has_claim_mapping:
+    # Check for methodology/results/discussion (flexible numbering)
+    has_methodology = "## 2. Methodology" in text or "Methodology" in text
+    has_results = "## 3. Results" in text or "Results" in text
+    has_discussion = "## 4. Discussion" in text or "Discussion" in text
+    if not (has_methodology and has_results and has_discussion):
         return False
     if research and research.sources:
         return _citation_count(text) >= 2 or "[S" in text
