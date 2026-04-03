@@ -14,6 +14,7 @@
     "test:e2e": "node --test tests/e2e/pipeline_contract.test.mjs",
     "bench:run": "python3 scripts/run_benchmarks.py --suite extended",
     "bench:competitive": "./.venv/bin/python scripts/run_competitive_research.py --limit 20",
+    "bench:local-architectures": "./.venv/bin/python scripts/run_competitive_research.py --local-architectures --architectures 3 --limit 20",
     "bench:regression": "python3 scripts/run_benchmarks.py --suite extended --compare-with ai-service/.data/benchmark-latest.json",
     "test": "npm run test:frontend && npm run test:backend && npm run test:e2e"
   },

@@ -6,6 +6,12 @@ This file is the local ledger for upcoming research and test runs. It stores com
 
 Use the competitive batch runner when you want one consolidated artifact for 20 topic runs.
 
+Run command for local-architecture comparison:
+
+```bash
+npm run bench:local-architectures
+```
+
 Local role assignment:
 
 - `ARIA` runs through the local Hexamind stack and uses the strongest local model available.

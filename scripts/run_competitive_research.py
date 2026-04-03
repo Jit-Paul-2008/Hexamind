@@ -18,6 +18,7 @@ def _load_competitive_research():
     from competitive_research import (  # type: ignore
         DEFAULT_COMPETITIVE_TOPICS,
         build_default_provider_specs,
+        build_local_architecture_provider_specs,
         load_latest_competitive_batch_report,
         run_competitive_batch,
         save_competitive_batch_report,
@@ -27,6 +28,7 @@ def _load_competitive_research():
     return (
         DEFAULT_COMPETITIVE_TOPICS,
         build_default_provider_specs,
+        build_local_architecture_provider_specs,
         load_latest_competitive_batch_report,
         run_competitive_batch,
         save_competitive_batch_report,
@@ -38,6 +40,7 @@ async def _run_async(args: argparse.Namespace) -> dict[str, object]:
     (
         default_topics,
         build_default_provider_specs,
+        build_local_architecture_provider_specs,
         _load_latest,
         run_competitive_batch,
         save_competitive_batch_report,
@@ -50,7 +53,11 @@ async def _run_async(args: argparse.Namespace) -> dict[str, object]:
     if args.limit > 0:
         topics = topics[: args.limit]
 
-    provider_specs = build_default_provider_specs()
+    provider_specs = (
+        build_default_provider_specs()
+        if args.global_baselines
+        else build_local_architecture_provider_specs(max_architectures=max(3, args.architectures))
+    )
     if args.providers:
         allowed = {item.strip() for item in args.providers.split(",") if item.strip()}
         provider_specs = tuple(spec for spec in provider_specs if spec.label in allowed)
@@ -66,6 +73,10 @@ async def _run_async(args: argparse.Namespace) -> dict[str, object]:
         "generatedAt": report.generated_at,
         "topicCount": report.topic_count,
         "providerStats": report.provider_stats(),
+        "winnerArchitecture": max(
+            report.provider_stats().items(),
+            key=lambda item: (float(item[1].get("wins", 0)), float(item[1].get("averageScore", 0.0))),
+        )[0],
         "markdownPath": markdown_path,
         "jsonPath": json_path,
         "ledgerPath": ledger_path,
@@ -80,6 +91,8 @@ def main() -> int:
     parser.add_argument("--output", default="", help="Path for the consolidated markdown report.")
     parser.add_argument("--ledger", default="", help="Path to the ledger markdown file to update.")
     parser.add_argument("--providers", default="", help="Comma-separated subset of providers: ARIA,Gemini,GPT.")
+    parser.add_argument("--global-baselines", action="store_true", help="Compare ARIA/Gemini/GPT providers instead of local architecture candidates.")
+    parser.add_argument("--architectures", type=int, default=3, help="Number of local architecture candidates to compare in local-architecture mode.")
     args = parser.parse_args()
 
     payload = asyncio.run(_run_async(args))

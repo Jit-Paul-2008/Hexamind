@@ -9,17 +9,45 @@ from competitive_research import (
     CompetitiveProviderSpec,
     CompetitiveRunResult,
     CompetitiveTopicResult,
+    build_local_architecture_provider_specs,
     save_competitive_batch_report,
     update_competitive_results_ledger,
 )
+from research import ResearchContext
+
+
+class FakeCompetitiveProvider:
+    async def build_research_context(self, query: str) -> ResearchContext | None:
+        return None
+
+    async def build_agent_text(
+        self,
+        agent_id: str,
+        query: str,
+        research: ResearchContext | None = None,
+        prior_outputs: dict[str, str] | None = None,
+    ) -> str:
+        return "placeholder"
+
+    async def compose_final_answer(
+        self,
+        query: str,
+        outputs: dict[str, str],
+        research: ResearchContext | None = None,
+        refinement_note: str | None = None,
+    ) -> str:
+        return "placeholder"
+
+    def diagnostics(self) -> dict[str, str | int | bool]:
+        return {"configuredProvider": "fake", "isFallback": True}
 
 
 class CompetitiveResearchTests(unittest.TestCase):
     def _make_report(self) -> CompetitiveBatchReport:
         provider_specs = (
-            CompetitiveProviderSpec(label="ARIA", model_name="local-model", provider_factory=lambda: None),
-            CompetitiveProviderSpec(label="Gemini", model_name="gemini-model", provider_factory=lambda: None),
-            CompetitiveProviderSpec(label="GPT", model_name="gpt-model", provider_factory=lambda: None),
+            CompetitiveProviderSpec(label="ARIA", model_name="local-model", provider_factory=lambda: FakeCompetitiveProvider()),
+            CompetitiveProviderSpec(label="Gemini", model_name="gemini-model", provider_factory=lambda: FakeCompetitiveProvider()),
+            CompetitiveProviderSpec(label="GPT", model_name="gpt-model", provider_factory=lambda: FakeCompetitiveProvider()),
         )
         provider_results = (
             CompetitiveRunResult(
@@ -91,6 +119,13 @@ class CompetitiveResearchTests(unittest.TestCase):
             self.assertIn("Demo Batch (1 topics)", ledger_text)
             self.assertIn("Research Quality: ARIA vs Gemini vs GPT", ledger_text)
             self.assertIn("xychart-beta", ledger_text)
+
+    def test_local_architecture_specs_are_generated(self) -> None:
+        specs = build_local_architecture_provider_specs(max_architectures=4)
+
+        self.assertGreaterEqual(len(specs), 3)
+        self.assertTrue(all(spec.label.startswith("Local-") for spec in specs))
+        self.assertTrue(all(spec.role_models for spec in specs))
 
 
 if __name__ == "__main__":

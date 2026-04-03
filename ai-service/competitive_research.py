@@ -279,7 +279,11 @@ async def run_competitive_batch(
         )
 
     report = CompetitiveBatchReport(
-        batch_name="ARIA Competitive Research Batch",
+        batch_name=(
+            "ARIA Local Architecture Competitive Batch"
+            if selected_specs and all(spec.label.startswith("Local-") for spec in selected_specs)
+            else "ARIA Competitive Research Batch"
+        ),
         generated_at=time.time(),
         topics=tuple(topic_results),
         provider_specs=selected_specs,
@@ -541,6 +545,118 @@ def _find_result(topic: CompetitiveTopicResult, label: str) -> CompetitiveRunRes
         if result.label == label:
             return result
     return topic.provider_results[0]
+
+
+def _score_columns(
+    report: CompetitiveBatchReport,
+    summary: dict[str, dict[str, float | int]],
+) -> list[tuple[str, float]]:
+    labels = [spec.label for spec in report.provider_specs]
+    columns: list[tuple[str, float]] = []
+    for label in labels[:3]:
+        columns.append((label, float(summary.get(label, {}).get("averageScore", 0.0))))
+    while len(columns) < 3:
+        columns.append((f"n/a-{len(columns)+1}", 0.0))
+    return columns
+
+
+def _discover_local_models() -> list[str]:
+    base = os.getenv("HEXAMIND_LOCAL_BASE_URL", "http://127.0.0.1:11434/v1").rstrip("/")
+    candidates = [
+        f"{base}/models",
+        f"{base.replace('/v1', '')}/api/tags",
+    ]
+    for endpoint in candidates:
+        try:
+            with httpx.Client(timeout=6.0) as client:
+                response = client.get(endpoint)
+                if response.status_code >= 400:
+                    continue
+                payload = response.json()
+        except Exception:
+            continue
+
+        models: list[str] = []
+        if isinstance(payload, dict) and isinstance(payload.get("data"), list):
+            for item in payload["data"]:
+                if isinstance(item, dict) and isinstance(item.get("id"), str):
+                    models.append(item["id"])
+        if isinstance(payload, dict) and isinstance(payload.get("models"), list):
+            for item in payload["models"]:
+                if isinstance(item, dict) and isinstance(item.get("name"), str):
+                    models.append(item["name"])
+        if models:
+            seen: set[str] = set()
+            unique: list[str] = []
+            for model in models:
+                if model in seen:
+                    continue
+                seen.add(model)
+                unique.append(model)
+            return unique
+    return []
+
+
+def _pick_local_tiers(models: list[str]) -> tuple[str, str, str]:
+    configured_small = os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", "").strip()
+    configured_medium = os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", "").strip()
+    configured_large = os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "").strip()
+    configured_default = os.getenv("HEXAMIND_LOCAL_MODEL", "llama3.1:8b").strip() or "llama3.1:8b"
+
+    if configured_small and configured_medium and configured_large:
+        return configured_small, configured_medium, configured_large
+
+    if not models:
+        small = configured_small or configured_default
+        medium = configured_medium or configured_default
+        large = configured_large or configured_default
+        return small, medium, large
+
+    ranked = sorted(models, key=_model_size_estimate)
+    small = configured_small or ranked[0]
+    medium = configured_medium or ranked[len(ranked) // 2]
+    large = configured_large or ranked[-1]
+    return small, medium, large
+
+
+def _model_size_estimate(model_name: str) -> float:
+    match = re.search(r"(\d+(?:\.\d+)?)b", model_name.lower())
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            return 8.0
+    return 8.0
+
+
+def _build_local_provider_with_overrides(
+    default_model: str,
+    role_models: dict[str, str],
+) -> PipelineModelProvider:
+    keys = {
+        "HEXAMIND_AGENT_MODEL_ADVOCATE": role_models.get("advocate", default_model),
+        "HEXAMIND_AGENT_MODEL_SKEPTIC": role_models.get("skeptic", default_model),
+        "HEXAMIND_AGENT_MODEL_SYNTHESIS": role_models.get("synthesiser", default_model),
+        "HEXAMIND_AGENT_MODEL_ORACLE": role_models.get("oracle", default_model),
+        "HEXAMIND_AGENT_MODEL_VERIFIER": role_models.get("verifier", default_model),
+        "HEXAMIND_AGENT_MODEL_FINAL": role_models.get("final", default_model),
+        "HEXAMIND_LOCAL_MODEL_SMALL": role_models.get("advocate", default_model),
+        "HEXAMIND_LOCAL_MODEL_MEDIUM": role_models.get("synthesiser", default_model),
+        "HEXAMIND_LOCAL_MODEL_LARGE": role_models.get("final", default_model),
+        "HEXAMIND_LOCAL_MODEL": default_model,
+    }
+
+    previous = {name: os.environ.get(name) for name in keys}
+    try:
+        for name, value in keys.items():
+            os.environ[name] = value
+        return LocalPipelineModelProvider(default_model)
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def _ledger_template() -> str:
