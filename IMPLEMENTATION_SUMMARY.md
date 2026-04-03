@@ -238,7 +238,8 @@ HEXAMIND_AGENT_API_KEY_FINAL=gemini_xxx
 - Dynamic Prompt Pruning is now wired to query complexity for API-backed agents.
 - Prompt-response caching is active for repeated agent calls.
 - Token Usage Dashboard data is exposed through provider diagnostics.
-- Still pending: semantic similarity cache and automatic cheapest-capable model routing.
+- Semantic similarity cache is active in the research layer.
+- Automatic cheapest-capable model routing is active for API-backed and local providers.
 
 ### Phase 3 (P2 - Quality & Advanced) - Mostly Pending
 

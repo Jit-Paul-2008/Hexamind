@@ -276,6 +276,53 @@ def _agent_model_override(agent_id: str, default_model: str) -> str:
     return default_model
 
 
+def _cost_aware_agent_model(provider_name: str, agent_id: str, default_model: str) -> str:
+    override = _agent_model_override(agent_id, "")
+    if override:
+        return override
+
+    cost_mode = _cost_mode()
+    if cost_mode == "max":
+        return default_model
+
+    provider_defaults = {
+        "openrouter": {
+            "advocate": "google/gemini-2.0-flash-exp:free",
+            "skeptic": "google/gemini-2.0-flash-exp:free",
+            "synthesiser": default_model,
+            "oracle": "google/gemini-2.0-flash-exp",
+            "verifier": "google/gemini-2.0-flash-exp:free",
+            "final": default_model,
+        },
+        "groq": {
+            "advocate": "llama-3.1-8b-instant",
+            "skeptic": "llama-3.1-8b-instant",
+            "synthesiser": default_model,
+            "oracle": "mixtral-8x7b-32768",
+            "verifier": "llama-3.1-8b-instant",
+            "final": default_model,
+        },
+        "local": {
+            "advocate": os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", default_model).strip() or default_model,
+            "skeptic": os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", default_model).strip() or default_model,
+            "synthesiser": os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", default_model).strip() or default_model,
+            "oracle": os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", default_model).strip() or default_model,
+            "verifier": os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", default_model).strip() or default_model,
+            "final": os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", default_model).strip() or default_model,
+        },
+    }
+
+    provider_models = provider_defaults.get(provider_name, {})
+    if cost_mode == "free":
+        return provider_models.get(agent_id, default_model)
+    if cost_mode == "balanced":
+        if agent_id in {"advocate", "skeptic", "verifier"}:
+            return provider_models.get(agent_id, default_model)
+        if agent_id == "oracle":
+            return provider_models.get(agent_id, default_model)
+    return default_model
+
+
 # Prompt Deduplication: Base prompt shared across all agents
 _BASE_PROMPT = (
     "You are {agent} in ARIA research-paper mode. "
@@ -1879,11 +1926,11 @@ class OpenRouterPipelineModelProvider:
             reason="OpenRouter runtime call failed",
         )
         self._model_by_role = {
-            "advocate": _agent_model_override("advocate", default_model),
-            "skeptic": _agent_model_override("skeptic", default_model),
-            "synthesiser": _agent_model_override("synthesiser", default_model),
-            "oracle": _agent_model_override("oracle", default_model),
-            "final": _agent_model_override("final", default_model),
+            "advocate": _cost_aware_agent_model("openrouter", "advocate", default_model),
+            "skeptic": _cost_aware_agent_model("openrouter", "skeptic", default_model),
+            "synthesiser": _cost_aware_agent_model("openrouter", "synthesiser", default_model),
+            "oracle": _cost_aware_agent_model("openrouter", "oracle", default_model),
+            "final": _cost_aware_agent_model("openrouter", "final", default_model),
         }
         self._token_budget = TokenBudget()
 
@@ -2142,11 +2189,11 @@ class GroqPipelineModelProvider:
             reason="Groq runtime call failed",
         )
         self._model_by_role = {
-            "advocate": _agent_model_override("advocate", default_model),
-            "skeptic": _agent_model_override("skeptic", default_model),
-            "synthesiser": _agent_model_override("synthesiser", default_model),
-            "oracle": _agent_model_override("oracle", default_model),
-            "final": _agent_model_override("final", default_model),
+            "advocate": _cost_aware_agent_model("groq", "advocate", default_model),
+            "skeptic": _cost_aware_agent_model("groq", "skeptic", default_model),
+            "synthesiser": _cost_aware_agent_model("groq", "synthesiser", default_model),
+            "oracle": _cost_aware_agent_model("groq", "oracle", default_model),
+            "final": _cost_aware_agent_model("groq", "final", default_model),
         }
         self._token_budget = TokenBudget()
 
@@ -2384,11 +2431,11 @@ class LocalPipelineModelProvider:
             "large": os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", default_model).strip() or default_model,
         }
         self._model_by_role = {
-            "advocate": _agent_model_override("advocate", default_model),
-            "skeptic": _agent_model_override("skeptic", default_model),
-            "synthesiser": _agent_model_override("synthesiser", default_model),
-            "oracle": _agent_model_override("oracle", default_model),
-            "final": _agent_model_override("final", default_model),
+            "advocate": _cost_aware_agent_model("local", "advocate", default_model),
+            "skeptic": _cost_aware_agent_model("local", "skeptic", default_model),
+            "synthesiser": _cost_aware_agent_model("local", "synthesiser", default_model),
+            "oracle": _cost_aware_agent_model("local", "oracle", default_model),
+            "final": _cost_aware_agent_model("local", "final", default_model),
         }
         self._token_budget = TokenBudget()
         self._local_available = self._probe_local_service()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -11,7 +12,7 @@ SERVICE_DIR = ROOT / "ai-service"
 if str(SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(SERVICE_DIR))
 
-from model_provider import _compressed_research_block, _local_model_tier
+from model_provider import _compressed_research_block, _cost_aware_agent_model, _local_model_tier
 from research import InternetResearcher, ResearchContext, ResearchSource, SearchHit
 from workflow import build_workflow_profile
 
@@ -26,6 +27,12 @@ class CostPerformanceMilestoneTests(unittest.TestCase):
 
         self.assertEqual(_local_model_tier(low_context.query, low_context), "small")
         self.assertEqual(_local_model_tier(high_context.query, high_context), "large")
+
+    def test_cost_aware_agent_model_prefers_cheaper_defaults(self) -> None:
+        with unittest.mock.patch.dict(os.environ, {"HEXAMIND_COST_MODE": "free", "HEXAMIND_AGENT_MODEL_ADVOCATE": ""}, clear=False):
+            model_name = _cost_aware_agent_model("openrouter", "advocate", "default-model")
+
+        self.assertEqual(model_name, "google/gemini-2.0-flash-exp:free")
 
     def test_compressed_research_block_respects_budget(self) -> None:
         context = self._build_context("How should we optimize model routing and cache evidence?")
@@ -71,6 +78,33 @@ class CostPerformanceMilestoneTests(unittest.TestCase):
         self.assertEqual(search_hits_mock.call_count, 1)
         self.assertEqual(first.sources, second.sources)
         self.assertEqual(first.search_passes, second.search_passes)
+
+    def test_semantic_research_cache_reuses_near_duplicate_queries(self) -> None:
+        researcher = InternetResearcher()
+        source = ResearchSource(
+            id="",
+            title="Guidance A",
+            url="https://example.gov/a",
+            domain="example.gov",
+            snippet="",
+            excerpt="Official guidance recommends prompt compression and cache reuse.",
+            authority="primary",
+            credibility_score=0.95,
+            recency_score=1.0,
+            discovery_pass="official",
+        )
+
+        first_query = "How should we optimize model routing and cache evidence?"
+        second_query = "What is the best way to optimize model routing and cache evidence?"
+
+        with patch.object(researcher, "_search_hits", new=AsyncMock(return_value=[SearchHit(title="A", url=source.url, snippet="", relevance_score=0.9)])) as search_hits_mock:
+            with patch.object(researcher, "_build_candidates", new=AsyncMock(return_value=[(0.9, source)])):
+                first = asyncio.run(researcher.research(first_query))
+                second = asyncio.run(researcher.research(second_query))
+
+        self.assertEqual(search_hits_mock.call_count, 1)
+        self.assertEqual(second.query, second_query)
+        self.assertEqual(first.sources, second.sources)
 
     @staticmethod
     def _build_context(query: str, source_count: int = 3) -> ResearchContext:

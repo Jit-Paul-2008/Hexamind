@@ -5,7 +5,7 @@ import html as html_lib
 import os
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from html.parser import HTMLParser
 from typing import Iterable
 from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse
@@ -182,6 +182,7 @@ class InternetResearcher:
         self._fetch_concurrency = max(3, _env_int("HEXAMIND_RESEARCH_FETCH_CONCURRENCY", 8))
         self._min_relevance_score = max(0.0, _env_float("HEXAMIND_RESEARCH_MIN_RELEVANCE", 0.20))  # Lower threshold
         self._cache_ttl_seconds = max(120.0, _env_float("HEXAMIND_RESEARCH_CACHE_TTL_SECONDS", 1800.0))
+        self._semantic_cache_threshold = min(0.98, max(0.65, _env_float("HEXAMIND_RESEARCH_SEMANTIC_CACHE_THRESHOLD", 0.68)))
         self._research_cache: dict[str, tuple[float, ResearchContext]] = {}
         self._require_sources = _env_bool("HEXAMIND_REQUIRE_RESEARCH_SOURCES", False)
         self._deep_extraction = _env_bool("HEXAMIND_DEEP_EXTRACTION", True)  # Enable by default
@@ -194,6 +195,18 @@ class InternetResearcher:
         cached = self._load_cached_research(cache_key)
         if cached is not None:
             return cached
+
+        semantic_cached = self._load_semantic_cached_research(query)
+        if semantic_cached is not None:
+            workflow_profile = build_workflow_profile(query)
+            adapted = replace(
+                semantic_cached,
+                query=query,
+                workflow_profile=workflow_profile,
+                generated_at=time.time(),
+            )
+            self._store_cached_research(cache_key, adapted)
+            return adapted
 
         workflow_profile = build_workflow_profile(query)
         
@@ -299,6 +312,55 @@ class InternetResearcher:
 
     def _store_cached_research(self, cache_key: str, context: ResearchContext) -> None:
         self._research_cache[cache_key] = (time.time(), context)
+
+    def _load_semantic_cached_research(self, query: str) -> ResearchContext | None:
+        query_signature = self._query_signature(query)
+        if not query_signature:
+            return None
+
+        best_match: ResearchContext | None = None
+        best_score = 0.0
+        now = time.time()
+
+        for cache_key, (cached_at, context) in list(self._research_cache.items()):
+            if now - cached_at > self._cache_ttl_seconds:
+                self._research_cache.pop(cache_key, None)
+                continue
+
+            cached_signature = self._query_signature(context.query)
+            score = self._semantic_similarity(query_signature, cached_signature)
+            if score > best_score:
+                best_score = score
+                best_match = context
+
+        if best_score >= self._semantic_cache_threshold:
+            return best_match
+        return None
+
+    @staticmethod
+    def _query_signature(text: str) -> tuple[str, ...]:
+        stop_words = {
+            "a", "an", "and", "are", "as", "be", "by", "for", "from", "how", "in",
+            "is", "it", "of", "on", "or", "should", "that", "the", "this", "to", "we",
+            "what", "when", "where", "which", "with", "will",
+        }
+        tokens = [token for token in re.findall(r"[a-z0-9]{3,}", text.lower()) if token not in stop_words]
+        return tuple(tokens)
+
+    @staticmethod
+    def _semantic_similarity(left: tuple[str, ...], right: tuple[str, ...]) -> float:
+        if not left or not right:
+            return 0.0
+
+        left_set = set(left)
+        right_set = set(right)
+        intersection = left_set & right_set
+        union = left_set | right_set
+        jaccard = len(intersection) / len(union) if union else 0.0
+        overlap = len(intersection) / min(len(left_set), len(right_set))
+        ordered_overlap = sum(1 for index, token in enumerate(left) if index < len(right) and right[index] == token)
+        ordered_overlap /= max(len(left), len(right))
+        return (jaccard * 0.55) + (overlap * 0.3) + (ordered_overlap * 0.15)
 
     async def _search_hits(
         self,
