@@ -545,6 +545,7 @@ class DeterministicPipelineModelProvider:
         q = query.strip()
         report_mode = self._report_mode(q, research)
         source_inventory = source_inventory_markdown(research)
+        executive_summary = self._build_executive_summary(q, outputs, research)
         
         # Build academic-style sections
         abstract = self._build_abstract(q, outputs, research, report_mode)
@@ -556,6 +557,8 @@ class DeterministicPipelineModelProvider:
         conclusion = self._build_conclusion(outputs, research, report_mode)
         
         return (
+            "## Executive Summary\n"
+            f"{executive_summary}\n\n"
             "## Abstract\n"
             f"{abstract}\n\n"
             "## 1. Introduction\n"
@@ -572,6 +575,21 @@ class DeterministicPipelineModelProvider:
             f"{conclusion}\n\n"
             "## References\n"
             f"{source_inventory}"
+        )
+
+    def _build_executive_summary(
+        self,
+        query: str,
+        outputs: dict[str, str],
+        research: ResearchContext | None,
+    ) -> str:
+        source_count = len(research.sources) if research and research.sources else 0
+        key_finding = self._extract_section_summary(outputs.get("synthesiser", ""), "## Integrated Assessment", "## Decision Rule")
+        confidence = "high" if source_count >= 5 else "moderate" if source_count >= 3 else "low"
+        return (
+            f"This report addresses '{query}' through a five-agent adversarial pipeline. "
+            f"Primary synthesis: {key_finding} "
+            f"Evidence base includes {source_count} retrieved sources; confidence is {confidence}."
         )
     
     def _build_abstract(self, query: str, outputs: dict[str, str], research: ResearchContext | None, report_mode: str) -> str:
