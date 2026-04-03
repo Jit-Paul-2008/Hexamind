@@ -16,7 +16,7 @@ from workflow import build_workflow_profile
 
 
 class SynthesisQualityMilestoneTests(unittest.TestCase):
-    def test_final_answer_uses_dynamic_report_plan(self) -> None:
+    def test_final_answer_uses_imrad_structure(self) -> None:
         provider = DeterministicPipelineModelProvider()
         research = self._build_research_context(
             "How should we change the policy for model deployment?",
@@ -26,13 +26,13 @@ class SynthesisQualityMilestoneTests(unittest.TestCase):
 
         report = asyncio.run(provider.compose_final_answer("How should we change the policy for model deployment?", outputs, research))
 
-        self.assertIn("### Report Plan", report)
-        self.assertIn("Policy Lens", report)
-        self.assertIn("### Claim Graph", report)
-        self.assertIn("Node C1", report)
-        self.assertIn("Confidence:", report)
+        self.assertIn("## Abstract", report)
+        self.assertIn("## 1. Introduction", report)
+        self.assertIn("## 2. Methodology", report)
+        self.assertIn("## 3. Results", report)
+        self.assertIn("## 4. Discussion", report)
 
-    def test_final_answer_switches_lens_for_engineering_queries(self) -> None:
+    def test_final_answer_includes_limitations_and_conclusion(self) -> None:
         provider = DeterministicPipelineModelProvider()
         research = self._build_research_context(
             "How do we reduce latency in the backend architecture?",
@@ -42,10 +42,10 @@ class SynthesisQualityMilestoneTests(unittest.TestCase):
 
         report = asyncio.run(provider.compose_final_answer("How do we reduce latency in the backend architecture?", outputs, research))
 
-        self.assertIn("Engineering Lens", report)
+        self.assertIn("## 5. Limitations", report)
+        self.assertIn("## 6. Conclusion", report)
+        self.assertIn("## References", report)
         self.assertIn("architecture", report.lower())
-        self.assertIn("Action Plan", report)
-        self.assertIn("Claim Graph", report)
 
     @staticmethod
     def _build_outputs() -> dict[str, str]:

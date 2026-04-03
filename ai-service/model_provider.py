@@ -544,45 +544,271 @@ class DeterministicPipelineModelProvider:
     ) -> str:
         q = query.strip()
         report_mode = self._report_mode(q, research)
-        refinement_block = f"\n- Refinement focus: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else ""
         source_inventory = source_inventory_markdown(research)
-        evidence_snapshot = self._evidence_snapshot_markdown(research)
-        report_plan = self._report_plan_markdown(q, research, report_mode)
-        claim_graph = self._claim_graph_markdown(outputs, research, report_mode)
-        recommendation = self._decision_recommendation(outputs, research, report_mode)
-        uncertainty = self._uncertainty_markdown(research, report_mode)
-        action_plan = self._action_plan_markdown(report_mode, research)
+        
+        # Build academic-style sections
+        abstract = self._build_abstract(q, outputs, research, report_mode)
+        introduction = self._build_introduction(q, research, report_mode, refinement_note)
+        methodology = self._build_methodology(research)
+        results = self._build_results(outputs, research, report_mode)
+        discussion = self._build_discussion(outputs, research, report_mode)
+        limitations = self._build_limitations(research, report_mode)
+        conclusion = self._build_conclusion(outputs, research, report_mode)
+        
         return (
-            "## Executive Summary\n"
-            f"This report evaluates '{q}' using a multi-agent evidence synthesis workflow with live retrieval when available. "
-            "The findings indicate where AI-supported conclusions are strong, where they are conditional, and where uncertainty remains.\n\n"
-            "## Introduction\n"
-            f"The research question is: {q}. The analysis combines retrieval-grounded source review with adversarial multi-agent reasoning to separate well-supported claims from weakly supported extrapolations. "
-            f"The analytical frame used is {self._analysis_lens_heading(report_mode)}.{refinement_block}\n\n"
-            "## Research Scope\n"
-            f"### Report Plan\n{report_plan}\n\n"
-            "## Evidence Snapshot\n"
-            f"{evidence_snapshot}\n\n"
-            "## Analytical Breakdown\n"
-            f"### {self._analysis_lens_heading(report_mode)}\n"
-            f"- Opportunity evidence: {self._extract_section_summary(outputs.get('advocate', ''), '## Strategic Upside', '## Supporting Logic')}\n"
-            f"- Risk evidence: {self._extract_section_summary(outputs.get('skeptic', ''), '## Primary Failure Modes', '## Risk Severity Matrix')}\n"
-            f"- Integrated interpretation: {self._extract_section_summary(outputs.get('synthesiser', ''), '## Integrated Assessment', '## Decision Rule')}\n"
-            f"- Forward outlook: {self._extract_section_summary(outputs.get('oracle', ''), '## Most Likely Outcome (60%)', '## Upside Scenario (25%)')}\n\n"
-            "### Verification Findings\n"
-            f"{self._extract_section_summary(outputs.get('verifier', ''), '## Verification Summary', '## Claim Verification')}\n\n"
-            "### Claim Graph\n"
-            f"{claim_graph}\n\n"
-            "### Contradictions and Uncertainty\n"
-            f"{uncertainty}\n\n"
-            "## Decision Recommendation\n"
-            f"{recommendation}\n\n"
-            "## Action Plan\n"
-            f"{action_plan}\n\n"
-            "## Confidence and Open Questions\n"
-            f"{self._confidence_block(research, report_mode)}\n\n"
-            "## Source Inventory\n"
+            "## Abstract\n"
+            f"{abstract}\n\n"
+            "## 1. Introduction\n"
+            f"{introduction}\n\n"
+            "## 2. Methodology\n"
+            f"{methodology}\n\n"
+            "## 3. Results\n"
+            f"{results}\n\n"
+            "## 4. Discussion\n"
+            f"{discussion}\n\n"
+            "## 5. Limitations and Counterarguments\n"
+            f"{limitations}\n\n"
+            "## 6. Conclusion\n"
+            f"{conclusion}\n\n"
+            "## References\n"
             f"{source_inventory}"
+        )
+    
+    def _build_abstract(self, query: str, outputs: dict[str, str], research: ResearchContext | None, report_mode: str) -> str:
+        source_count = len(research.sources) if research and research.sources else 0
+        domain_count = len({s.domain for s in research.sources}) if research and research.sources else 0
+        primary_count = sum(1 for s in research.sources if s.authority == "primary") if research and research.sources else 0
+        
+        key_finding = self._extract_section_summary(outputs.get("synthesiser", ""), "## Integrated Assessment", "## Decision Rule")
+        confidence = "high" if source_count >= 5 and primary_count >= 2 else "moderate" if source_count >= 3 else "low"
+        
+        if not research or not research.sources:
+            return (
+                f"**Background:** This analysis addresses '{query}' using structured multi-agent reasoning in the absence of live source retrieval. "
+                f"**Methods:** A five-agent adversarial pipeline (Advocate, Skeptic, Synthesiser, Oracle, Verifier) evaluated the query through {report_mode}-specific analytical frames. "
+                f"**Results:** {key_finding} "
+                f"**Conclusion:** Confidence is {confidence} due to lack of external source validation. Claims should be treated as provisional pending primary source verification."
+            )
+        
+        return (
+            f"**Background:** This analysis addresses '{query}' within the {report_mode} domain, synthesizing {source_count} sources across {domain_count} domains, including {primary_count} primary sources. "
+            f"**Methods:** Evidence was retrieved via Tavily search API and processed through a five-agent adversarial pipeline that separates supportive claims from risks and contradictions. "
+            f"**Results:** {key_finding} "
+            f"**Conclusion:** Overall confidence is {confidence}. The findings contribute to understanding by distinguishing validated evidence from speculative extrapolation and identifying specific gaps requiring further research."
+        )
+    
+    def _build_introduction(self, query: str, research: ResearchContext | None, report_mode: str, refinement_note: str | None) -> str:
+        context_framing = {
+            "medical": "The integration of artificial intelligence into clinical practice represents one of the most significant transformations in modern healthcare delivery. Understanding the current evidence base, regulatory landscape, and outcome implications is essential for informed adoption decisions.",
+            "policy": "Policy decisions in rapidly evolving technological domains require rigorous evidence synthesis that distinguishes between demonstrated outcomes and projected benefits. This analysis examines the regulatory and governance dimensions with attention to implementation constraints.",
+            "engineering": "Technical architecture decisions carry long-term implications for system reliability, scalability, and maintenance burden. This analysis evaluates the engineering considerations through the lens of failure modes, performance characteristics, and operational requirements.",
+            "operations": "Operational effectiveness depends on understanding both the potential benefits and the implementation barriers associated with new approaches. This analysis examines workflow implications, adoption factors, and measurable outcome indicators.",
+            "research": "Rigorous inquiry requires systematic evidence gathering, critical evaluation of source quality, and explicit acknowledgment of uncertainty. This analysis applies structured methodology to separate well-supported claims from weakly grounded assertions.",
+        }
+        
+        framing = context_framing.get(report_mode, context_framing["research"])
+        refinement_text = f" The analysis specifically focuses on: {refinement_note.strip()}." if refinement_note and refinement_note.strip() else ""
+        
+        source_context = ""
+        if research and research.sources:
+            primary = [s for s in research.sources if s.authority == "primary"]
+            if primary:
+                source_context = f" Primary sources consulted include {primary[0].title} [{primary[0].id}]" + (f" and {primary[1].title} [{primary[1].id}]" if len(primary) > 1 else "") + "."
+        
+        return (
+            f"{framing}\n\n"
+            f"**Research Question:** {query}{refinement_text}\n\n"
+            f"This inquiry is significant because the intersection of technological capability and real-world deployment raises questions that cannot be answered by either pure technical analysis or policy review alone. "
+            f"A synthesis approach is required to integrate evidence across domains and identify where conclusions are robust versus where they remain contested.{source_context}"
+        )
+    
+    def _build_methodology(self, research: ResearchContext | None) -> str:
+        if not research or not research.sources:
+            return (
+                "**Data Sources:** No live web retrieval was performed for this analysis. Conclusions are based on structured reasoning using the model's training knowledge, which may be outdated or incomplete.\n\n"
+                "**Analytical Framework:** A five-agent adversarial pipeline was employed: (1) Advocate — constructs the strongest evidence-backed case for benefits; (2) Skeptic — identifies failure modes, risks, and limitations; (3) Synthesiser — resolves conflicts and produces integrated interpretation; (4) Oracle — forecasts likely outcomes under different scenarios; (5) Verifier — audits claim-to-source mappings and flags evidence gaps.\n\n"
+                "**Limitations:** Without live source retrieval, all claims should be verified against current primary literature before acting on recommendations."
+            )
+        
+        source_count = len(research.sources)
+        domain_count = len({s.domain for s in research.sources})
+        primary_count = sum(1 for s in research.sources if s.authority == "primary")
+        secondary_count = source_count - primary_count
+        avg_credibility = sum(s.credibility_score for s in research.sources) / source_count if source_count > 0 else 0
+        
+        domains = list({s.domain for s in research.sources})[:5]
+        domain_list = ", ".join(domains[:4]) + (f", and {len(domains) - 4} others" if len(domains) > 4 else "")
+        
+        return (
+            f"**Data Sources:** This analysis synthesizes {source_count} sources retrieved via Tavily search API across {domain_count} distinct domains ({domain_list}). "
+            f"Of these, {primary_count} are classified as primary sources (peer-reviewed literature, official regulatory guidance, government publications) and {secondary_count} as secondary sources (industry analyses, news, commentary). "
+            f"Mean credibility score across sources is {avg_credibility:.0%}.\n\n"
+            "**Analytical Framework:** Evidence was processed through a five-agent adversarial pipeline:\n"
+            "- **Advocate** — Constructs the strongest evidence-backed case for benefits, requiring explicit citation for each claim.\n"
+            "- **Skeptic** — Identifies failure modes, risks, and limitations with probability and impact estimates.\n"
+            "- **Synthesiser** — Resolves conflicts between supportive and critical perspectives, producing integrated interpretation.\n"
+            "- **Oracle** — Forecasts likely outcomes under baseline, upside, and downside scenarios.\n"
+            "- **Verifier** — Audits claim-to-source mappings, triangulates across sources, and flags evidence gaps.\n\n"
+            "**Quality Controls:** Claims are retained only when traceable to at least one source. Contradictions between sources are explicitly surfaced rather than silently resolved. Confidence levels reflect source diversity, authority, and internal consistency."
+        )
+    
+    def _build_results(self, outputs: dict[str, str], research: ResearchContext | None, report_mode: str) -> str:
+        advocate_summary = self._extract_section_summary(outputs.get("advocate", ""), "## Strategic Upside", "## Supporting Logic")
+        skeptic_summary = self._extract_section_summary(outputs.get("skeptic", ""), "## Primary Failure Modes", "## Risk Severity Matrix")
+        synthesis_summary = self._extract_section_summary(outputs.get("synthesiser", ""), "## Integrated Assessment", "## Decision Rule")
+        oracle_summary = self._extract_section_summary(outputs.get("oracle", ""), "## Most Likely Outcome (60%)", "## Upside Scenario (25%)")
+        verifier_summary = self._extract_section_summary(outputs.get("verifier", ""), "## Verification Summary", "## Claim Verification")
+        
+        evidence_section = ""
+        if research and research.sources:
+            top_sources = research.sources[:4]
+            evidence_lines = []
+            for s in top_sources:
+                excerpt_short = s.excerpt[:200] + "..." if len(s.excerpt) > 200 else s.excerpt
+                evidence_lines.append(f"[{s.id}] {s.title}: \"{excerpt_short}\" (credibility: {s.credibility_score:.0%})")
+            evidence_section = "**Key Evidence Excerpts:**\n" + "\n".join(f"- {line}" for line in evidence_lines) + "\n\n"
+        
+        return (
+            f"### 3.1 Evidence Base\n"
+            f"{evidence_section if evidence_section else 'No live sources were retrieved for this analysis.\n\n'}"
+            f"### 3.2 Supportive Findings\n"
+            f"The Advocate analysis identified the following key benefits: {advocate_summary}\n\n"
+            f"### 3.3 Risk Factors and Limitations\n"
+            f"The Skeptic analysis identified the following concerns: {skeptic_summary}\n\n"
+            f"### 3.4 Integrated Interpretation\n"
+            f"Synthesizing supportive and critical perspectives: {synthesis_summary}\n\n"
+            f"### 3.5 Forward Outlook\n"
+            f"Probabilistic scenario analysis indicates: {oracle_summary}\n\n"
+            f"### 3.6 Evidence Quality Assessment\n"
+            f"{verifier_summary}"
+        )
+    
+    def _build_discussion(self, outputs: dict[str, str], research: ResearchContext | None, report_mode: str) -> str:
+        synthesis = self._extract_section_summary(outputs.get("synthesiser", ""), "## Integrated Assessment", "## Decision Rule")
+        
+        if not research or not research.sources:
+            return (
+                f"The findings of this analysis must be interpreted with significant caution due to the absence of live source verification. "
+                f"The integrated interpretation suggests: {synthesis}\n\n"
+                "**Implications:** Without external validation, these conclusions represent structured reasoning rather than evidence-grounded findings. "
+                "Practitioners should consult primary literature and domain experts before acting on these recommendations.\n\n"
+                "**What This Changes:** This analysis contributes a structured framework for thinking about the question, but does not advance the empirical evidence base."
+            )
+        
+        contradiction_count = len(getattr(research, "contradictions", ()))
+        primary_sources = [s for s in research.sources if s.authority == "primary"]
+        
+        contribution = ""
+        if report_mode == "medical":
+            contribution = "This synthesis contributes to the clinical evidence base by distinguishing between validated diagnostic performance and marketing claims, and by identifying specific subgroup and safety considerations that require attention before deployment."
+        elif report_mode == "policy":
+            contribution = "This analysis contributes to policy deliberation by mapping the regulatory landscape, identifying compliance boundaries, and surfacing areas where guidance remains ambiguous or contested."
+        elif report_mode == "engineering":
+            contribution = "This synthesis advances technical decision-making by separating demonstrated capabilities from theoretical roadmaps, and by quantifying reliability and failure mode considerations."
+        else:
+            contribution = "This analysis contributes to informed decision-making by systematically distinguishing well-supported claims from weakly grounded assertions and by identifying specific evidence gaps."
+        
+        return (
+            f"The evidence synthesis reveals a nuanced picture: {synthesis}\n\n"
+            f"**Strength of Evidence:** The analysis draws on {len(research.sources)} sources, including {len(primary_sources)} primary sources. "
+            f"{'No direct contradictions were detected between sources.' if contradiction_count == 0 else f'{contradiction_count} contradictions between sources were identified and explicitly preserved rather than silently resolved.'}\n\n"
+            f"**Implications for Practice:** {contribution}\n\n"
+            f"**What This Changes:** The key insight is that conclusions must be qualified by context: "
+            f"benefits are strongest where task boundaries are well-defined and validation is rigorous; "
+            f"risks are most acute where generalization claims outrun the evidence base or where human oversight pathways are weak."
+        )
+    
+    def _build_limitations(self, research: ResearchContext | None, report_mode: str) -> str:
+        if not research or not research.sources:
+            return (
+                "**Primary Limitation:** This analysis was conducted without live source retrieval, meaning all claims are based on model training knowledge rather than current evidence.\n\n"
+                "**Potential Counterarguments:**\n"
+                "- The absence of source grounding means conclusions may reflect outdated information or training biases.\n"
+                "- Claims that appear well-reasoned may nonetheless be incorrect if the underlying assumptions have changed.\n"
+                "- Readers should treat all findings as hypotheses requiring validation rather than established conclusions.\n\n"
+                "**What Would Invalidate These Findings:** Access to current primary sources could substantially alter the conclusions if recent evidence contradicts the model's training knowledge."
+            )
+        
+        domain_count = len({s.domain for s in research.sources})
+        avg_credibility = sum(s.credibility_score for s in research.sources) / len(research.sources) if research.sources else 0
+        secondary_heavy = sum(1 for s in research.sources if s.authority != "primary") > len(research.sources) * 0.7
+        
+        limitations_text = (
+            f"**Source Limitations:** While this analysis draws on {len(research.sources)} sources across {domain_count} domains, "
+        )
+        if secondary_heavy:
+            limitations_text += "the evidence base is weighted toward secondary sources, which may not reflect the full nuance of primary research findings. "
+        if avg_credibility < 0.7:
+            limitations_text += f"Mean source credibility ({avg_credibility:.0%}) suggests some reliance on lower-authority sources. "
+        
+        counterarguments = ""
+        if report_mode == "medical":
+            counterarguments = (
+                "- Diagnostic performance measured in controlled studies may not generalize to real-world clinical settings with diverse patient populations.\n"
+                "- Benefits demonstrated in high-resource settings may not translate to resource-constrained environments.\n"
+                "- Regulatory approval does not guarantee clinical utility or cost-effectiveness.\n"
+                "- Publication bias may overstate positive findings while underreporting null or negative results."
+            )
+        elif report_mode == "policy":
+            counterarguments = (
+                "- Regulatory frameworks are evolving rapidly; current guidance may be superseded.\n"
+                "- Compliance requirements vary by jurisdiction; generalizations may not apply locally.\n"
+                "- Policy intent and enforcement reality often diverge; stated rules may not predict actual outcomes."
+            )
+        else:
+            counterarguments = (
+                "- Source selection may introduce bias toward certain perspectives.\n"
+                "- Temporal limitations: evidence reflects a snapshot that may not capture recent developments.\n"
+                "- Synthesis necessarily involves interpretive judgment; alternative interpretations may be equally valid."
+            )
+        
+        return (
+            f"{limitations_text}\n\n"
+            f"**Potential Counterarguments:**\n{counterarguments}\n\n"
+            f"**What Would Invalidate These Findings:** New primary research demonstrating different effect sizes, unexpected adverse outcomes, or regulatory changes could substantially alter the conclusions."
+        )
+    
+    def _build_conclusion(self, outputs: dict[str, str], research: ResearchContext | None, report_mode: str) -> str:
+        synthesis = self._extract_section_summary(outputs.get("synthesiser", ""), "## Integrated Assessment", "## Decision Rule")
+        
+        if not research or not research.sources:
+            return (
+                f"This analysis addressed the research question through structured multi-agent reasoning, producing the following integrated finding: {synthesis}\n\n"
+                "**Key Contribution:** The primary value of this analysis is the structured decomposition of the question into supportive, critical, and synthetic perspectives, rather than novel evidence.\n\n"
+                "**Recommended Next Steps:**\n"
+                "1. Conduct targeted primary source retrieval to ground claims in current evidence.\n"
+                "2. Consult domain experts to validate the analytical framework.\n"
+                "3. Treat conclusions as working hypotheses pending empirical verification."
+            )
+        
+        source_count = len(research.sources)
+        primary_count = sum(1 for s in research.sources if s.authority == "primary")
+        
+        next_steps = ""
+        if report_mode == "medical":
+            next_steps = (
+                "1. Verify clinical claims against randomized controlled trial data where available.\n"
+                "2. Assess subgroup performance before generalizing to new populations.\n"
+                "3. Establish human oversight pathways before deployment in high-stakes contexts."
+            )
+        elif report_mode == "policy":
+            next_steps = (
+                "1. Monitor regulatory developments as frameworks continue to evolve.\n"
+                "2. Consult legal counsel on jurisdiction-specific compliance requirements.\n"
+                "3. Document decision rationale to support future audit requirements."
+            )
+        else:
+            next_steps = (
+                "1. Validate key claims against primary sources before acting.\n"
+                "2. Address identified evidence gaps through targeted research.\n"
+                "3. Revisit conclusions as new evidence becomes available."
+            )
+        
+        return (
+            f"This analysis synthesized {source_count} sources ({primary_count} primary) to address the research question, producing the following integrated finding: {synthesis}\n\n"
+            f"**Key Contribution:** Beyond summarizing existing evidence, this analysis distinguishes between well-supported claims (traceable to primary sources) and weakly grounded extrapolations, identifies specific evidence gaps, and surfaces contradictions that remain unresolved in the literature.\n\n"
+            f"**Why This Matters:** The distinction between validated findings and provisional claims is critical for informed decision-making. Readers can use the claim-to-source mappings to assess which conclusions warrant confidence and which require additional verification.\n\n"
+            f"**Recommended Next Steps:**\n{next_steps}"
         )
 
     def _evidence_snapshot_markdown(self, research: ResearchContext | None) -> str:

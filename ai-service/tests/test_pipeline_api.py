@@ -69,7 +69,7 @@ class PipelineApiTests(unittest.TestCase):
         self.assertEqual([event["agentId"] for event in start_events], [agent.id for agent in AGENTS])
         self.assertEqual([event["agentId"] for event in done_events], [agent.id for agent in AGENTS])
         self.assertEqual(final_event["agentId"], "output")
-        self.assertIn("## Executive Summary", final_event["fullContent"])
+        self.assertIn("## Abstract", final_event["fullContent"])
 
         quality_response = self.client.get(f"/api/pipeline/{session_id}/quality")
         self.assertEqual(quality_response.status_code, 200)
