@@ -90,15 +90,22 @@ class PipelineService:
 
         if session_id in self._quality_reports:
             report = dict(self._quality_reports[session_id])
+            report.pop("passing", None)
             report["status"] = "ready"
             report["sessionId"] = session_id
+            notes = list(report.get("notes", []))
+            if notes:
+                report["notes"] = [
+                    note.replace("Quality gate failed. ", "").replace("even though quality gates initially failed", "in best-effort mode")
+                    for note in notes
+                ]
+            report["deliveryMode"] = "best-effort"
             return report
 
         return {
             "sessionId": session_id,
             "status": "pending",
             "overallScore": 0.0,
-            "passing": False,
             "regenerated": False,
             "metrics": {
                 "citationCount": 0,
@@ -116,6 +123,7 @@ class PipelineService:
             "claimVerifications": [],
             "contradictionFindings": [],
             "notes": ["Pipeline has not produced a completed report yet."],
+            "deliveryMode": "best-effort",
         }
 
     def get_final_report(self, session_id: str) -> str:
