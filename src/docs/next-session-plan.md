@@ -85,6 +85,8 @@
 - POST /api/pipeline/start
 - GET /api/pipeline/{sessionId}/stream
 - GET /api/pipeline/{sessionId}/quality
+- GET /api/models/status
+- GET /api/benchmark/local
 - POST /api/pipeline/{sessionId}/regenerate
 
 ## Risks to Address

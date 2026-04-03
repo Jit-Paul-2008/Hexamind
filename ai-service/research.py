@@ -12,6 +12,8 @@ from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse
 
 import httpx
 
+from embeddings import LocalEmbeddingsClient
+from knowledge_cache import LocalKnowledgeCache
 from governance import redact_pii
 from workflow import ResearchWorkflowProfile, build_workflow_profile
 
@@ -185,9 +187,11 @@ class InternetResearcher:
         self._cache_ttl_seconds = max(120.0, _env_float("HEXAMIND_RESEARCH_CACHE_TTL_SECONDS", 1800.0))
         self._semantic_cache_threshold = min(0.98, max(0.65, _env_float("HEXAMIND_RESEARCH_SEMANTIC_CACHE_THRESHOLD", 0.68)))
         self._research_cache: dict[str, tuple[float, ResearchContext]] = {}
+        self._knowledge_cache = LocalKnowledgeCache()
         self._require_sources = _env_bool("HEXAMIND_REQUIRE_RESEARCH_SOURCES", False)
         self._deep_extraction = _env_bool("HEXAMIND_DEEP_EXTRACTION", True)  # Enable by default
         self._evidence_excerpt_limit = _env_int("HEXAMIND_EVIDENCE_EXCERPT_LIMIT", 600)  # Longer excerpts
+        self._embeddings = LocalEmbeddingsClient() if _env_bool("HEXAMIND_ENABLE_LOCAL_EMBEDDINGS", False) else None
         if self._search_provider == "tavily" and not self._tavily_api_key:
             raise RuntimeError("Tavily provider is enabled but TAVILY_API_KEY is missing.")
 
@@ -198,7 +202,19 @@ class InternetResearcher:
         if cached is not None:
             return cached
 
-        semantic_cached = self._load_semantic_cached_research(sanitized_query)
+        offline_cached = self._knowledge_cache.get_cached_research(sanitized_query)
+        if offline_cached is not None:
+            workflow_profile = build_workflow_profile(sanitized_query)
+            adapted = replace(
+                offline_cached,
+                query=sanitized_query,
+                workflow_profile=workflow_profile,
+                generated_at=time.time(),
+            )
+            self._store_cached_research(cache_key, adapted)
+            return adapted
+
+        semantic_cached = await self._load_semantic_cached_research(sanitized_query)
         if semantic_cached is not None:
             workflow_profile = build_workflow_profile(sanitized_query)
             adapted = replace(
@@ -277,6 +293,7 @@ class InternetResearcher:
         if self._require_sources and not result.sources:
             raise RuntimeError("No research sources were retrieved.")
         self._store_cached_research(cache_key, result)
+        self._knowledge_cache.cache_research(sanitized_query, result)
         return result
 
     def _build_search_passes(self, query: str, workflow_profile: ResearchWorkflowProfile) -> list[str]:
@@ -315,7 +332,7 @@ class InternetResearcher:
     def _store_cached_research(self, cache_key: str, context: ResearchContext) -> None:
         self._research_cache[cache_key] = (time.time(), context)
 
-    def _load_semantic_cached_research(self, query: str) -> ResearchContext | None:
+    async def _load_semantic_cached_research(self, query: str) -> ResearchContext | None:
         query_signature = self._query_signature(query)
         if not query_signature:
             return None
@@ -331,6 +348,11 @@ class InternetResearcher:
 
             cached_signature = self._query_signature(context.query)
             score = self._semantic_similarity(query_signature, cached_signature)
+            if self._embeddings is not None:
+                try:
+                    score = max(score, await self._embeddings.similarity(query, context.query))
+                except Exception:
+                    pass
             if score > best_score:
                 best_score = score
                 best_match = context

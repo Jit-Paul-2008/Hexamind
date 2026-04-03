@@ -24,6 +24,8 @@ The UI is a single full-window experience at `/` with the existing 4 agents:
 - `POST /api/pipeline/start` -> create pipeline session
 - `GET /api/pipeline/{sessionId}/stream` -> SSE events (`agent_start`, `agent_chunk`, `agent_done`, `pipeline_done`)
 - `GET /api/pipeline/{sessionId}/quality` -> structured quality diagnostics + trust metrics
+- `GET /api/models/status` -> local Ollama/OpenAI-compatible model inventory and readiness
+- `GET /api/benchmark/local` -> local model benchmark summary for the current tiered routing setup
 - `POST /api/pipeline/{sessionId}/sarvam-transform` -> optional language/instruction transform of final report
 - `POST /api/pipeline/{sessionId}/export-docx` -> optional DOCX export of transformed final report
 
@@ -178,6 +180,8 @@ HEXAMIND_MODEL_NAME=llama3.1:8b
 HEXAMIND_LOCAL_BASE_URL=http://127.0.0.1:11434/v1
 HEXAMIND_LOCAL_STRICT=1
 HEXAMIND_WEB_RESEARCH=1
+HEXAMIND_ENABLE_LOCAL_EMBEDDINGS=1
+HEXAMIND_KNOWLEDGE_CACHE_TTL_SECONDS=604800
 ```
 
 Set `HEXAMIND_LOCAL_STRICT=1` to force Ollama/local-only generation and fail fast on local errors instead of falling back to deterministic output.
@@ -205,6 +209,16 @@ To use this path, start a local model server first. Ollama is the easiest option
 ```bash
 ollama serve
 ollama pull llama3.1:8b
+ollama pull qwen2.5:7b
+ollama pull mistral:7b
+ollama pull nomic-embed-text
+```
+
+If you want to inspect readiness before running the pipeline, use:
+
+```bash
+curl http://localhost:8000/api/models/status
+curl http://localhost:8000/api/benchmark/local
 ```
 
 If you already use LM Studio or another OpenAI-compatible local server, set `HEXAMIND_LOCAL_BASE_URL` to that server's `/v1` endpoint and keep `HEXAMIND_MODEL_NAME` aligned with the installed model tag.

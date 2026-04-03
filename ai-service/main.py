@@ -7,6 +7,7 @@ import uuid
 from collections import defaultdict, deque
 from pathlib import Path
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
@@ -101,6 +102,16 @@ def health_check() -> dict[str, str | int | bool]:
     payload["auditLoggingEnabled"] = True
     payload["authRequired"] = _auth_token_required()
     return payload
+
+
+@app.get("/api/models/status")
+async def model_status() -> dict[str, object]:
+    return await _local_model_status()
+
+
+@app.get("/api/benchmark/local")
+async def benchmark_local_models() -> dict[str, object]:
+    return await _benchmark_local_models()
 
 
 @app.get("/api/agents", response_model=list[Agent])
@@ -269,6 +280,161 @@ def _append_audit_log(
             handle.write(json.dumps(record, sort_keys=True) + "\n")
     except OSError:
         pass
+
+
+def _local_base_url() -> str:
+    provider = getattr(pipeline_service, "_model_provider", None)
+    base_url = getattr(provider, "_base_url", os.getenv("HEXAMIND_LOCAL_BASE_URL", "http://127.0.0.1:11434/v1"))
+    return str(base_url).rstrip("/")
+
+
+def _required_local_models() -> list[str]:
+    required = [
+        os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", "mistral:7b").strip() or "mistral:7b",
+        os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", "qwen2.5:7b").strip() or "qwen2.5:7b",
+        os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "llama3.1:8b").strip() or "llama3.1:8b",
+    ]
+    deduped: list[str] = []
+    for model in required:
+        if model not in deduped:
+            deduped.append(model)
+    return deduped
+
+
+async def _local_model_status() -> dict[str, object]:
+    base_url = _local_base_url()
+    required = _required_local_models()
+    endpoints = [
+        f"{base_url.removesuffix('/v1')}/api/tags",
+        f"{base_url}/models",
+    ]
+    last_error = ""
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for endpoint in endpoints:
+            try:
+                response = await client.get(endpoint)
+                response.raise_for_status()
+                payload = response.json()
+                installed = _extract_local_models(payload)
+                missing = [model for model in required if model not in installed]
+                return {
+                    "baseUrl": base_url,
+                    "installed": installed,
+                    "installedCount": len(installed),
+                    "required": required,
+                    "missing": missing,
+                    "ready": not missing,
+                    "endpoint": endpoint,
+                }
+            except Exception as exc:
+                last_error = f"{type(exc).__name__}: {exc}".strip()
+
+    return {
+        "baseUrl": base_url,
+        "installed": [],
+        "installedCount": 0,
+        "required": required,
+        "missing": required,
+        "ready": False,
+        "error": last_error or "Local model service is unavailable",
+    }
+
+
+async def _benchmark_local_models() -> dict[str, object]:
+    status = await _local_model_status()
+    base_url = str(status.get("baseUrl", _local_base_url()))
+    models = list(status.get("installed") or status.get("required") or _required_local_models())
+    models = [model for model in models if isinstance(model, str) and model.strip()]
+
+    prompt = "Summarize the benefits and risks of renewable energy in 3 sentences."
+    results: list[dict[str, object]] = []
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        for model in models:
+            started = time.perf_counter()
+            try:
+                response = await client.post(
+                    f"{base_url}/chat/completions",
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": "You are a concise benchmark assistant."},
+                            {"role": "user", "content": prompt},
+                        ],
+                        "temperature": 0.2,
+                        "max_tokens": 128,
+                        "stream": False,
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+                content = _extract_chat_content(payload)
+                latency = max(0.001, time.perf_counter() - started)
+                token_estimate = max(1, len(content.split()))
+                results.append(
+                    {
+                        "model": model,
+                        "latencySeconds": round(latency, 3),
+                        "tokensGenerated": token_estimate,
+                        "tokensPerSecond": round(token_estimate / latency, 2),
+                        "preview": content[:240],
+                    }
+                )
+            except Exception as exc:
+                results.append(
+                    {
+                        "model": model,
+                        "error": f"{type(exc).__name__}: {exc}".strip(),
+                    }
+                )
+
+    return {
+        "baseUrl": base_url,
+        "ready": bool(status.get("ready")),
+        "installed": status.get("installed", []),
+        "required": status.get("required", []),
+        "benchmarks": results,
+    }
+
+
+def _extract_local_models(payload: object) -> list[str]:
+    models: list[str] = []
+    if not isinstance(payload, dict):
+        return models
+
+    for entry in payload.get("models", []) if isinstance(payload.get("models"), list) else []:
+        if isinstance(entry, dict):
+            name = str(entry.get("name") or entry.get("id") or "").strip()
+            if name and name not in models:
+                models.append(name)
+
+    for entry in payload.get("data", []) if isinstance(payload.get("data"), list) else []:
+        if isinstance(entry, dict):
+            name = str(entry.get("id") or entry.get("name") or "").strip()
+            if name and name not in models:
+                models.append(name)
+
+    return models
+
+
+def _extract_chat_content(payload: object) -> str:
+    if not isinstance(payload, dict):
+        return ""
+
+    choices = payload.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0]
+        if isinstance(first, dict):
+            message = first.get("message")
+            if isinstance(message, dict):
+                content = message.get("content", "")
+                if isinstance(content, list):
+                    parts = [str(item.get("text", "")) for item in content if isinstance(item, dict)]
+                    return "\n".join(part for part in parts if part).strip()
+                return str(content).strip()
+
+    return str(payload.get("response", "")).strip()
 
 
 def _env_int(name: str, default: int) -> int:

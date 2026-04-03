@@ -70,10 +70,12 @@ class CostPerformanceMilestoneTests(unittest.TestCase):
             discovery_pass="evidence",
         )
 
+        query = "How should we optimize model routing and cache evidence for baseline reuse?"
+
         with patch.object(researcher, "_search_hits", new=AsyncMock(return_value=[SearchHit(title="A", url=source_one.url, snippet="", relevance_score=0.9)])) as search_hits_mock:
             with patch.object(researcher, "_build_candidates", new=AsyncMock(return_value=[(0.9, source_one), (0.8, source_two)])):
-                first = asyncio.run(researcher.research("How should we optimize model routing and cache evidence?"))
-                second = asyncio.run(researcher.research("How should we optimize model routing and cache evidence?"))
+                first = asyncio.run(researcher.research(query))
+                second = asyncio.run(researcher.research(query))
 
         self.assertEqual(search_hits_mock.call_count, 1)
         self.assertEqual(first.sources, second.sources)
@@ -94,8 +96,8 @@ class CostPerformanceMilestoneTests(unittest.TestCase):
             discovery_pass="official",
         )
 
-        first_query = "How should we optimize model routing and cache evidence?"
-        second_query = "What is the best way to optimize model routing and cache evidence?"
+        first_query = "How should we optimize model routing and cache evidence for near-duplicate reuse?"
+        second_query = "What is the best way to optimize model routing and cache evidence for near-duplicate reuse?"
 
         with patch.object(researcher, "_search_hits", new=AsyncMock(return_value=[SearchHit(title="A", url=source.url, snippet="", relevance_score=0.9)])) as search_hits_mock:
             with patch.object(researcher, "_build_candidates", new=AsyncMock(return_value=[(0.9, source)])):

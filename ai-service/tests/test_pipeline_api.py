@@ -36,6 +36,20 @@ class PipelineApiTests(unittest.TestCase):
         self.assertIn("activeProvider", health_payload)
         self.assertIn("isFallback", health_payload)
 
+        with patch("main._local_model_status", new=AsyncMock(return_value={"baseUrl": "http://127.0.0.1:11434/v1", "installed": ["llama3.1:8b"], "installedCount": 1, "required": ["llama3.1:8b", "qwen2.5:7b", "mistral:7b"], "missing": ["qwen2.5:7b", "mistral:7b"], "ready": False, "endpoint": "http://127.0.0.1:11434/api/tags"})):
+            status_response = self.client.get("/api/models/status")
+        self.assertEqual(status_response.status_code, 200)
+        status_payload = status_response.json()
+        self.assertIn("installed", status_payload)
+        self.assertFalse(status_payload["ready"])
+
+        with patch("main._benchmark_local_models", new=AsyncMock(return_value={"baseUrl": "http://127.0.0.1:11434/v1", "ready": True, "installed": ["llama3.1:8b"], "required": ["llama3.1:8b"], "benchmarks": [{"model": "llama3.1:8b", "latencySeconds": 0.5, "tokensGenerated": 32, "tokensPerSecond": 64.0}]})):
+            benchmark_response = self.client.get("/api/benchmark/local")
+        self.assertEqual(benchmark_response.status_code, 200)
+        benchmark_payload = benchmark_response.json()
+        self.assertTrue(benchmark_payload["ready"])
+        self.assertEqual(benchmark_payload["benchmarks"][0]["model"], "llama3.1:8b")
+
         agents_response = self.client.get("/api/agents")
         self.assertEqual(agents_response.status_code, 200)
         agents = agents_response.json()
