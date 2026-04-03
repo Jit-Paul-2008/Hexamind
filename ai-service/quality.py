@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 import httpx
 
 from research import ResearchContext
+from workflow import ResearchWorkflowProfile
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,7 @@ def analyze_pipeline_quality(
     assembled: dict[str, str],
     final_answer: str,
     research: ResearchContext | None,
+    workflow_profile: ResearchWorkflowProfile | None = None,
 ) -> dict[str, object]:
     combined = "\n".join(list(assembled.values()) + [final_answer])
     citation_count = _citation_count(combined)
@@ -83,6 +85,11 @@ def analyze_pipeline_quality(
     has_report_plan = "report plan" in final_answer.lower()
     generic_template_hits = _generic_template_hit_count(final_answer)
     citation_integrity_findings = _audit_citations(final_answer, research)
+    adaptive_verification_target = workflow_profile.min_verification_rate if workflow_profile else 0.75
+    adaptive_citation_target = 6 if workflow_profile and workflow_profile.complexity_score >= 0.7 else 5
+    adaptive_domain_target = 4 if workflow_profile and workflow_profile.complexity_score >= 0.55 else 3
+    if workflow_profile and workflow_profile.query_type in {"exploratory", "forecast"}:
+        adaptive_domain_target = max(2, adaptive_domain_target - 1)
 
     # Beast workflow: Enhanced claim verification with confidence levels
     claim_verifications = _verify_claims_v2(final_answer, research)
@@ -166,10 +173,10 @@ def analyze_pipeline_quality(
     all_gates_passed = all(gate.passed for gate in gate_results)
     passing = (
         overall_score >= 72  # Raised threshold
-        and citation_count >= (5 if source_count > 0 else 0)  # Raised bar
-        and (source_count == 0 or unique_domains >= min(3, source_count))
+        and citation_count >= (adaptive_citation_target if source_count > 0 else 0)
+        and (source_count == 0 or unique_domains >= min(adaptive_domain_target, source_count))
         and contradiction_covered
-        and (not claim_verifications or claim_verification_rate >= 0.75)
+        and (not claim_verifications or claim_verification_rate >= adaptive_verification_target)
         and trust_score >= 55  # Trust score gate
         and high_severity_contradictions == 0  # No high-severity unaddressed contradictions
         and generic_template_hits == 0
@@ -181,6 +188,14 @@ def analyze_pipeline_quality(
 
     return {
         "query": query,
+        "workflowProfile": {
+            "queryType": workflow_profile.query_type,
+            "complexityScore": round(workflow_profile.complexity_score, 3),
+            "minVerificationRate": round(adaptive_verification_target, 3),
+            "contradictionSensitivity": workflow_profile.contradiction_sensitivity,
+        }
+        if workflow_profile
+        else None,
         "overallScore": overall_score,
         "trustScore": trust_score,
         "trustGrade": trust_breakdown.grade,
@@ -204,6 +219,9 @@ def analyze_pipeline_quality(
             "unverifiedClaimCount": unverified_count,
             "highConfidenceClaimCount": high_confidence_count,
             "claimVerificationRate": round(claim_verification_rate, 3),
+            "adaptiveVerificationTarget": round(adaptive_verification_target, 3),
+            "adaptiveCitationTarget": adaptive_citation_target,
+            "adaptiveDomainTarget": adaptive_domain_target,
             "citationIntegrityScore": round(integrity_score, 3),
             "sourceFreshnessScore": round(freshness_score, 3),
         },

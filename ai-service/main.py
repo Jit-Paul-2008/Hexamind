@@ -16,6 +16,7 @@ from sse_starlette.sse import EventSourceResponse
 load_dotenv()
 
 from agents import AGENTS
+from governance import resolve_tenant_resolution
 from pipeline import pipeline_service
 from sarvam_service import SarvamService, docx_supported
 from schemas import (
@@ -45,10 +46,12 @@ app.add_middleware(
 async def security_and_audit_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-Id", str(uuid.uuid4()))
     client_ip = request.client.host if request.client else "unknown"
+    tenant_resolution = resolve_tenant_resolution(request.headers)
+    request.state.tenant_id = tenant_resolution.tenant_id
     started_at = time.perf_counter()
 
     rate_limit = _rate_limit_per_minute()
-    if rate_limit > 0 and not _rate_limit_allows(client_ip, rate_limit):
+    if rate_limit > 0 and not _rate_limit_allows(f"{tenant_resolution.tenant_id}:{client_ip}", rate_limit):
         response = JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
         _append_audit_log(
             request_id=request_id,
@@ -56,6 +59,7 @@ async def security_and_audit_middleware(request: Request, call_next):
             status_code=response.status_code,
             duration_seconds=0.0,
             client_ip=client_ip,
+            tenant_id=tenant_resolution.tenant_id,
             rate_limited=True,
         )
         return response
@@ -71,6 +75,7 @@ async def security_and_audit_middleware(request: Request, call_next):
                 status_code=response.status_code,
                 duration_seconds=0.0,
                 client_ip=client_ip,
+                tenant_id=tenant_resolution.tenant_id,
                 rate_limited=False,
             )
             return response
@@ -82,6 +87,7 @@ async def security_and_audit_middleware(request: Request, call_next):
         status_code=response.status_code,
         duration_seconds=round(time.perf_counter() - started_at, 4),
         client_ip=client_ip,
+        tenant_id=tenant_resolution.tenant_id,
         rate_limited=False,
     )
     response.headers["X-Request-Id"] = request_id
@@ -115,22 +121,24 @@ def get_agents() -> list[Agent]:
 
 
 @app.post("/api/pipeline/start", response_model=StartPipelineResponse)
-def start_pipeline(payload: StartPipelineRequest) -> StartPipelineResponse:
-    session_id = pipeline_service.start(payload.query.strip())
+def start_pipeline(payload: StartPipelineRequest, request: Request) -> StartPipelineResponse:
+    tenant_id = getattr(request.state, "tenant_id", "default")
+    session_id = pipeline_service.start(payload.query.strip(), tenant_id=tenant_id)
     return StartPipelineResponse(sessionId=session_id)
 
 
 @app.get("/api/pipeline/{session_id}/stream")
-def stream_pipeline(session_id: str):
-    if not pipeline_service.has_session(session_id):
+def stream_pipeline(session_id: str, request: Request):
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if not pipeline_service.has_session(session_id, tenant_id):
         raise HTTPException(status_code=404, detail="Unknown pipeline session")
-    return EventSourceResponse(pipeline_service.stream_events(session_id))
+    return EventSourceResponse(pipeline_service.stream_events(session_id, tenant_id))
 
 
 @app.get("/api/pipeline/{session_id}/quality")
-def pipeline_quality(session_id: str) -> dict[str, object]:
+def pipeline_quality(session_id: str, request: Request) -> dict[str, object]:
     try:
-        return pipeline_service.get_quality_report(session_id)
+        return pipeline_service.get_quality_report(session_id, getattr(request.state, "tenant_id", None))
     except KeyError:
         raise HTTPException(status_code=404, detail="Unknown pipeline session")
 
@@ -139,9 +147,10 @@ def pipeline_quality(session_id: str) -> dict[str, object]:
 async def pipeline_sarvam_transform(
     session_id: str,
     payload: SarvamTransformRequest,
+    request: Request,
 ) -> SarvamTransformResponse:
     try:
-        report_text = pipeline_service.get_final_report(session_id)
+        report_text = pipeline_service.get_final_report(session_id, getattr(request.state, "tenant_id", None))
     except KeyError:
         raise HTTPException(status_code=404, detail="Unknown pipeline session")
     if not report_text.strip():
@@ -167,9 +176,10 @@ async def pipeline_sarvam_transform(
 async def pipeline_export_docx(
     session_id: str,
     payload: SarvamTransformRequest,
+    request: Request,
 ) -> Response:
     try:
-        report_text = pipeline_service.get_final_report(session_id)
+        report_text = pipeline_service.get_final_report(session_id, getattr(request.state, "tenant_id", None))
     except KeyError:
         raise HTTPException(status_code=404, detail="Unknown pipeline session")
     if not report_text.strip():
@@ -239,6 +249,7 @@ def _append_audit_log(
     status_code: int,
     duration_seconds: float,
     client_ip: str,
+    tenant_id: str,
     rate_limited: bool,
 ) -> None:
     try:
@@ -250,6 +261,7 @@ def _append_audit_log(
             "statusCode": status_code,
             "durationSeconds": duration_seconds,
             "clientIp": client_ip,
+            "tenantId": tenant_id,
             "rateLimited": rate_limited,
             "timestamp": time.time(),
         }

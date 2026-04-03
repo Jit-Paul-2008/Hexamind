@@ -27,6 +27,7 @@ class PipelineModelProvider(Protocol):
         agent_id: str,
         query: str,
         research: ResearchContext | None = None,
+        prior_outputs: dict[str, str] | None = None,
     ) -> str:
         ...
 
@@ -844,18 +845,20 @@ class DeterministicPipelineModelProvider:
         agent_id: str,
         query: str,
         research: ResearchContext | None = None,
+        prior_outputs: dict[str, str] | None = None,
     ) -> str:
         self._research = research  # Store for _get_source_details
         q = query.strip()
         source_block = self._source_block(research)
+        prior_block = _prior_outputs_block(prior_outputs)
         if agent_id == "advocate":
             return self._structured_advocate(q, source_block)
         if agent_id == "skeptic":
             return self._structured_skeptic(q, source_block)
         if agent_id == "synthesiser":
-            return self._structured_synthesiser(q, source_block)
+            return self._structured_synthesiser(q, source_block, prior_block)
         if agent_id == "verifier":
-            return self._structured_verifier(q, source_block)
+            return self._structured_verifier(q, source_block, prior_block)
         return self._structured_oracle(q, source_block)
 
     async def compose_final_answer(
@@ -1407,9 +1410,10 @@ class DeterministicPipelineModelProvider:
             f"- [{primary_source['id']}] {primary_source['title']} ({primary_source['domain']}): Risk and governance evidence basis.\n"
         )
 
-    def _structured_synthesiser(self, query: str, source_block: str) -> str:
+    def _structured_synthesiser(self, query: str, source_block: str, prior_outputs_block: str = "") -> str:
         sources = self._get_source_details()
         primary_source = sources[0] if sources else {"id": "S1", "title": "synthesis", "domain": "internal", "cred": 0.7}
+        prior_context = f"\n\n## Prior Agent Outputs\n{prior_outputs_block}\n" if prior_outputs_block else ""
         return (
             "## Integrated Assessment\n"
             f"Taken together, the evidence on '{query}' supports a cautious-but-forward position: AI diagnostics show meaningful promise in selected workflows, but outcome quality depends on regulatory compliance, human oversight, and real-world validation across diverse populations [{primary_source['id']}].\n\n"
@@ -1433,6 +1437,7 @@ class DeterministicPipelineModelProvider:
             "- Never deploy high-impact diagnostic models without documented subgroup performance.\n"
             "- Require explicit fallback workflows for low-confidence outputs.\n"
             "- Enforce periodic drift audits and incident reporting.\n\n"
+            f"{prior_context}"
             "## Citations Used\n"
             f"- [{primary_source['id']}] {primary_source['title']} ({primary_source['domain']}): Integration rationale and evidence synthesis anchor.\n"
         )
@@ -1472,12 +1477,13 @@ class DeterministicPipelineModelProvider:
             f"- [{primary_source['id']}] {primary_source['title']} ({primary_source['domain']}): Forecast anchor and constraint assumptions.\n"
         )
 
-    def _structured_verifier(self, query: str, source_block: str) -> str:
+    def _structured_verifier(self, query: str, source_block: str, prior_outputs_block: str = "") -> str:
         sources = self._get_source_details()
         source_count = len(sources)
         avg_cred = sum(s['cred'] for s in sources) / max(1, source_count) if sources else 0.5
         first_id = sources[0]["id"] if sources else "S1"
         second_id = sources[1]["id"] if len(sources) > 1 else first_id
+        prior_context = f"\n\n## Prior Agent Outputs\n{prior_outputs_block}\n" if prior_outputs_block else ""
         return (
             "## Claim Verification\n"
             f"Evidence audit for '{query}' across {source_count} retrieved sources (mean credibility: {avg_cred:.0%}).\n\n"
@@ -1507,6 +1513,7 @@ class DeterministicPipelineModelProvider:
             "## Verification Confidence\n"
             "- Report confidence: medium.\n"
             "- Use caveats for market-size extrapolations and cross-setting generalization claims.\n"
+            f"{prior_context}"
         )
 
     def _get_source_details(self) -> list[dict]:
@@ -2721,6 +2728,25 @@ def _trim_for_prompt(text: str, limit: int) -> str:
     if len(value) <= limit:
         return value
     return value[: limit - 64].rstrip() + "\n\n[truncated for token safety]"
+
+
+def _prior_outputs_block(prior_outputs: dict[str, str] | None, limit: int = 3200) -> str:
+    if not prior_outputs:
+        return ""
+
+    ordered_agents = ("advocate", "skeptic", "oracle", "verifier", "synthesiser")
+    sections: list[str] = []
+    for agent_id in ordered_agents:
+        content = (prior_outputs.get(agent_id) or "").strip()
+        if not content:
+            continue
+        sections.append(f"[{agent_id}]\n{_trim_for_prompt(content, max(300, limit // 4))}")
+
+    if not sections:
+        return ""
+
+    combined = "\n\n".join(sections)
+    return _trim_for_prompt(f"Prior agent outputs:\n{combined}", limit)
 
 
 def _is_agent_research_grade(

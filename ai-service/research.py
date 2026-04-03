@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse
 
 import httpx
 
+from governance import redact_pii
 from workflow import ResearchWorkflowProfile, build_workflow_profile
 
 
@@ -191,40 +192,41 @@ class InternetResearcher:
             raise RuntimeError("Tavily provider is enabled but TAVILY_API_KEY is missing.")
 
     async def research(self, query: str) -> ResearchContext:
-        cache_key = self._cache_key(query)
+        sanitized_query = redact_pii(query.strip())
+        cache_key = self._cache_key(sanitized_query)
         cached = self._load_cached_research(cache_key)
         if cached is not None:
             return cached
 
-        semantic_cached = self._load_semantic_cached_research(query)
+        semantic_cached = self._load_semantic_cached_research(sanitized_query)
         if semantic_cached is not None:
-            workflow_profile = build_workflow_profile(query)
+            workflow_profile = build_workflow_profile(sanitized_query)
             adapted = replace(
                 semantic_cached,
-                query=query,
+                query=sanitized_query,
                 workflow_profile=workflow_profile,
                 generated_at=time.time(),
             )
             self._store_cached_research(cache_key, adapted)
             return adapted
 
-        workflow_profile = build_workflow_profile(query)
+        workflow_profile = build_workflow_profile(sanitized_query)
         
         # Adaptive search depth based on topic complexity
         complexity_multiplier = 1.0 + (workflow_profile.complexity_score * 0.5)
         effective_max_sources = int(max(self._max_sources, workflow_profile.max_sources) * complexity_multiplier)
         
-        search_passes = self._build_search_passes(query, workflow_profile)
-        search_terms = self._build_search_terms(query, workflow_profile, search_passes)
+        search_passes = self._build_search_passes(sanitized_query, workflow_profile)
+        search_terms = self._build_search_terms(sanitized_query, workflow_profile, search_passes)
         
         # Phase 1: Primary search
-        hits = await self._search_hits(query, search_terms, workflow_profile, search_passes)
-        candidates = await self._build_candidates(query, hits, workflow_profile)
+        hits = await self._search_hits(sanitized_query, search_terms, workflow_profile, search_passes)
+        candidates = await self._build_candidates(sanitized_query, hits, workflow_profile)
         
         # Phase 2: Fallback expansion if primary search underperforms
         if len(candidates) < 4:
-            fallback_hits = await self._expanded_fallback_search(query, workflow_profile)
-            fallback_candidates = await self._build_candidates(query, fallback_hits, workflow_profile)
+            fallback_hits = await self._expanded_fallback_search(sanitized_query, workflow_profile)
+            fallback_candidates = await self._build_candidates(sanitized_query, fallback_hits, workflow_profile)
             candidates.extend(fallback_candidates)
         
         sources = _select_sources_with_diversity(
@@ -236,11 +238,11 @@ class InternetResearcher:
         
         # Phase 3: Deep evidence analysis
         if self._deep_extraction and sources:
-            sources = self._enrich_with_evidence_density(sources, query)
+            sources = self._enrich_with_evidence_density(sources, sanitized_query)
             sources = self._compute_cross_corroboration(sources)
         
-        contradictions = tuple(_detect_source_contradictions(query, sources))
-        evidence_graph = self._build_evidence_graph(sources, query)
+        contradictions = tuple(_detect_source_contradictions(sanitized_query, sources))
+        evidence_graph = self._build_evidence_graph(sources, sanitized_query)
         corroboration_pairs = self._find_corroboration_pairs(sources)
         
         # Phase 4: Wikipedia fallback for minimum source diversity
@@ -260,7 +262,7 @@ class InternetResearcher:
         research_depth = self._compute_research_depth(sources, contradictions, corroboration_pairs)
 
         result = ResearchContext(
-            query=query,
+            query=sanitized_query,
             workflow_profile=workflow_profile,
             search_terms=tuple(search_terms),
             search_passes=tuple(search_passes),
