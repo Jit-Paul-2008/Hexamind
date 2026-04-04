@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import json
 import os
 import sys
@@ -267,7 +268,14 @@ class AutonomousOrchestrator:
             or 0.0
         )
         total_seconds = float(stage_timings.get("totalSeconds", 0.0) or 0.0)
-        token_used = int(provider_diagnostics.get("tokenBudgetUsed", 0) or 0)
+        provider_token_used = int(provider_diagnostics.get("tokenBudgetUsed", 0) or 0)
+        token_input_estimate, token_output_estimate, token_total_estimate = self._estimate_token_usage(
+            query_text=str(research_report.get("query", "") or ""),
+            report_text=raw_report,
+            coverage_summary=coverage_summary,
+        )
+        token_used = provider_token_used if provider_token_used > 0 else token_total_estimate
+        token_mode = "provider" if provider_token_used > 0 else "estimated"
         api_present = bool(provider_diagnostics.get("activeProvider", "").strip()) and provider_diagnostics.get("activeProvider") != "deterministic"
         quality_metrics_block = quality_report.get("metrics", {}) if isinstance(quality_report.get("metrics", {}), dict) else {}
         citation_count = int(quality_metrics_block.get("citationCount", 0) or 0)
@@ -289,6 +297,10 @@ class AutonomousOrchestrator:
             "provider": provider_diagnostics.get("activeProvider", "unknown"),
             "apiPresent": api_present,
             "tokenUsed": token_used,
+            "tokenMode": token_mode,
+            "tokenInputEstimate": token_input_estimate,
+            "tokenOutputEstimate": token_output_estimate,
+            "providerTokenUsed": provider_token_used,
             "speedSeconds": round(total_seconds, 3),
             "overallScore": round(overall_score, 2),
             "trustScore": round(trust_score, 2),
@@ -300,6 +312,27 @@ class AutonomousOrchestrator:
             "coverage": coverage_summary,
             "improvementsApplied": improvements_applied,
         }
+
+    @staticmethod
+    def _estimate_token_usage(query_text: str, report_text: str, coverage_summary: dict[str, Any]) -> tuple[int, int, int]:
+        # Heuristic token accounting for local mode so cost simulation can be estimated before API deployment.
+        # Approximation: 1 token ~= 4 characters with pass multipliers for multi-agent workflow.
+        query_chars = len((query_text or "").strip())
+        report_chars = len((report_text or "").strip())
+        source_count = int(coverage_summary.get("sourceCount", 1) or 1)
+        web_enabled = bool(coverage_summary.get("allowWebResearch", False))
+
+        base_input_tokens = max(1, math.ceil(query_chars / 4))
+        base_output_tokens = max(1, math.ceil(report_chars / 4))
+
+        source_factor = min(2.0, 1.0 + (max(0, source_count - 1) * 0.12))
+        workflow_input_multiplier = 3.8 if web_enabled else 3.2
+        workflow_output_multiplier = 1.9 if web_enabled else 1.6
+
+        input_estimate = int(base_input_tokens * source_factor * workflow_input_multiplier)
+        output_estimate = int(base_output_tokens * source_factor * workflow_output_multiplier)
+        total_estimate = max(1, input_estimate + output_estimate)
+        return input_estimate, output_estimate, total_estimate
 
     def _update_visual_dashboard(self, snapshot: dict[str, Any]) -> None:
         history_path = self.aggregated_path / "run-metrics-history.json"

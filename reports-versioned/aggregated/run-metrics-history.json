@@ -4,7 +4,7 @@
     "timestamp": "2026-04-04T07:43:24.247056",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 74143,
     "speedSeconds": 187.476,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -31,14 +31,18 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 61375,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T07-46-39-00600704",
     "timestamp": "2026-04-04T07:50:39.403299",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93302,
     "speedSeconds": 238.469,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -64,14 +68,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80534,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T07-55-49-a0c898b9",
     "timestamp": "2026-04-04T07:59:48.042004",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 237.446,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -97,14 +105,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-00-57-fb1e3d64",
     "timestamp": "2026-04-04T08:04:55.388087",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.945,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -130,14 +142,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-08-12-d5ea97a8",
     "timestamp": "2026-04-04T08:12:10.439143",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.7,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -163,14 +179,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-12-12-4cfa68e5",
     "timestamp": "2026-04-04T08:16:10.379470",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.624,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -196,14 +216,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-16-12-f43afa37",
     "timestamp": "2026-04-04T08:20:10.183500",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.35,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -229,14 +253,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-20-12-a9bbe589",
     "timestamp": "2026-04-04T08:24:10.227221",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.349,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -262,14 +290,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-24-12-db2af632",
     "timestamp": "2026-04-04T08:28:10.357620",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.433,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -295,14 +327,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-28-12-a466cb23",
     "timestamp": "2026-04-04T08:32:10.499934",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.484,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -328,14 +364,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-32-12-8527953f",
     "timestamp": "2026-04-04T08:36:10.366578",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.358,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -361,14 +401,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-36-13-2dbceeb7",
     "timestamp": "2026-04-04T08:40:10.455246",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.368,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -394,14 +438,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-40-13-47de5cac",
     "timestamp": "2026-04-04T08:44:10.520783",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.382,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -427,14 +475,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-47-11-29ed2a1a",
     "timestamp": "2026-04-04T08:51:08.801280",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.581,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -460,14 +512,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-51-11-af7023d2",
     "timestamp": "2026-04-04T08:55:08.770553",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.464,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -493,14 +549,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-55-11-762cdb61",
     "timestamp": "2026-04-04T08:59:08.950858",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.592,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -526,14 +586,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T08-59-11-ea1794de",
     "timestamp": "2026-04-04T09:03:08.940968",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.558,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -559,14 +623,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-03-11-14de4d2f",
     "timestamp": "2026-04-04T09:07:08.954164",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.519,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -592,14 +660,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-07-11-b32c6376",
     "timestamp": "2026-04-04T09:11:09.030372",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.523,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -625,14 +697,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-11-11-68291bb5",
     "timestamp": "2026-04-04T09:15:09.009771",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.419,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -658,14 +734,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-15-11-be36b271",
     "timestamp": "2026-04-04T09:19:09.081978",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.435,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -691,14 +771,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-23-04-f926e086",
     "timestamp": "2026-04-04T09:27:02.187074",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 236.666,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -724,14 +808,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-27-04-caf3a5c0",
     "timestamp": "2026-04-04T09:31:02.712714",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 93304,
     "speedSeconds": 237.156,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -757,14 +845,18 @@
       "HEXAMIND_WEB_RESEARCH",
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 12768,
+    "tokenOutputEstimate": 80536,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-32-58-d2b06dc9",
     "timestamp": "2026-04-04T09:36:56.191155",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 103301,
     "speedSeconds": 236.707,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -792,14 +884,18 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-38-53-a5e9ee25",
     "timestamp": "2026-04-04T09:42:50.558646",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 103301,
     "speedSeconds": 235.913,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -827,14 +923,18 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-42-53-ed71848c",
     "timestamp": "2026-04-04T09:46:50.856497",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 103301,
     "speedSeconds": 236.187,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -862,14 +962,18 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-46-53-3ca2eec1",
     "timestamp": "2026-04-04T09:50:50.535561",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 103301,
     "speedSeconds": 235.871,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -897,14 +1001,18 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-50-53-a55412e1",
     "timestamp": "2026-04-04T09:54:49.723065",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 103301,
     "speedSeconds": 235.0,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -932,14 +1040,18 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-54-53-aa4161dd",
     "timestamp": "2026-04-04T09:58:49.777421",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 103301,
     "speedSeconds": 235.009,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -967,14 +1079,18 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T09-58-55-179023b8",
     "timestamp": "2026-04-04T10:02:51.478545",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 103301,
     "speedSeconds": 234.942,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -1002,14 +1118,18 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T10-02-55-d5d4d590",
     "timestamp": "2026-04-04T10:06:51.418052",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 103301,
     "speedSeconds": 234.993,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -1037,14 +1157,18 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T10-06-55-16c5dcc2",
     "timestamp": "2026-04-04T10:10:51.678292",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 103301,
     "speedSeconds": 235.068,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -1072,14 +1196,18 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T10-10-55-5cd64efe",
     "timestamp": "2026-04-04T10:14:51.835520",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 103301,
     "speedSeconds": 235.172,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -1107,14 +1235,18 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
-    ]
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "tokenMode": "estimated"
   },
   {
     "iterationId": "iter-001-2026-04-04T10-14-55-bdbbfcb9",
     "timestamp": "2026-04-04T10:18:52.334080",
     "provider": "local-unavailable",
     "apiPresent": true,
-    "tokenUsed": 0,
+    "tokenUsed": 103301,
     "speedSeconds": 235.66,
     "overallScore": 70.0,
     "trustScore": 0.0,
@@ -1142,6 +1274,195 @@
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
       "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
       "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
+    ],
+    "providerTokenUsed": 0,
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "tokenMode": "estimated"
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T10-19-46-e8bb3192",
+    "timestamp": "2026-04-04T10:23:43.090937",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 103301,
+    "tokenMode": "estimated",
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "providerTokenUsed": 0,
+    "speedSeconds": 235.279,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 94.91,
+    "usefulnessScore": 48.83,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 3,
+      "uniqueDomains": 1,
+      "extractedChars": 141472,
+      "sourceCoverageRatio": 0.75,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.993,
+      "overallCoverage": 0.692,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T10-23-46-e57240f7",
+    "timestamp": "2026-04-04T10:27:43.204740",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 103301,
+    "tokenMode": "estimated",
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "providerTokenUsed": 0,
+    "speedSeconds": 235.402,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 94.91,
+    "usefulnessScore": 48.83,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 3,
+      "uniqueDomains": 1,
+      "extractedChars": 141472,
+      "sourceCoverageRatio": 0.75,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.993,
+      "overallCoverage": 0.692,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T10-27-46-7332bb41",
+    "timestamp": "2026-04-04T10:31:42.880177",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 103301,
+    "tokenMode": "estimated",
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "providerTokenUsed": 0,
+    "speedSeconds": 235.008,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 94.91,
+    "usefulnessScore": 48.83,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 3,
+      "uniqueDomains": 1,
+      "extractedChars": 141472,
+      "sourceCoverageRatio": 0.75,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.993,
+      "overallCoverage": 0.692,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T10-31-46-cdda679b",
+    "timestamp": "2026-04-04T10:35:42.930654",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 103301,
+    "tokenMode": "estimated",
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "providerTokenUsed": 0,
+    "speedSeconds": 234.999,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 94.91,
+    "usefulnessScore": 48.83,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 3,
+      "uniqueDomains": 1,
+      "extractedChars": 141472,
+      "sourceCoverageRatio": 0.75,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.993,
+      "overallCoverage": 0.692,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T10-35-46-b2c64b6e",
+    "timestamp": "2026-04-04T10:39:43.816888",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 103301,
+    "tokenMode": "estimated",
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "providerTokenUsed": 0,
+    "speedSeconds": 235.779,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 94.91,
+    "usefulnessScore": 48.83,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 3,
+      "uniqueDomains": 1,
+      "extractedChars": 141472,
+      "sourceCoverageRatio": 0.75,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.993,
+      "overallCoverage": 0.692,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
     ]
   }
 ]

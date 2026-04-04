@@ -1,9 +1,9 @@
 nohup: ignoring input
-[2026-04-04T09:38:53Z] Commit state initialized at run 24
-[2026-04-04T09:38:53Z] Run 25/50 started
-[2026-04-04T09:39:53Z] heartbeat: run 25 still running (60s elapsed)
-[2026-04-04T09:40:53Z] heartbeat: run 25 still running (120s elapsed)
-[2026-04-04T09:41:53Z] heartbeat: run 25 still running (180s elapsed)
+[2026-04-04T10:19:46Z] Commit state initialized at run 34
+[2026-04-04T10:19:46Z] Run 35/50 started
+[2026-04-04T10:20:46Z] heartbeat: run 35 still running (60s elapsed)
+[2026-04-04T10:21:46Z] heartbeat: run 35 still running (120s elapsed)
+[2026-04-04T10:22:46Z] heartbeat: run 35 still running (180s elapsed)
 ======================================================================
 HEXAMIND SINGLE ITERATION
 ======================================================================
@@ -12,15 +12,15 @@ Sources: ['file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md', 'file:///
 ======================================================================
 
 
-[Iteration 1] iter-001-2026-04-04T09-38-53-a5e9ee25
+[Iteration 1] iter-001-2026-04-04T10-19-46-e8bb3192
   Run complete.
 
 Iteration complete
-[2026-04-04T09:42:53Z] Run:(25) is completed in 240s
-[2026-04-04T09:42:53Z] Run 26/50 started
-[2026-04-04T09:43:53Z] heartbeat: run 26 still running (60s elapsed)
-[2026-04-04T09:44:53Z] heartbeat: run 26 still running (120s elapsed)
-[2026-04-04T09:45:53Z] heartbeat: run 26 still running (180s elapsed)
+[2026-04-04T10:23:46Z] Run:(35) is completed in 240s
+[2026-04-04T10:23:46Z] Run 36/50 started
+[2026-04-04T10:24:46Z] heartbeat: run 36 still running (60s elapsed)
+[2026-04-04T10:25:46Z] heartbeat: run 36 still running (120s elapsed)
+[2026-04-04T10:26:46Z] heartbeat: run 36 still running (180s elapsed)
 ======================================================================
 HEXAMIND SINGLE ITERATION
 ======================================================================
@@ -29,15 +29,15 @@ Sources: ['file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md', 'file:///
 ======================================================================
 
 
-[Iteration 1] iter-001-2026-04-04T09-42-53-ed71848c
+[Iteration 1] iter-001-2026-04-04T10-23-46-e57240f7
   Run complete.
 
 Iteration complete
-[2026-04-04T09:46:53Z] Run:(26) is completed in 240s
-[2026-04-04T09:46:53Z] Run 27/50 started
-[2026-04-04T09:47:53Z] heartbeat: run 27 still running (60s elapsed)
-[2026-04-04T09:48:53Z] heartbeat: run 27 still running (120s elapsed)
-[2026-04-04T09:49:53Z] heartbeat: run 27 still running (180s elapsed)
+[2026-04-04T10:27:46Z] Run:(36) is completed in 240s
+[2026-04-04T10:27:46Z] Run 37/50 started
+[2026-04-04T10:28:46Z] heartbeat: run 37 still running (60s elapsed)
+[2026-04-04T10:29:46Z] heartbeat: run 37 still running (120s elapsed)
+[2026-04-04T10:30:46Z] heartbeat: run 37 still running (180s elapsed)
 ======================================================================
 HEXAMIND SINGLE ITERATION
 ======================================================================
@@ -46,15 +46,15 @@ Sources: ['file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md', 'file:///
 ======================================================================
 
 
-[Iteration 1] iter-001-2026-04-04T09-46-53-3ca2eec1
+[Iteration 1] iter-001-2026-04-04T10-27-46-7332bb41
   Run complete.
 
 Iteration complete
-[2026-04-04T09:50:53Z] Run:(27) is completed in 240s
-[2026-04-04T09:50:53Z] Run 28/50 started
-[2026-04-04T09:51:53Z] heartbeat: run 28 still running (60s elapsed)
-[2026-04-04T09:52:53Z] heartbeat: run 28 still running (120s elapsed)
-[2026-04-04T09:53:53Z] heartbeat: run 28 still running (180s elapsed)
+[2026-04-04T10:31:46Z] Run:(37) is completed in 240s
+[2026-04-04T10:31:46Z] Run 38/50 started
+[2026-04-04T10:32:46Z] heartbeat: run 38 still running (60s elapsed)
+[2026-04-04T10:33:46Z] heartbeat: run 38 still running (120s elapsed)
+[2026-04-04T10:34:46Z] heartbeat: run 38 still running (180s elapsed)
 ======================================================================
 HEXAMIND SINGLE ITERATION
 ======================================================================
@@ -63,15 +63,15 @@ Sources: ['file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md', 'file:///
 ======================================================================
 
 
-[Iteration 1] iter-001-2026-04-04T09-50-53-a55412e1
+[Iteration 1] iter-001-2026-04-04T10-31-46-cdda679b
   Run complete.
 
 Iteration complete
-[2026-04-04T09:54:53Z] Run:(28) is completed in 240s
-[2026-04-04T09:54:53Z] Run 29/50 started
-[2026-04-04T09:55:53Z] heartbeat: run 29 still running (60s elapsed)
-[2026-04-04T09:56:53Z] heartbeat: run 29 still running (120s elapsed)
-[2026-04-04T09:57:53Z] heartbeat: run 29 still running (180s elapsed)
+[2026-04-04T10:35:46Z] Run:(38) is completed in 240s
+[2026-04-04T10:35:46Z] Run 39/50 started
+[2026-04-04T10:36:46Z] heartbeat: run 39 still running (60s elapsed)
+[2026-04-04T10:37:46Z] heartbeat: run 39 still running (120s elapsed)
+[2026-04-04T10:38:46Z] heartbeat: run 39 still running (180s elapsed)
 ======================================================================
 HEXAMIND SINGLE ITERATION
 ======================================================================
@@ -80,161 +80,8 @@ Sources: ['file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md', 'file:///
 ======================================================================
 
 
-[Iteration 1] iter-001-2026-04-04T09-54-53-aa4161dd
+[Iteration 1] iter-001-2026-04-04T10-35-46-b2c64b6e
   Run complete.
 
 Iteration complete
-[2026-04-04T09:58:53Z] Run:(29) is completed in 240s
-[main 66faf27] Automated run 25-29
- 67 files changed, 66138 insertions(+), 17 deletions(-)
- create mode 100644 reports-versioned/aggregated/iter-001-2026-04-04T09-38-53-a5e9ee25-comparison.json
- create mode 100644 reports-versioned/aggregated/iter-001-2026-04-04T09-42-53-ed71848c-comparison.json
- create mode 100644 reports-versioned/aggregated/iter-001-2026-04-04T09-46-53-3ca2eec1-comparison.json
- create mode 100644 reports-versioned/aggregated/iter-001-2026-04-04T09-50-53-a55412e1-comparison.json
- create mode 100644 reports-versioned/aggregated/iter-001-2026-04-04T09-54-53-aa4161dd-comparison.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-36-59-0d18aeba/input/extraction-log.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-36-59-0d18aeba/input/source-data.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-38-53-a5e9ee25/analysis/gaps-identified.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-38-53-a5e9ee25/analysis/human-review-form.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-38-53-a5e9ee25/analysis/prev-comparison.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-38-53-a5e9ee25/analysis/quality-metrics.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-38-53-a5e9ee25/improvements/applied-config.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-38-53-a5e9ee25/improvements/suggestions.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-38-53-a5e9ee25/input/extraction-log.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-38-53-a5e9ee25/input/source-data.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-38-53-a5e9ee25/manifest.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-38-53-a5e9ee25/research/full-report.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-38-53-a5e9ee25/research/metadata.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-42-53-ed71848c/analysis/gaps-identified.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-42-53-ed71848c/analysis/human-review-form.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-42-53-ed71848c/analysis/prev-comparison.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-42-53-ed71848c/analysis/quality-metrics.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-42-53-ed71848c/improvements/applied-config.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-42-53-ed71848c/improvements/suggestions.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-42-53-ed71848c/input/extraction-log.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-42-53-ed71848c/input/source-data.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-42-53-ed71848c/manifest.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-42-53-ed71848c/research/full-report.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-42-53-ed71848c/research/metadata.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-46-53-3ca2eec1/analysis/gaps-identified.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-46-53-3ca2eec1/analysis/human-review-form.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-46-53-3ca2eec1/analysis/prev-comparison.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-46-53-3ca2eec1/analysis/quality-metrics.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-46-53-3ca2eec1/improvements/applied-config.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-46-53-3ca2eec1/improvements/suggestions.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-46-53-3ca2eec1/input/extraction-log.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-46-53-3ca2eec1/input/source-data.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-46-53-3ca2eec1/manifest.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-46-53-3ca2eec1/research/full-report.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-46-53-3ca2eec1/research/metadata.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-50-53-a55412e1/analysis/gaps-identified.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-50-53-a55412e1/analysis/human-review-form.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-50-53-a55412e1/analysis/prev-comparison.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-50-53-a55412e1/analysis/quality-metrics.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-50-53-a55412e1/improvements/applied-config.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-50-53-a55412e1/improvements/suggestions.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-50-53-a55412e1/input/extraction-log.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-50-53-a55412e1/input/source-data.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-50-53-a55412e1/manifest.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-50-53-a55412e1/research/full-report.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-50-53-a55412e1/research/metadata.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-54-53-aa4161dd/analysis/gaps-identified.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-54-53-aa4161dd/analysis/human-review-form.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-54-53-aa4161dd/analysis/prev-comparison.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-54-53-aa4161dd/analysis/quality-metrics.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-54-53-aa4161dd/improvements/applied-config.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-54-53-aa4161dd/improvements/suggestions.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-54-53-aa4161dd/input/extraction-log.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-54-53-aa4161dd/input/source-data.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-54-53-aa4161dd/manifest.json
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-54-53-aa4161dd/research/full-report.md
- create mode 100644 reports-versioned/iterations/iter-001-2026-04-04T09-54-53-aa4161dd/research/metadata.json
-[2026-04-04T09:58:53Z] Commit created: Automated run 25-29
-To https://github.com/Jit-Paul-2008/Hexamind.git
-   3342311..66faf27  main -> main
-[2026-04-04T09:58:54Z] Push successful: Automated run 25-29
-[2026-04-04T09:58:55Z] Run 30/50 started
-[2026-04-04T09:59:55Z] heartbeat: run 30 still running (60s elapsed)
-[2026-04-04T10:00:55Z] heartbeat: run 30 still running (120s elapsed)
-[2026-04-04T10:01:55Z] heartbeat: run 30 still running (180s elapsed)
-======================================================================
-HEXAMIND SINGLE ITERATION
-======================================================================
-Models: Small=llama3.1:8b, Large=llama3.1:70b-instruct-q4_K_M
-Sources: ['file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md', 'file:///home/Jit-Paul-2008/Desktop/Hexamind/*.md', 'file:///home/Jit-Paul-2008/Desktop/Hexamind/ARIA_Healthcare_AI_Report.txt']
-======================================================================
-
-
-[Iteration 1] iter-001-2026-04-04T09-58-55-179023b8
-  Run complete.
-
-Iteration complete
-[2026-04-04T10:02:55Z] Run:(30) is completed in 240s
-[2026-04-04T10:02:55Z] Run 31/50 started
-[2026-04-04T10:03:55Z] heartbeat: run 31 still running (60s elapsed)
-[2026-04-04T10:04:55Z] heartbeat: run 31 still running (120s elapsed)
-[2026-04-04T10:05:55Z] heartbeat: run 31 still running (180s elapsed)
-======================================================================
-HEXAMIND SINGLE ITERATION
-======================================================================
-Models: Small=llama3.1:8b, Large=llama3.1:70b-instruct-q4_K_M
-Sources: ['file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md', 'file:///home/Jit-Paul-2008/Desktop/Hexamind/*.md', 'file:///home/Jit-Paul-2008/Desktop/Hexamind/ARIA_Healthcare_AI_Report.txt']
-======================================================================
-
-
-[Iteration 1] iter-001-2026-04-04T10-02-55-d5d4d590
-  Run complete.
-
-Iteration complete
-[2026-04-04T10:06:55Z] Run:(31) is completed in 240s
-[2026-04-04T10:06:55Z] Run 32/50 started
-[2026-04-04T10:07:55Z] heartbeat: run 32 still running (60s elapsed)
-[2026-04-04T10:08:55Z] heartbeat: run 32 still running (120s elapsed)
-[2026-04-04T10:09:55Z] heartbeat: run 32 still running (180s elapsed)
-======================================================================
-HEXAMIND SINGLE ITERATION
-======================================================================
-Models: Small=llama3.1:8b, Large=llama3.1:70b-instruct-q4_K_M
-Sources: ['file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md', 'file:///home/Jit-Paul-2008/Desktop/Hexamind/*.md', 'file:///home/Jit-Paul-2008/Desktop/Hexamind/ARIA_Healthcare_AI_Report.txt']
-======================================================================
-
-
-[Iteration 1] iter-001-2026-04-04T10-06-55-16c5dcc2
-  Run complete.
-
-Iteration complete
-[2026-04-04T10:10:55Z] Run:(32) is completed in 240s
-[2026-04-04T10:10:55Z] Run 33/50 started
-[2026-04-04T10:11:55Z] heartbeat: run 33 still running (60s elapsed)
-[2026-04-04T10:12:55Z] heartbeat: run 33 still running (120s elapsed)
-[2026-04-04T10:13:55Z] heartbeat: run 33 still running (180s elapsed)
-======================================================================
-HEXAMIND SINGLE ITERATION
-======================================================================
-Models: Small=llama3.1:8b, Large=llama3.1:70b-instruct-q4_K_M
-Sources: ['file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md', 'file:///home/Jit-Paul-2008/Desktop/Hexamind/*.md', 'file:///home/Jit-Paul-2008/Desktop/Hexamind/ARIA_Healthcare_AI_Report.txt']
-======================================================================
-
-
-[Iteration 1] iter-001-2026-04-04T10-10-55-5cd64efe
-  Run complete.
-
-Iteration complete
-[2026-04-04T10:14:55Z] Run:(33) is completed in 240s
-[2026-04-04T10:14:55Z] Run 34/50 started
-[2026-04-04T10:15:55Z] heartbeat: run 34 still running (60s elapsed)
-[2026-04-04T10:16:55Z] heartbeat: run 34 still running (120s elapsed)
-[2026-04-04T10:17:55Z] heartbeat: run 34 still running (180s elapsed)
-======================================================================
-HEXAMIND SINGLE ITERATION
-======================================================================
-Models: Small=llama3.1:8b, Large=llama3.1:70b-instruct-q4_K_M
-Sources: ['file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md', 'file:///home/Jit-Paul-2008/Desktop/Hexamind/*.md', 'file:///home/Jit-Paul-2008/Desktop/Hexamind/ARIA_Healthcare_AI_Report.txt']
-======================================================================
-
-
-[Iteration 1] iter-001-2026-04-04T10-14-55-bdbbfcb9
-  Run complete.
-
-Iteration complete
-[2026-04-04T10:18:55Z] Run:(34) is completed in 240s
+[2026-04-04T10:39:46Z] Run:(39) is completed in 240s
