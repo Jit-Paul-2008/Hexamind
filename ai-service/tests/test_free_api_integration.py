@@ -69,6 +69,8 @@ class FreeApiIntegrationTests(unittest.TestCase):
 
         self.assertIn("hfFallbackEnabled", diagnostics)
         self.assertIn("hfFallbackAvailable", diagnostics)
+        self.assertIn("openrouterFallbackEnabled", diagnostics)
+        self.assertIn("openrouterFallbackAvailable", diagnostics)
         self.assertIn("activeProvider", diagnostics)
 
 

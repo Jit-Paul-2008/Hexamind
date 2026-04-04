@@ -13,6 +13,7 @@ import httpx
 
 from agent_model_config import get_agent_model_config
 from huggingface_provider import get_huggingface_provider
+from openrouter_provider import get_openrouter_provider
 from research import ResearchContext, format_research_context, source_inventory_markdown
 from prompt_registry import prompt_fingerprint, prompt_registry_snapshot
 
@@ -2458,6 +2459,8 @@ class LocalPipelineModelProvider:
             )
         self._hf_provider = get_huggingface_provider()
         self._hf_enabled = os.getenv("HEXAMIND_ENABLE_HF_FALLBACK", "1").strip().lower() not in {"0", "false", "no"}
+        self._or_provider = get_openrouter_provider()
+        self._or_enabled = os.getenv("HEXAMIND_ENABLE_OPENROUTER_FALLBACK", "1").strip().lower() not in {"0", "false", "no"}
         self._tier_models = {
             "small": os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", default_model).strip() or default_model,
             "medium": os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", default_model).strip() or default_model,
@@ -2594,6 +2597,10 @@ class LocalPipelineModelProvider:
         if hf_result:
             return hf_result
 
+        or_result = await self._or_agent_fallback(agent_id, query, research)
+        if or_result:
+            return or_result
+
         if not self._fallback:
             raise RuntimeError("Local provider fallback is unavailable.")
         return await self._fallback.build_agent_text(agent_id, query, research)
@@ -2668,6 +2675,10 @@ class LocalPipelineModelProvider:
         if hf_result:
             return hf_result
 
+        or_result = await self._or_final_fallback(query, outputs, research, refinement_note)
+        if or_result:
+            return or_result
+
         if not self._fallback:
             raise RuntimeError("Local provider fallback is unavailable.")
         return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
@@ -2701,6 +2712,8 @@ class LocalPipelineModelProvider:
             "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
             "hfFallbackEnabled": self._hf_enabled,
             "hfFallbackAvailable": self._hf_provider.available,
+            "openrouterFallbackEnabled": self._or_enabled,
+            "openrouterFallbackAvailable": self._or_provider.available,
             "tokenBudgetLimit": self._token_budget.total_limit,
             "tokenBudgetUsed": self._token_budget.used,
             "tokenBudgetRemaining": self._token_budget.remaining(),
@@ -2763,6 +2776,71 @@ class LocalPipelineModelProvider:
                 + (f"\nREFINEMENT: {refinement_note.strip()}\n" if refinement_note and refinement_note.strip() else "")
             )
             result = await self._hf_provider.generate(
+                agent_id="synthesiser",
+                prompt=prompt,
+                temperature=0.35,
+                max_tokens=1800,
+            )
+            if result and len(result.strip()) >= 500:
+                return result.strip()
+            return None
+        except Exception:
+            return None
+
+    async def _or_agent_fallback(
+        self,
+        agent_id: str,
+        query: str,
+        research: ResearchContext | None,
+    ) -> str | None:
+        if not self._or_enabled or not self._or_provider.available:
+            return None
+        try:
+            config = get_agent_model_config(agent_id)
+            research_block = _compressed_research_block(research, 2200)
+            prompt = (
+                f"You are the {agent_id.upper()} agent."
+                f" {config.system_prompt_suffix}\n\n"
+                f"Question: {query.strip()}\n\n"
+                f"Research:\n{research_block}\n\n"
+                "Return concise markdown with clear headings and evidence-backed reasoning."
+            )
+            result = await self._or_provider.generate(
+                agent_id=agent_id,
+                prompt=prompt,
+                temperature=config.temperature,
+                max_tokens=config.max_tokens,
+            )
+            if result and len(result.strip()) >= 120:
+                return result.strip()
+            return None
+        except Exception:
+            return None
+
+    async def _or_final_fallback(
+        self,
+        query: str,
+        outputs: dict[str, str],
+        research: ResearchContext | None,
+        refinement_note: str | None,
+    ) -> str | None:
+        if not self._or_enabled or not self._or_provider.available:
+            return None
+        try:
+            research_block = _compressed_research_block(research, 2800)
+            prompt = (
+                "Produce a structured final research report with sections: "
+                "Executive Summary, Abstract, 1. Introduction, 2. Methodology, 3. Results, 4. Discussion, 5. Limitations and Counterarguments, 6. Conclusion, References.\n\n"
+                f"Question: {query.strip()}\n\n"
+                f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
+                f"SKEPTIC:\n{outputs.get('skeptic', '')}\n\n"
+                f"SYNTHESISER:\n{outputs.get('synthesiser', '')}\n\n"
+                f"ORACLE:\n{outputs.get('oracle', '')}\n\n"
+                f"VERIFIER:\n{outputs.get('verifier', '')}\n\n"
+                f"RESEARCH:\n{research_block}\n"
+                + (f"\nREFINEMENT: {refinement_note.strip()}\n" if refinement_note and refinement_note.strip() else "")
+            )
+            result = await self._or_provider.generate(
                 agent_id="synthesiser",
                 prompt=prompt,
                 temperature=0.35,
