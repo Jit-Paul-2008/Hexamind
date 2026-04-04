@@ -18,6 +18,7 @@ export interface PipelineSession {
   createdAt: number;
   backendSessionId?: string;
   status: "idle" | "running" | "complete" | "error";
+  errorMessage?: string;
   outputs: Record<string, AgentOutput>;  // keyed by agentId
   finalAnswer: string;
   qualityStatus?: "idle" | "loading" | "ready" | "error";

@@ -23,6 +23,7 @@ interface PipelineStore {
   setQualityLoading: () => void;
   setQualityReport: (report: PipelineQualityReport) => void;
   setQualityError: () => void;
+  setPipelineError: (message: string) => void;
   resetPipeline: () => void;
 }
 
@@ -42,6 +43,7 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
       query,
       createdAt: Date.now(),
       status: "running",
+      errorMessage: undefined,
       outputs: {},
       finalAnswer: "",
       qualityStatus: "idle",
@@ -134,6 +136,19 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
             qualityStatus: "error",
           }
         : null,
+    })),
+
+  setPipelineError: (message) =>
+    set((state) => ({
+      session: state.session
+        ? {
+            ...state.session,
+            status: "error",
+            errorMessage: message,
+            qualityStatus: state.session.qualityStatus === "loading" ? "error" : state.session.qualityStatus,
+          }
+        : null,
+      nodeStatuses: { ...state.nodeStatuses, output: "error" },
     })),
 
   resetPipeline: () =>

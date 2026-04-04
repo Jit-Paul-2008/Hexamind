@@ -200,7 +200,7 @@ function nodeSize(type?: string): { width: number; height: number } {
     case "processingNode":
       return { width: 270, height: 190 };
     case "outputNode":
-      return { width: 780, height: 1123 };
+      return { width: 660, height: 740 };
     default:
       return { width: 260, height: 180 };
   }

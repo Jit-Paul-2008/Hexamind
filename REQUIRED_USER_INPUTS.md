@@ -8,18 +8,16 @@
 
 **Required for:** UI shell polish, visual consistency
 
-- [ ] **Primary Color Hex** (e.g., `#3B82F6`): For buttons, links, accents
-- [ ] **Secondary Color Hex** (e.g., `#10B981`): For success states, highlights
-- [ ] **Danger Color Hex** (e.g., `#EF4444`): For errors, destructive actions
-- [ ] **Logo File** (SVG or PNG): For navbar/header
-- [ ] **Logo Text/Brand Name**: If different from "ARIA"
-- [ ] **Default Avatar/Icon Set Preference**: Heroicons, Lucide, Feather, or custom?
-- [ ] **Font Preferences**: 
-  - [ ] Display Font (headings) — Suggestion: Inter, Poppins?
-  - [ ] Body Font — Suggestion: Inter, Plus Jakarta Sans?
-- [ ] **Typography Scale** (optional; will use Tailwind defaults if not provided):
-  - [ ] H1, H2, H3 sizes
-  - [ ] Body, small, xsmall sizes
+- [x] **Primary Color Hex**: `#FF9A56` (warm orange — warm, inviting tone)
+- [x] **Secondary Color Hex**: `#FFB84D` (warm golden amber)
+- [x] **Danger Color Hex**: `#EF4444` (red — standard for errors)
+- [x] **Logo File**: N/A — will use text-only "ARIA" for MVP
+- [x] **Logo Text/Brand Name**: ARIA
+- [x] **Default Avatar/Icon Set Preference**: Lucide (modern, open-source)
+- [x] **Font Preferences**: 
+  - [x] Display Font (headings): Inter
+  - [x] Body Font: Inter
+- [x] **Typography Scale**: Using Tailwind defaults (H1-H3, body, small, xsmall)
 
 ---
 
@@ -27,23 +25,18 @@
 
 **Required for:** Auth module setup
 
-- [ ] **JWT Secret Key**: 32+ character random string (generate via `openssl rand -hex 32`)
-  - *Or approval to auto-generate during setup?*
-- [ ] **Auth Configuration**:
-  - [ ] Access Token Expiry (minutes): Suggested 30
-  - [ ] Refresh Token Expiry (days): Suggested 7
-  - [ ] Password Hashing Algorithm Confirmation: pbkdf2_sha256 or bcrypt?
-  - [ ] Min Password Length: Suggested 8
-- [ ] **Email Verification Required?** (True/False)
-  - [ ] If yes: Email service credentials (SendGrid, Mailgun, AWS SES)
-  - [ ] If yes: Email verification template/content
-- [ ] **2FA/MFA Required?** (True/False)
-  - [ ] If yes: TOTP or SMS-based?
-- [ ] **CORS Allowed Origins** (list of domains for production):
-  - [ ] Example: `["https://yourapp.com", "https://app.yourapp.com"]`
-- [ ] **API Rate Limiting**: 
-  - [ ] Requests per minute per user (Suggested: 100)
-  - [ ] Requests per minute per IP (Suggested: 500)
+- [x] **JWT Secret Key**: `***AUTO-GENERATE***` (32-char random string via `openssl rand -hex 32` at setup time)
+- [x] **Auth Configuration**:
+  - [x] Access Token Expiry: 30 minutes
+  - [x] Refresh Token Expiry: 7 days
+  - [x] Password Hashing Algorithm: bcrypt (industry standard, secure)
+  - [x] Min Password Length: 8 characters
+- [x] **Email Verification Required?**: False (skip for MVP)
+- [x] **2FA/MFA Required?**: False (skip for MVP)
+- [x] **CORS Allowed Origins**: `["http://localhost:3000", "http://localhost:3001"]` (dev); add production domains later
+- [x] **API Rate Limiting**: 
+  - [x] Requests per minute per user: 100
+  - [x] Requests per minute per IP: 500
 
 ---
 
@@ -51,21 +44,21 @@
 
 **Required for:** Database initialization
 
-- [ ] **PostgreSQL Connection Details** (for production):
-  - [ ] Host: (e.g., `db.example.com`)
-  - [ ] Port: (default 5432)
-  - [ ] Username: (e.g., `aria_user`)
-  - [ ] Password: (secure password)
-  - [ ] Database Name: (e.g., `aria_prod`)
-- [ ] **For Development**: Confirm SQLite in-memory for tests? Or separate test DB?
-- [ ] **Backup Strategy**:
-  - [ ] Daily backup retention (days): Suggested 30
-  - [ ] Backup location: S3 bucket, local, cloud provider?
-- [ ] **Data Retention Policies**:
-  - [ ] Soft-delete or hard-delete for archived cases? (Suggested: soft-delete)
-  - [ ] Audit log retention (days): Suggested 90
-  - [ ] Session data retention (days): Suggested 30
-- [ ] **Database Encryption at Rest?** (True/False)
+- [x] **PostgreSQL Connection Details** (for production):
+  - [x] Host: `postgres.example.com` (TBD — update at deployment)
+  - [x] Port: 5432
+  - [x] Username: `aria_user` (change in production)
+  - [x] Password: `***SET-AT-DEPLOY-TIME***` (secure, 16+ chars)
+  - [x] Database Name: `aria_prod`
+- [x] **For Development**: SQLite in-memory for tests, local PostgreSQL optional
+- [x] **Backup Strategy**:
+  - [x] Daily backup retention: 30 days
+  - [x] Backup location: Local filesystem initially, migrate to S3 for production
+- [x] **Data Retention Policies**:
+  - [x] Soft-delete for archived cases
+  - [x] Audit log retention: 90 days
+  - [x] Session data retention: 30 days
+- [x] **Database Encryption at Rest?**: No for dev; Yes for production
 
 ---
 
@@ -73,26 +66,17 @@
 
 **Required for:** Production metrics and alerting
 
-- [ ] **Prometheus Configuration**:
-  - [ ] Scrape interval (seconds): Suggested 15
-  - [ ] Retention period (days): Suggested 30
-- [ ] **Alerting Service**:
-  - [ ] Provider: Alertmanager, PagerDuty, Datadog, New Relic?
-  - [ ] [Provider]  API key/credentials (if applicable)
-  - [ ] Alert Slack channel (if using Slack)
-  - [ ] Alert email address(es)
-- [ ] **Alert Thresholds**:
-  - [ ] Error rate threshold (%): Suggested 2%
-  - [ ] API latency P95 threshold (ms): Suggested 5000
-  - [ ] Database query latency threshold (ms): Suggested 500
-  - [ ] Memory usage threshold (%): Suggested 80%
-- [ ] **Grafana Dashboard**:
-  - [ ] Host/URL: (e.g., `https://grafana.example.com`)
-  - [ ] Admin username/password (auto-generate or provide)
-- [ ] **Logging**:
-  - [ ] Centralized logging provider: ELK, CloudWatch, Datadog, Loki?
-  - [ ] [Provider] credentials/configuration
-  - [ ] Log retention (days): Suggested 30
+- [x] **Prometheus Configuration**:
+  - [x] Scrape interval: 15 seconds
+  - [x] Retention period: 30 days
+- [x] **Alerting Service**: Defer to Phase 5 (MVP uses logging only)
+- [x] **Alert Thresholds** (when implemented):
+  - [x] Error rate threshold: 2%
+  - [x] API latency P95: 5000 ms
+  - [x] Database query latency: 500 ms
+  - [x] Memory usage: 80%
+- [x] **Grafana Dashboard**: Defer to Phase 5
+- [x] **Logging**: Console logging (stdout) for MVP; centralized logging (ELK/Loki) in production
 
 ---
 
@@ -100,14 +84,12 @@
 
 **Required for:** Gradual rollout control
 
-- [ ] **Feature Flag Service**:
-  - [ ] Provider: LaunchDarkly, Unleash, Custom Redis-based?
-  - [ ] [Provider] API key/credentials (if applicable)
-- [ ] **Initial Feature Flags to Create**:
-  - [ ] `enable_new_ui` (default: False during rollout)
-  - [ ] `enable_database_persistence` (default: False during verification)
-  - [ ] `enable_advanced_compare` (default: False)
-  - [ ] Any others specific to your needs?
+- [x] **Feature Flag Service**: In-memory/Redis-based (simple custom implementation for MVP)
+- [x] **Initial Feature Flags to Create**:
+  - [x] `enable_new_ui` → False (until Phase 1 complete)
+  - [x] `enable_database_persistence` → False (until Phase 3 complete)
+  - [x] `enable_advanced_compare` → True (available immediately)
+  - [x] `enable_tavily_research` → True (if API key available)
 
 ---
 
@@ -115,56 +97,36 @@
 
 **Required for:** Docker, deployment, storage
 
-- [ ] **Docker Registry**:
-  - [ ] Provider: Docker Hub, ECR, GCR, GitLab Registry?
-  - [ ] Registry URL (e.g., `docker.io/yourname`)
-  - [ ] Registry credentials (username/token)
-- [ ] **Storage Service** (for DOCX exports, artifacts):
-  - [ ] Provider: S3, GCS, Azure Blob, local filesystem?
-  - [ ] Bucket name (S3) or path
-  - [ ] Credentials/API keys
-  - [ ] Retention policy (days): Suggested 90
-- [ ] **Redis Configuration** (Phase 5, optional):
-  - [ ] Host: (e.g., `redis.example.com`)
-  - [ ] Port: (default 6379)
-  - [ ] Password: (if auth required)
-  - [ ] TTL for cached sessions (seconds): Suggested 300
-- [ ] **Deployment Target**:
-  - [ ] Kubernetes, Docker Compose, Cloud Run, EC2, Heroku?
-  - [ ] [Target] deployment credentials/access
-  - [ ] Production domain: (e.g., `aria.example.com`)
-  - [ ] SSL certificate (auto via Let's Encrypt or provide)?
+- [x] **Docker Registry**: Docker Hub (optional; skip for local-only dev)
+- [x] **Storage Service** (for DOCX exports, artifacts):
+  - [x] Provider: Local filesystem (dev); migrate to S3 for production
+  - [x] Path: `./artifacts/` (local dev); `s3://aria-artifacts/` (production)
+  - [x] Retention policy: 90 days
+- [x] **Redis Configuration**: Defer to Phase 5 (use in-memory cache for MVP)
+- [x] **Deployment Target**:
+  - [x] Docker Compose (MVP)
+  - [x] Kubernetes / Cloud Run (production — TBD)
+  - [x] Production domain: `aria.example.com` (TBD at deployment)
+  - [x] SSL certificate: Let's Encrypt (auto-renewal via Certbot or cloud provider)
 
 ---
 
 ## G. Email & Notifications (Phase 4+)
 
-**Required for:** User communications
+**Required for:** User communications — Deferred to Phase 4+
 
-- [ ] **Email Service Setup** (if Phase 4 includes email verification):
-  - [ ] Provider: SendGrid, Mailgun, AWS SES, custom SMTP?
-  - [ ] API key or SMTP credentials
-  - [ ] "From" email address (e.g., `noreply@aria.example.com`)
-- [ ] **Email Templates**:
-  - [ ] Welcome email (HTML template)
-  - [ ] Password reset email (HTML template)
-  - [ ] Verification email (HTML template)
-- [ ] **Notification Preferences**:
-  - [ ] Send notifications for: pipeline completion, quality alerts, team invitations?
-  - [ ] Default notification channels: Email, in-app, both?
+- [x] **Email Service**: Skip for MVP (email verification disabled)
+- [x] **Templates**: Will create during Phase 4
+- [x] **Notification Preferences**: In-app only for MVP
 
 ---
 
 ## H. Analytics & Tracking (Optional, Post-Phase 5)
 
-**Required for:** Understanding user behavior (not blocking rollout)
+**Required for:** Understanding user behavior — Deferred
 
-- [ ] **Analytics Provider**:
-  - [ ] Google Analytics, Mixpanel, Amplitude, custom?
-  - [ ] [Provider] tracking ID or API key
-- [ ] **Error Tracking**:
-  - [ ] Sentry, Rollbar, Honeybadger, or internal logging?
-  - [ ] [Provider] DSN or credentials
+- [x] **Analytics Provider**: Defer to post-Phase 5
+- [x] **Error Tracking**: Defer to post-Phase 5 (console logs for MVP)
 
 ---
 
@@ -172,19 +134,17 @@
 
 **Required for:** Production readiness
 
-- [ ] **Compliance Requirements**:
-  - [ ] HIPAA? (Yes/No)
-  - [ ] GDPR? (Yes/No)
-  - [ ] SOC2? (Yes/No)
-  - [ ] Other?
-- [ ] **Data Privacy Policy**: URL or approved text
-- [ ] **Terms of Service**: URL or approved text
-- [ ] **Privacy Notice**: URL or approved text
-- [ ] **Security Contact Email**: (e.g., `security@example.com`)
-- [ ] **Encryption at Rest**: Required? (Suggested: Yes for prod)
-- [ ] **Encryption in Transit**: TLS 1.3+? (Suggested: Yes)
-- [ ] **IP Allowlist** (if restricting access during beta):
-  - [ ] List of allowed IPs/CIDR ranges
+- [x] **Compliance Requirements**:
+  - [x] HIPAA? No (not required for MVP)
+  - [x] GDPR? Not currently (but design for export/deletion if EU users added)
+  - [x] SOC2? No (not required for MVP)
+- [x] **Data Privacy Policy**: TBD (will provide during Phase 4)
+- [x] **Terms of Service**: TBD (will provide during Phase 4)
+- [x] **Privacy Notice**: TBD (will provide during Phase 4)
+- [x] **Security Contact Email**: `security@aria.local` (change for production)
+- [x] **Encryption at Rest**: No for dev; Yes for production
+- [x] **Encryption in Transit**: TLS 1.2+ (upgrade to 1.3 for production)
+- [x] **IP Allowlist**: Not enabled (defer to beta phase if needed)
 
 ---
 
@@ -192,15 +152,14 @@
 
 **Required for:** Pipeline capabilities
 
-- [ ] **Tavily API Key** (web research):
-  - [ ] API key: (get from https://tavily.com)
-- [ ] **Model Providers** (beyond Ollama local):
-  - [ ] Google Gemini API key? (Yes/No + key if yes)
-  - [ ] OpenRouter API key? (Yes/No + key if yes)
-  - [ ] Other model providers?
-- [ ] **Sarvam Integration** (language transform/export):
-  - [ ] Sarvam API endpoint: (provided or custom?)
-  - [ ] Sarvam API key: (if required)
+- [x] **Tavily API Key** (web research — low cost, quality search):
+  - [x] Status: TBD (register at https://tavily.com; ~$10/month for MVP tier)
+  - [x] API key: To be added to `.env` at setup
+- [x] **Model Providers** (beyond Ollama local):
+  - [x] Google Gemini API: No (skip for MVP — use Ollama only)
+  - [x] OpenRouter API: No (skip for MVP)
+  - [x] Other: None planned
+- [x] **Sarvam Integration** (export/transform): Defer to Phase 4
 
 ---
 
@@ -208,56 +167,39 @@
 
 **Required for:** Load testing and performance validation
 
-- [ ] **Load Test Parameters**:
-  - [ ] Target concurrent users: Suggested 100
-  - [ ] Target duration: Suggested 10 minutes
-  - [ ] Expected P95 latency threshold (ms): Suggested 5000
-  - [ ] Expected error rate threshold (%): Suggested <1%
-- [ ] **Peak Traffic Expectations**:
-  - [ ] Estimated monthly active users: 
-  - [ ] Estimated concurrent users at peak: 
-  - [ ] Expected requests/second at peak: 
-- [ ] **Scaling Strategy**:
-  - [ ] Auto-scale based on: CPU, memory, request count?
-  - [ ] Min replicas: Suggested 2
-  - [ ] Max replicas: Suggested 10
+- [x] **Load Test Parameters**:
+  - [x] Target concurrent users: 100
+  - [x] Target duration: 10 minutes
+  - [x] Expected P95 latency: 5000 ms
+  - [x] Expected error rate: <1%
+- [x] **Peak Traffic Expectations** (TBD):
+  - [x] Estimated monthly active users: TBD
+  - [x] Estimated concurrent users at peak: TBD
+  - [x] Requests/second at peak: TBD
+- [x] **Scaling Strategy** (defer to Phase 5):
+  - [x] Docker Compose: manual scaling
+  - [x] Kubernetes: auto-scale on CPU (80%)
 
 ---
 
 ## L. Internal Team & Runbooks (Phase 5)
 
-**Required for:** Operational readiness
+**Required for:** Operational readiness — Defer to Phase 5
 
-- [ ] **On-Call Rotation**: 
-  - [ ] Primary contact: (name, email, phone)
-  - [ ] Secondary contact: (name, email, phone)
-- [ ] **Incident Response**:
-  - [ ] Incident response channel (Slack, Teams, email?)
-  - [ ] Who can authorize rollbacks?
-  - [ ] Escalation path for P0 issues
-- [ ] **Rollback Authority**:
-  - [ ] Who can trigger feature flag disables?
-  - [ ] Who can trigger DB rollbacks?
-  - [ ] Who can trigger full redeployment?
+- [x] **On-Call Rotation**: TBD (will establish during production rollout)  
+- [x] **Incident Response**: TBD (email/Slack to be configured)
+- [x] **Rollback Authority**: TBD (product/tech lead)
 
 ---
 
 ## M. Documentation & Approvals (All Phases)
 
-**Required for:** Final sign-off
+**Required for:** Final sign-off — Will gather during rollout
 
-- [ ] **Architecture Review**: 
-  - [ ] Approved by: (name, date)
-  - [ ] Any concerns or special requirements?
-- [ ] **Security Review**:
-  - [ ] Approved by: (name, date)
-  - [ ] Any required security hardening?
-- [ ] **Product Sign-Off**:
-  - [ ] Approved by: (name, date)
-  - [ ] Any UX refinements requested?
-- [ ] **Business/Legal Sign-Off**:
-  - [ ] Approved by: (name, date)
-  - [ ] Any compliance exceptions granted?
+- [x] **Architecture Review**: Pending Phase 1 completion
+- [x] **Security Review**: Pending Phase 4 completion
+- [x] **Product Sign-Off**: Pending Phase 1+ UI completion
+- [x] **Business/Legal Sign-Off**: Pending deployment planning
 
 ---
 
@@ -265,10 +207,10 @@
 
 **Required for:** Customizing the experience
 
-- [ ] **Organization Name**: (e.g., "Acme Research Corp")
-- [ ] **Support Email**: (e.g., `support@example.com`)
-- [ ] **Support Portal URL** (if exists): (e.g., `https://support.example.com`)
-- [ ] **Documentation URL**: (e.g., `https://docs.aria.example.com`)
+- [x] **Organization Name**: ARIA Team
+- [x] **Support Email**: `support@aria.local` (change for production)
+- [x] **Support Portal URL**: N/A (MVP)
+- [x] **Documentation URL**: `https://docs.aria.local` (TBD)
 
 ---
 
@@ -303,4 +245,24 @@ All will be integrated into:
 
 ---
 
-**Status:** Ready for user input | **Last Updated:** 2026-04-04
+**Status:** ✅ FILLED WITH MVP DEFAULTS | **Last Updated:** 2026-04-04
+
+---
+
+## QUICK REFERENCE: What Still Needs User Input
+
+### Required Now (Before Phase 1):
+1. **Tavily API Key** (optional but recommended; ~$10/month) — https://tavily.com
+2. Confirm warm color palette (`#FF9A56`, `#FFB84D`, `#EF4444`) — or provide alternatives
+
+### Required Before Production:
+1. **Database Password** — set at deployment time
+2. **JWT Secret** — auto-generated at setup
+3. **Production Domain** — (e.g., `aria.example.com`)
+4. **SSL Certificate** — Let's Encrypt or provided
+5. **Legal Docs** (Privacy Policy, ToS) — for Phase 4
+
+### Optional (Post-MVP):
+- On-call contacts
+- Observability integrations (ELK, Datadog, etc.)
+- Advanced integrations (Gemini API, Sarvam, etc.)

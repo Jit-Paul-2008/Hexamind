@@ -21,7 +21,7 @@ const HexamindCanvas = dynamic(
 
 export default function Home() {
   return (
-    <main className="relative w-full h-screen overflow-hidden bg-[#0a0b0f]">
+    <main className="relative w-full h-screen overflow-hidden bg-[#0f1116]">
       <a
         href="#query-input"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 z-[120] rounded-md border border-white/20 bg-black/90 px-3 py-2 text-xs text-white"
@@ -39,7 +39,7 @@ export default function Home() {
         transition={{ duration: 0.8, delay: 0.1 }}
         className="fixed top-5 left-6 z-50 flex items-center gap-2.5"
       >
-        <div className="w-1.5 h-1.5 rounded-full bg-lavender-gray/60" />
+        <div className="w-1.5 h-1.5 rounded-full bg-amber-200/70" />
         <span className="font-sans text-[10px] tracking-[0.3em] uppercase text-white/30">
           Hexamind · ARIA
         </span>
@@ -52,13 +52,13 @@ export default function Home() {
         className="fixed top-10 left-6 z-50 hidden md:flex items-center gap-2 text-[10px] text-white/40"
       >
         <span className="rounded-full border border-white/10 px-2 py-1 tracking-[0.12em] uppercase">
-          live orchestration
+          guided workflow
         </span>
         <span className="rounded-full border border-white/10 px-2 py-1 tracking-[0.12em] uppercase">
-          adversarial agents
+          evidence-backed analysis
         </span>
         <span className="rounded-full border border-white/10 px-2 py-1 tracking-[0.12em] uppercase">
-          quality gates
+          quality scoring
         </span>
       </motion.div>
 

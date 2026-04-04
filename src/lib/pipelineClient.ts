@@ -13,6 +13,7 @@ export interface PipelineRunHandlers {
   setQualityLoading: () => void;
   setQualityReport: (report: PipelineQualityReport) => void;
   setQualityError: () => void;
+  setPipelineError: (message: string) => void;
 }
 
 export interface PipelineClientOptions {
@@ -101,10 +102,12 @@ export async function startPipelineRun(
         }
 
         if (event.type === "error") {
+          handlers.setPipelineError(event.error || "Pipeline stream returned an error.");
           handlers.setNodeStatus(event.agentId || "output", "error");
           source.close();
         }
       } catch {
+        handlers.setPipelineError("Could not parse pipeline stream event.");
         handlers.setNodeStatus("output", "error");
         source.close();
       }
@@ -121,12 +124,18 @@ export async function startPipelineRun(
       if (pipelineCompleted) {
         return;
       }
+      handlers.setPipelineError("Lost connection to pipeline stream. Please retry.");
       handlers.setNodeStatus("output", "error");
       source.close();
     };
 
     return source;
-  } catch {
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to start pipeline. Check backend availability.";
+    handlers.setPipelineError(message);
     handlers.setNodeStatus("output", "error");
     return null;
   }

@@ -12,6 +12,7 @@ export function useProcessPipeline() {
     setQualityLoading,
     setQualityReport,
     setQualityError,
+    setPipelineError,
   } = usePipelineStore();
 
   const runPipeline = useCallback(
@@ -25,6 +26,7 @@ export function useProcessPipeline() {
         setQualityLoading,
         setQualityReport,
         setQualityError,
+        setPipelineError,
       });
     },
     [
@@ -36,6 +38,7 @@ export function useProcessPipeline() {
       setQualityLoading,
       setQualityReport,
       setQualityError,
+      setPipelineError,
     ]
   );
 

@@ -5,8 +5,8 @@
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  --background: #0a0b0f;
-  --foreground: #b6bac5;
+  --background: #0f1116;
+  --foreground: #d3d7e0;
   --surface-1: rgba(255, 255, 255, 0.04);
   --surface-2: rgba(0, 0, 0, 0.35);
 }
@@ -30,11 +30,11 @@ body {
 
 .aurora-bg {
   background:
-    radial-gradient(circle at 12% 20%, rgba(95, 191, 144, 0.15), transparent 34%),
-    radial-gradient(circle at 80% 28%, rgba(88, 120, 191, 0.14), transparent 38%),
-    radial-gradient(circle at 46% 80%, rgba(241, 203, 119, 0.08), transparent 38%);
+    radial-gradient(circle at 12% 20%, rgba(255, 154, 86, 0.18), transparent 34%),
+    radial-gradient(circle at 80% 28%, rgba(109, 133, 200, 0.14), transparent 38%),
+    radial-gradient(circle at 46% 80%, rgba(255, 184, 77, 0.14), transparent 38%);
   filter: blur(22px);
-  opacity: 0.8;
+  opacity: 0.92;
 }
 
 .hex-grid-overlay {

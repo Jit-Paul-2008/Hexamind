@@ -97,7 +97,7 @@ export default function OutputNode({}: NodeProps) {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       className="relative"
-      style={{ width: 780 }}
+      style={{ width: 660 }}
     >
       {/* Glow when result is ready */}
       {isDone && (
@@ -113,7 +113,7 @@ export default function OutputNode({}: NodeProps) {
       <div
         className="relative rounded-[28px] border px-7 py-7 backdrop-blur-xl transition-all duration-500"
         style={{
-          minHeight: 1123,
+          minHeight: 740,
           background: isDone
             ? "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(9,10,14,0.94) 100%)"
             : "linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(9,10,14,0.92) 100%)",
@@ -286,7 +286,7 @@ export default function OutputNode({}: NodeProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8 }}
-              className="font-sans text-[13px] text-white/88 leading-7 whitespace-pre-wrap max-h-[920px] overflow-y-auto pr-2"
+              className="font-sans text-[13px] text-white/88 leading-7 whitespace-pre-wrap max-h-[460px] overflow-y-auto pr-2"
             >
               {displayAnswer}
             </motion.p>

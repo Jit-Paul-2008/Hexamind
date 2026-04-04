@@ -23,6 +23,7 @@ export default function InputBar() {
   const [query, setQuery] = useState("");
   const { runPipeline } = useProcessPipeline();
   const pipelineStatus = usePipelineStore((s) => s.session?.status);
+  const pipelineError = usePipelineStore((s) => s.session?.errorMessage);
   const isRunning = pipelineStatus === "running";
 
   const setPrompt = useCallback(
@@ -90,6 +91,12 @@ export default function InputBar() {
       <div className="h-12 bg-gradient-to-t from-[#0a0b0f] to-transparent" />
 
       <div className="bg-[#0a0b0f]/90 backdrop-blur-2xl border-t border-white/5 px-4 pb-4 pt-3 pointer-events-auto">
+        {pipelineStatus === "error" && pipelineError ? (
+          <div className="max-w-2xl mx-auto mb-3 rounded-xl border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-[11px] text-rose-100">
+            Pipeline error: {pipelineError}
+          </div>
+        ) : null}
+
         <div className="max-w-2xl mx-auto mb-3 flex flex-wrap items-center gap-2">
           {QUICK_PROMPTS.map((prompt) => (
             <button
