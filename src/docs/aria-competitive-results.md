@@ -28,6 +28,11 @@ Generated artifacts:
 
 The batch runner updates the ledger row and rewrites the Mermaid graph after each completed batch.
 
+Operational note:
+
+- Do not run the 20-topic competition through MCP/Pylance tools. Those tools are not meant for long-running, network-bound batches and can time out.
+- The local runner already probes the model server on startup and then performs per-topic local model calls with stage timeouts, so use the shell/venv runner instead.
+
 ## How To Use
 
 1. Run a research or benchmark locally.
@@ -53,16 +58,18 @@ Note: when running local-architecture mode, the table headers `ARIA`, `Gemini`, 
 
 | 4 | 2026-04-03 | ARIA Local Architecture Competitive Batch (20 topics) | 70.0 | 70.0 | 70.0 | ARIA | Columns mapped as ARIA=Local-Balanced, Gemini=Local-Throughput, GPT=Local-Quality. Generated consolidated competitive report and updated the ledger. | Local critic review pending. |
 
+| 5 | 2026-04-04 | ARIA Local Architecture Competitive Batch (1 topics) | 70.0 | 70.0 | 70.0 | ARIA | Columns mapped as ARIA=Local-Balanced, Gemini=Local-Throughput, GPT=Local-Quality. Generated consolidated competitive report and updated the ledger. | Local critic review pending. |
+
 ## Line Graph
 
 ```mermaid
 xychart-beta
     title "Research Quality: ARIA vs Gemini vs GPT"
-    x-axis "Run" [0, 1, 2, 3, 4]
+    x-axis "Run" [0, 1, 2, 3, 4, 5]
     y-axis "Quality Score" 0 --> 100
-    line "ARIA" [0.0, 70.0, 70.0, 70.0, 70.0]
-    line "Gemini" [0.0, 70.0, 70.0, 70.0, 70.0]
-    line "GPT" [0.0, 70.0, 70.0, 70.0, 70.0]
+    line "ARIA" [0.0, 70.0, 70.0, 70.0, 70.0, 70.0]
+    line "Gemini" [0.0, 70.0, 70.0, 70.0, 70.0, 70.0]
+    line "GPT" [0.0, 70.0, 70.0, 70.0, 70.0, 70.0]
 ```
 
 ## Local Critic Loop

@@ -64,7 +64,28 @@ async def _run_async(args: argparse.Namespace) -> dict[str, object]:
         if not provider_specs:
             raise SystemExit("No valid providers selected.")
 
-    report = await run_competitive_batch(queries=topics, provider_specs=provider_specs)
+    last_saved: tuple[str, str] = ("", "")
+
+    def _save_progress(snapshot_report, completed: int, total: int) -> None:
+        nonlocal last_saved
+        last_saved = save_competitive_batch_report(snapshot_report, args.output or None)
+        print(
+            json.dumps(
+                {
+                    "progress": completed,
+                    "total": total,
+                    "reportPath": last_saved[0],
+                    "jsonPath": last_saved[1],
+                },
+                sort_keys=True,
+            )
+        )
+
+    report = await run_competitive_batch(
+        queries=topics,
+        provider_specs=provider_specs,
+        progress_callback=_save_progress,
+    )
     markdown_path, json_path = save_competitive_batch_report(report, args.output or None)
     ledger_path = update_competitive_results_ledger(report, args.ledger or None)
 

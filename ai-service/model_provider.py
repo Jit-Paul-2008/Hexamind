@@ -27,7 +27,6 @@ class PipelineModelProvider(Protocol):
         agent_id: str,
         query: str,
         research: ResearchContext | None = None,
-        prior_outputs: dict[str, str] | None = None,
     ) -> str:
         ...
 
@@ -41,6 +40,11 @@ class PipelineModelProvider(Protocol):
         ...
 
     def diagnostics(self) -> dict[str, str | int | bool]:
+        ...
+
+
+class ResearcherProtocol(Protocol):
+    async def research(self, query: str) -> ResearchContext | None:
         ...
 
 
@@ -263,6 +267,20 @@ def _store_prompt_cache(cache_key: str, response: str) -> None:
     while len(_PROMPT_RESPONSE_CACHE) > _PROMPT_RESPONSE_CACHE_MAX_ENTRIES:
         oldest_key = next(iter(_PROMPT_RESPONSE_CACHE))
         _PROMPT_RESPONSE_CACHE.pop(oldest_key, None)
+
+
+def _coerce_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _prompt_registry_summary(registry: dict[str, object]) -> tuple[str, int]:
+    version = registry.get("registryVersion", "unknown")
+    prompts = registry.get("prompts", [])
+    prompt_count = len(prompts) if isinstance(prompts, list) else 0
+    return str(version), int(prompt_count)
 
 
 def _agent_model_override(agent_id: str, default_model: str) -> str:
@@ -1595,6 +1613,7 @@ class DeterministicPipelineModelProvider:
                 prompt_fingerprint("final", _provider_final_prompt(self.configured_provider)),
             ]
         )
+        registry_version, registry_size = _prompt_registry_summary(registry)
         return {
             "configuredProvider": self.configured_provider,
             "activeProvider": "deterministic",
@@ -1602,8 +1621,8 @@ class DeterministicPipelineModelProvider:
             "isFallback": self.configured_provider != "deterministic",
             "fallbackCount": 0,
             "lastError": self.reason,
-            "promptRegistryVersion": registry["registryVersion"],
-            "promptRegistrySize": len(registry["prompts"]),
+            "promptRegistryVersion": registry_version,
+            "promptRegistrySize": registry_size,
         }
 
 
@@ -1878,6 +1897,7 @@ class GeminiPipelineModelProvider:
                 prompt_fingerprint("final", _provider_final_prompt("gemini")),
             ]
         )
+        registry_version, registry_size = _prompt_registry_summary(registry)
         return {
             "configuredProvider": "gemini",
             "activeProvider": "deterministic-fallback" if self._health.is_open() else "gemini",
@@ -1885,8 +1905,8 @@ class GeminiPipelineModelProvider:
             "isFallback": self._fallback_count > 0,
             "fallbackCount": self._fallback_count,
             "lastError": self._last_error,
-            "promptRegistryVersion": registry["registryVersion"],
-            "promptRegistrySize": len(registry["prompts"]),
+            "promptRegistryVersion": registry_version,
+            "promptRegistrySize": registry_size,
             **breaker_state,
         }
 
@@ -2087,6 +2107,7 @@ class OpenRouterPipelineModelProvider:
                 prompt_fingerprint("final", _provider_final_prompt("openrouter")),
             ]
         )
+        registry_version, registry_size = _prompt_registry_summary(registry)
         return {
             "configuredProvider": "openrouter",
             "activeProvider": "deterministic-fallback" if self._health.is_open() else "openrouter",
@@ -2099,8 +2120,8 @@ class OpenRouterPipelineModelProvider:
             "tokenBudgetLimit": self._token_budget.total_limit,
             "tokenBudgetUsed": self._token_budget.used,
             "tokenBudgetRemaining": self._token_budget.remaining(),
-            "promptRegistryVersion": registry["registryVersion"],
-            "promptRegistrySize": len(registry["prompts"]),
+            "promptRegistryVersion": registry_version,
+            "promptRegistrySize": registry_size,
             **breaker_state,
         }
 
@@ -2329,6 +2350,7 @@ class GroqPipelineModelProvider:
                 prompt_fingerprint("final", _provider_final_prompt("groq")),
             ]
         )
+        registry_version, registry_size = _prompt_registry_summary(registry)
         return {
             "configuredProvider": "groq",
             "activeProvider": "deterministic-fallback" if self._health.is_open() else "groq",
@@ -2340,8 +2362,8 @@ class GroqPipelineModelProvider:
             "tokenBudgetLimit": self._token_budget.total_limit,
             "tokenBudgetUsed": self._token_budget.used,
             "tokenBudgetRemaining": self._token_budget.remaining(),
-            "promptRegistryVersion": registry["registryVersion"],
-            "promptRegistrySize": len(registry["prompts"]),
+            "promptRegistryVersion": registry_version,
+            "promptRegistrySize": registry_size,
             **breaker_state,
         }
 
@@ -2646,6 +2668,7 @@ class LocalPipelineModelProvider:
                 prompt_fingerprint("final", _provider_final_prompt("local")),
             ]
         )
+        registry_version, registry_size = _prompt_registry_summary(registry)
         return {
             "configuredProvider": "local",
             "activeProvider": (
@@ -2664,8 +2687,8 @@ class LocalPipelineModelProvider:
             "tokenBudgetLimit": self._token_budget.total_limit,
             "tokenBudgetUsed": self._token_budget.used,
             "tokenBudgetRemaining": self._token_budget.remaining(),
-            "promptRegistryVersion": registry["registryVersion"],
-            "promptRegistrySize": len(registry["prompts"]),
+            "promptRegistryVersion": registry_version,
+            "promptRegistrySize": registry_size,
             **breaker_state,
         }
 
@@ -2814,7 +2837,7 @@ def _default_model_for_provider(provider_name: str) -> str:
     return "deterministic"
 
 
-def _create_researcher() -> object:
+def _create_researcher() -> ResearcherProtocol:
     from research import InternetResearcher
 
     return InternetResearcher()

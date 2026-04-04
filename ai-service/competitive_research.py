@@ -62,16 +62,16 @@ class CompetitiveRunResult:
     query: str
     final_answer: str
     quality_report: dict[str, object]
-    diagnostics: dict[str, object]
+    diagnostics: dict[str, str | int | bool]
     runtime_seconds: float
 
     @property
     def overall_score(self) -> float:
-        return float(self.quality_report.get("overallScore", 0.0))
+        return _coerce_float(self.quality_report.get("overallScore", 0.0))
 
     @property
     def trust_score(self) -> float:
-        return float(self.quality_report.get("trustScore", 0.0))
+        return _coerce_float(self.quality_report.get("trustScore", 0.0))
 
 
 @dataclass(frozen=True)
@@ -247,6 +247,7 @@ def build_local_architecture_provider_specs(max_architectures: int = 3) -> tuple
 async def run_competitive_batch(
     queries: Iterable[str] | None = None,
     provider_specs: tuple[CompetitiveProviderSpec, ...] | None = None,
+    progress_callback: Callable[[CompetitiveBatchReport, int, int], None] | None = None,
 ) -> CompetitiveBatchReport:
     selected_queries = tuple(queries or DEFAULT_COMPETITIVE_TOPICS)
     selected_specs = provider_specs or build_default_provider_specs()
@@ -277,6 +278,21 @@ async def run_competitive_batch(
                 notes=_topic_notes(provider_runs),
             )
         )
+        if progress_callback:
+            progress_callback(
+                CompetitiveBatchReport(
+                    batch_name=(
+                        "ARIA Local Architecture Competitive Batch"
+                        if selected_specs and all(spec.label.startswith("Local-") for spec in selected_specs)
+                        else "ARIA Competitive Research Batch"
+                    ),
+                    generated_at=time.time(),
+                    topics=tuple(topic_results),
+                    provider_specs=selected_specs,
+                ),
+                len(topic_results),
+                len(selected_queries),
+            )
 
     report = CompetitiveBatchReport(
         batch_name=(
@@ -414,6 +430,13 @@ def _decode_sse_payload(raw: str) -> dict[str, object]:
         return json.loads(raw)
     except json.JSONDecodeError:
         return {}
+
+
+def _coerce_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
 
 
 def _topic_notes(provider_runs: Iterable[CompetitiveRunResult]) -> tuple[str, ...]:
@@ -623,6 +646,10 @@ def _pick_local_tiers(models: list[str]) -> tuple[str, str, str]:
     configured_large = os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "").strip()
     configured_default = os.getenv("HEXAMIND_LOCAL_MODEL", "llama3.1:8b").strip() or "llama3.1:8b"
 
+    configured_small = configured_small if _is_generation_model(configured_small) else ""
+    configured_medium = configured_medium if _is_generation_model(configured_medium) else ""
+    configured_large = configured_large if _is_generation_model(configured_large) else ""
+
     if configured_small and configured_medium and configured_large:
         return configured_small, configured_medium, configured_large
 
@@ -639,21 +666,6 @@ def _pick_local_tiers(models: list[str]) -> tuple[str, str, str]:
     medium = configured_medium or ranked[len(ranked) // 2]
     large = configured_large or ranked[-1]
     return small, medium, large
-
-
-def _is_generation_model(model_name: str) -> bool:
-    lowered = model_name.lower()
-    blocked_markers = (
-        "embed",
-        "embedding",
-        "bge",
-        "e5",
-        "nomic-embed",
-        "mxbai-embed",
-    )
-    if any(marker in lowered for marker in blocked_markers):
-        return False
-    return True
 
 
 def _model_size_estimate(model_name: str) -> float:
@@ -699,7 +711,7 @@ def _build_local_provider_with_overrides(
 def _ledger_template() -> str:
     return """# ARIA Competitive Research Results
 
-This file is the local ledger for upcoming research and test runs. It stores comparative results for ARIA versus Gemini/GPT, keeps a running line graph, and defines the local-model review loop that must happen before the next research run.
+This file is the local ledger for upcoming research and test runs. It stores comparative results for ARIA against local architecture candidates, keeps a running line graph, and defines the local-model review loop that must happen before the next research run.
 
 ## How To Use
 
