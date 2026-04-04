@@ -3,6 +3,7 @@ import type {
   PipelineEvent,
   PipelineQualityReport,
 } from "../types/pipeline";
+import { publicApiBaseUrl } from "@/lib/publicApiBaseUrl";
 
 export interface PipelineRunHandlers {
   startPipeline: (query: string) => void;
@@ -42,10 +43,7 @@ export async function startPipelineRun(
   handlers: PipelineRunHandlers,
   options: PipelineClientOptions = {}
 ): Promise<EventSource | null> {
-  const apiBaseUrl =
-    options.apiBaseUrl ??
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    "http://localhost:8000";
+  const apiBaseUrl = options.apiBaseUrl ?? publicApiBaseUrl;
   const fetchImpl = options.fetchImpl ?? fetch;
   const eventSourceImpl = options.eventSourceImpl ?? EventSource;
 
@@ -183,10 +181,7 @@ export async function transformReportWithSarvam(
   payload: SarvamTransformPayload,
   options: Omit<PipelineClientOptions, "eventSourceImpl"> = {}
 ): Promise<SarvamTransformResponse> {
-  const apiBaseUrl =
-    options.apiBaseUrl ??
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    "http://localhost:8000";
+  const apiBaseUrl = options.apiBaseUrl ?? publicApiBaseUrl;
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const response = await fetchImpl(
@@ -210,10 +205,7 @@ export async function exportReportDocx(
   payload: SarvamTransformPayload,
   options: Omit<PipelineClientOptions, "eventSourceImpl"> = {}
 ): Promise<{ blob: Blob; filename: string }> {
-  const apiBaseUrl =
-    options.apiBaseUrl ??
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    "http://localhost:8000";
+  const apiBaseUrl = options.apiBaseUrl ?? publicApiBaseUrl;
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const response = await fetchImpl(`${apiBaseUrl}/api/pipeline/${sessionId}/export-docx`, {

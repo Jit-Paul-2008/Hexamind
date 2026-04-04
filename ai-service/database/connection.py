@@ -21,6 +21,12 @@ def _default_database_url() -> str:
 def _normalized_database_url(raw_url: str) -> str:
     if raw_url.startswith("sqlite:///") and not raw_url.startswith("sqlite+aiosqlite:///"):
         return raw_url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
+    u = raw_url.strip()
+    # Render/Heroku-style Postgres URLs use sync drivers; async SQLAlchemy needs asyncpg.
+    if u.startswith("postgres://"):
+        return "postgresql+asyncpg://" + u[len("postgres://") :]
+    if u.startswith("postgresql://") and not u.startswith("postgresql+asyncpg"):
+        return "postgresql+asyncpg://" + u[len("postgresql://") :]
     return raw_url
 
 

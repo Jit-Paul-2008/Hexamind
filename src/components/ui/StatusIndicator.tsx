@@ -3,9 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { usePipelineStore } from "@/lib/store";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+import { fetchHealthCached } from "@/lib/api/cachedBackend";
 
 export default function StatusIndicator() {
   const pipelineStatus = usePipelineStore((s) => s.session?.status);
@@ -23,10 +21,9 @@ export default function StatusIndicator() {
 
     const checkBackend = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/health`);
-        const payload = response.ok ? await response.json() : null;
+        const { ok, data: payload } = await fetchHealthCached();
         if (active) {
-          setBackendOnline(response.ok);
+          setBackendOnline(ok);
           if (payload && typeof payload === "object") {
             const activeProvider =
               typeof payload.activeProvider === "string"
@@ -58,7 +55,7 @@ export default function StatusIndicator() {
     };
 
     checkBackend();
-    const timer = setInterval(checkBackend, 7000);
+    const timer = setInterval(checkBackend, 12_000);
     return () => {
       active = false;
       clearInterval(timer);

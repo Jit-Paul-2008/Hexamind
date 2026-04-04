@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+import {
+  fetchCompetitiveBenchmarkCached,
+  fetchHealthCached,
+  invalidateBackendFetchCaches,
+} from "@/lib/api/cachedBackend";
 
 type HealthPayload = {
   status?: string;
@@ -41,57 +44,41 @@ export default function TelemetryPanel() {
   const [competitiveSummary, setCompetitiveSummary] = useState<CompetitiveSummary | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const mountedRef = useRef(true);
 
-  const loadTelemetry = async () => {
+  const loadTelemetry = useCallback(async (forceRefresh: boolean) => {
+    if (forceRefresh) {
+      invalidateBackendFetchCaches();
+    }
     try {
-      const [healthResponse, competitiveResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/health`),
-        fetch(`${API_BASE_URL}/api/benchmark/competitive`),
+      const [{ ok, data: healthData }, competitiveRaw] = await Promise.all([
+        fetchHealthCached(),
+        fetchCompetitiveBenchmarkCached(),
       ]);
-      const json = healthResponse.ok ? ((await healthResponse.json()) as HealthPayload) : null;
-      const competitiveJson = competitiveResponse.ok
-        ? ((await competitiveResponse.json()) as CompetitiveSummary)
-        : null;
+      if (!mountedRef.current) {
+        return;
+      }
+      const json = ok && healthData ? (healthData as HealthPayload) : null;
+      const competitiveJson = competitiveRaw as CompetitiveSummary | null;
       setPayload(json);
       setCompetitiveSummary(competitiveJson);
     } catch {
-      setPayload(null);
-      setCompetitiveSummary(null);
+      if (mountedRef.current) {
+        setPayload(null);
+        setCompetitiveSummary(null);
+      }
     }
-  };
+  }, []);
 
   useEffect(() => {
-    let active = true;
-
-    const load = async () => {
-      try {
-        const [healthResponse, competitiveResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/health`),
-          fetch(`${API_BASE_URL}/api/benchmark/competitive`),
-        ]);
-        const json = healthResponse.ok ? ((await healthResponse.json()) as HealthPayload) : null;
-        const competitiveJson = competitiveResponse.ok
-          ? ((await competitiveResponse.json()) as CompetitiveSummary)
-          : null;
-        if (active) {
-          setPayload(json);
-          setCompetitiveSummary(competitiveJson);
-        }
-      } catch {
-        if (active) {
-          setPayload(null);
-          setCompetitiveSummary(null);
-        }
-      }
-    };
-
-    void load();
-    const timer = setInterval(load, 15000);
+    mountedRef.current = true;
+    void loadTelemetry(false);
+    const timer = setInterval(() => void loadTelemetry(false), 30_000);
     return () => {
-      active = false;
+      mountedRef.current = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [loadTelemetry]);
 
   if (!payload) {
     return null;
@@ -137,7 +124,7 @@ export default function TelemetryPanel() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => void loadTelemetry()}
+            onClick={() => void loadTelemetry(true)}
             className="rounded-md border border-white/10 px-2 py-1 text-[9px] uppercase tracking-[0.2em] text-white/40 hover:text-white/75 hover:border-white/20 transition"
           >
             Refresh

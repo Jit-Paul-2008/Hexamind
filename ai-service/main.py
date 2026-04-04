@@ -15,6 +15,10 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
+# Repo root is one level above ai-service/ (Docker WORKDIR is ai-service; .env lives at project root).
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(_REPO_ROOT / ".env")
+load_dotenv(_REPO_ROOT / ".env.local")
 load_dotenv()
 
 from agents import AGENTS

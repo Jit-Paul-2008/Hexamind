@@ -1,0 +1,64 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Push this repo, connect it in Render, then "Apply" the blueprint (or create services from this file).
+#
+# After the first deploy: if the web UI still calls the wrong API, open the **web** service →
+# Manual Deploy → Clear build cache & deploy (so NEXT_PUBLIC_API_BASE_URL is baked from the API URL).
+
+databases:
+  - name: hexamind-db
+    plan: free
+    databaseName: hexamind
+    user: hexamind
+
+services:
+  - type: web
+    name: hexamind-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./ai-service/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hexamind-db
+          property: connectionString
+      - key: HEXAMIND_ENABLE_DATABASE_PERSISTENCE
+        value: "1"
+      - key: HEXAMIND_MODEL_PROVIDER
+        value: openrouter
+      - key: HEXAMIND_MODEL_NAME
+        value: google/gemma-3-12b-it:free
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: HUGGINGFACE_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+
+  - type: web
+    name: hexamind-web
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE_URL
+        fromService:
+          type: web
+          name: hexamind-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: hexamind-api
+          envVarKey: RENDER_EXTERNAL_URL
