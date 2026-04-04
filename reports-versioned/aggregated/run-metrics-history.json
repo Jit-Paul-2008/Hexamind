@@ -1834,5 +1834,42 @@
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
     ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T11-24-06-97b47b48",
+    "timestamp": "2026-04-04T11:28:05.520579",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 103301,
+    "tokenMode": "estimated",
+    "tokenInputEstimate": 14136,
+    "tokenOutputEstimate": 89165,
+    "providerTokenUsed": 0,
+    "speedSeconds": 236.572,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 94.91,
+    "usefulnessScore": 48.83,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 3,
+      "uniqueDomains": 1,
+      "extractedChars": 141472,
+      "sourceCoverageRatio": 0.75,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.993,
+      "overallCoverage": 0.692,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
   }
 ]
