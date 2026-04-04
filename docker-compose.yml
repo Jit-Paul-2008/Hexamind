@@ -1,4 +1,15 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aria}
+      POSTGRES_USER: ${POSTGRES_USER:-aria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aria}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   backend:
     build:
       context: .
@@ -8,6 +19,10 @@ services:
     environment:
       HEXAMIND_MODEL_PROVIDER: ${HEXAMIND_MODEL_PROVIDER:-deterministic}
       HEXAMIND_MODEL_NAME: ${HEXAMIND_MODEL_NAME:-gemini-1.5-flash}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://aria:aria@postgres:5432/aria}
+      HEXAMIND_ENABLE_DATABASE_PERSISTENCE: ${HEXAMIND_ENABLE_DATABASE_PERSISTENCE:-1}
+    depends_on:
+      - postgres
 
   frontend:
     build:
@@ -18,3 +33,6 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+
+volumes:
+  postgres_data:

@@ -17,6 +17,8 @@ from sse_starlette.sse import EventSourceResponse
 load_dotenv()
 
 from agents import AGENTS
+from api.routes import cases_router, projects_router, runs_router, workspaces_router
+from database.connection import init_db
 from governance import resolve_tenant_resolution
 from pipeline import pipeline_service
 from sarvam_service import SarvamService, docx_supported
@@ -42,6 +44,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def startup_initialize_database() -> None:
+    if _db_persistence_enabled():
+        await init_db()
+
+
+app.include_router(workspaces_router)
+app.include_router(projects_router)
+app.include_router(cases_router)
+app.include_router(runs_router)
 
 
 @app.middleware("http")
@@ -257,6 +271,11 @@ def _is_sensitive_route(path: str) -> bool:
     return path.startswith("/api/pipeline/") and (
         path.endswith("/sarvam-transform") or path.endswith("/export-docx") or path.endswith("/regenerate") or path.endswith("/start")
     )
+
+
+def _db_persistence_enabled() -> bool:
+    raw = os.getenv("HEXAMIND_ENABLE_DATABASE_PERSISTENCE", "1").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 def _append_audit_log(
