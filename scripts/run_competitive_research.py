@@ -85,7 +85,7 @@ async def _run_async(args: argparse.Namespace) -> dict[str, object]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run a 20-topic ARIA vs Gemini vs GPT competitive research batch.")
+    parser = argparse.ArgumentParser(description="Run a 20-topic local-architecture competitive research batch (or optional global baselines).")
     parser.add_argument("--topics-file", default="", help="Optional newline-delimited file of research topics.")
     parser.add_argument("--limit", type=int, default=20, help="Limit the number of topics from the default list.")
     parser.add_argument("--output", default="", help="Path for the consolidated markdown report.")

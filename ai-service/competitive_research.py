@@ -580,11 +580,20 @@ def _discover_local_models() -> list[str]:
         if isinstance(payload, dict) and isinstance(payload.get("data"), list):
             for item in payload["data"]:
                 if isinstance(item, dict) and isinstance(item.get("id"), str):
-                    models.append(item["id"])
+                    candidate = item["id"]
+                    if _is_generation_model(candidate):
+                        models.append(candidate)
         if isinstance(payload, dict) and isinstance(payload.get("models"), list):
             for item in payload["models"]:
-                if isinstance(item, dict) and isinstance(item.get("name"), str):
-                    models.append(item["name"])
+                if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+                    continue
+                candidate = item["name"]
+                family = ""
+                details = item.get("details")
+                if isinstance(details, dict):
+                    family = str(details.get("family", "")).strip().lower()
+                if _is_generation_model(candidate, family=family):
+                    models.append(candidate)
         if models:
             seen: set[str] = set()
             unique: list[str] = []
@@ -597,6 +606,17 @@ def _discover_local_models() -> list[str]:
     return []
 
 
+def _is_generation_model(model_name: str, family: str = "") -> bool:
+    normalized = model_name.strip().lower()
+    if not normalized:
+        return False
+    if any(token in normalized for token in ("embed", "embedding", "rerank", "bge", "e5", "nomic-embed", "mxbai-embed")):
+        return False
+    if family in {"bert", "embedding", "reranker"}:
+        return False
+    return True
+
+
 def _pick_local_tiers(models: list[str]) -> tuple[str, str, str]:
     configured_small = os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", "").strip()
     configured_medium = os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", "").strip()
@@ -606,17 +626,34 @@ def _pick_local_tiers(models: list[str]) -> tuple[str, str, str]:
     if configured_small and configured_medium and configured_large:
         return configured_small, configured_medium, configured_large
 
-    if not models:
+    generation_models = [model for model in models if _is_generation_model(model)]
+
+    if not generation_models:
         small = configured_small or configured_default
         medium = configured_medium or configured_default
         large = configured_large or configured_default
         return small, medium, large
 
-    ranked = sorted(models, key=_model_size_estimate)
+    ranked = sorted(generation_models, key=_model_size_estimate)
     small = configured_small or ranked[0]
     medium = configured_medium or ranked[len(ranked) // 2]
     large = configured_large or ranked[-1]
     return small, medium, large
+
+
+def _is_generation_model(model_name: str) -> bool:
+    lowered = model_name.lower()
+    blocked_markers = (
+        "embed",
+        "embedding",
+        "bge",
+        "e5",
+        "nomic-embed",
+        "mxbai-embed",
+    )
+    if any(marker in lowered for marker in blocked_markers):
+        return False
+    return True
 
 
 def _model_size_estimate(model_name: str) -> float:

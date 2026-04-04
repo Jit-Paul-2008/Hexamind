@@ -1,6 +1,6 @@
 # ARIA Competitive Research Results
 
-This file is the local ledger for upcoming research and test runs. It stores comparative results for ARIA versus Gemini/GPT, keeps a running line graph, and defines the local-model review loop that must happen before the next research run.
+This file is the local ledger for upcoming research and test runs. It stores comparative results for ARIA against local architecture candidates, keeps a running line graph, and defines the local-model review loop that must happen before the next research run.
 
 ## Batch Orchestration
 
@@ -12,12 +12,13 @@ Run command for local-architecture comparison:
 npm run bench:local-architectures
 ```
 
-Local role assignment:
+Local architecture candidates:
 
-- `ARIA` runs through the local Hexamind stack and uses the strongest local model available.
-- `Gemini` is the external comparison baseline.
-- `GPT` is the external GPT-family comparison baseline.
-- `Verifier` and `Skeptic` are the most important local critique roles when a run fails quality gates.
+- `Local-Balanced` uses small models for discovery and a larger model for final synthesis.
+- `Local-Throughput` favors latency with smaller models across most roles.
+- `Local-Quality` assigns the largest available local model to every role.
+- `Local-VerificationHeavy` boosts skeptic, verifier, and final synthesis quality.
+- `Verifier` and `Skeptic` are the most important critique roles when a run fails quality gates.
 
 Generated artifacts:
 
@@ -30,11 +31,13 @@ The batch runner updates the ledger row and rewrites the Mermaid graph after eac
 ## How To Use
 
 1. Run a research or benchmark locally.
-2. Record the quality score for ARIA, Gemini, and GPT in the table below.
+2. Record the quality score for the 3 compared architecture slots in the table below.
 3. Update the Mermaid line graph with the new run.
 4. Feed the latest report into a local critic model such as `phi3:medium`, `qwen2.5:7b`, or `mistral:7b`.
 5. Apply the improvement notes from that local model.
 6. Only then start the next research run.
+
+Note: when running local-architecture mode, the table headers `ARIA`, `Gemini`, and `GPT` are used as fixed display columns and map to the first three architecture candidates for that run. The batch row notes store the exact mapping.
 
 ## Latest Status
 
@@ -42,16 +45,24 @@ The batch runner updates the ledger row and rewrites the Mermaid graph after eac
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0 | 2026-04-03 | Initial setup | 0 | 0 | 0 | n/a | Baseline ledger created. | Await first local run. |
 
+| 1 | 2026-04-03 | ARIA Local Architecture Competitive Batch (20 topics) | 70.0 | 70.0 | 70.0 | ARIA | Columns mapped as ARIA=Local-Balanced, Gemini=Local-Throughput, GPT=Local-Quality. Generated consolidated competitive report and updated the ledger. | Local critic review pending. |
+
+| 2 | 2026-04-03 | ARIA Local Architecture Competitive Batch (20 topics) | 70.0 | 70.0 | 70.0 | ARIA | Columns mapped as ARIA=Local-Balanced, Gemini=Local-Throughput, GPT=Local-Quality. Generated consolidated competitive report and updated the ledger. | Local critic review pending. |
+
+| 3 | 2026-04-03 | ARIA Local Architecture Competitive Batch (20 topics) | 70.0 | 70.0 | 70.0 | ARIA | Columns mapped as ARIA=Local-Balanced, Gemini=Local-Throughput, GPT=Local-Quality. Generated consolidated competitive report and updated the ledger. | Local critic review pending. |
+
+| 4 | 2026-04-03 | ARIA Local Architecture Competitive Batch (20 topics) | 70.0 | 70.0 | 70.0 | ARIA | Columns mapped as ARIA=Local-Balanced, Gemini=Local-Throughput, GPT=Local-Quality. Generated consolidated competitive report and updated the ledger. | Local critic review pending. |
+
 ## Line Graph
 
 ```mermaid
 xychart-beta
     title "Research Quality: ARIA vs Gemini vs GPT"
-    x-axis "Run" [0]
+    x-axis "Run" [0, 1, 2, 3, 4]
     y-axis "Quality Score" 0 --> 100
-    line "ARIA" [0]
-    line "Gemini" [0]
-    line "GPT" [0]
+    line "ARIA" [0.0, 70.0, 70.0, 70.0, 70.0]
+    line "Gemini" [0.0, 70.0, 70.0, 70.0, 70.0]
+    line "GPT" [0.0, 70.0, 70.0, 70.0, 70.0]
 ```
 
 ## Local Critic Loop
@@ -94,9 +105,9 @@ For each future run, add one row with:
 - `Run`: sequential number
 - `Date`: ISO date
 - `Query / Test`: short description of the benchmark or research topic
-- `ARIA Quality`: quality score from Hexamind
-- `Gemini Quality`: comparison score from the Gemini baseline
-- `GPT Quality`: comparison score from the GPT baseline
+- `ARIA Quality`: score for mapped architecture slot 1
+- `Gemini Quality`: score for mapped architecture slot 2
+- `GPT Quality`: score for mapped architecture slot 3
 - `Winner`: ARIA, Gemini, GPT, or tie
 - `Notes`: short summary of what happened
 - `Improvement Actions`: short list of what the local critic recommended
