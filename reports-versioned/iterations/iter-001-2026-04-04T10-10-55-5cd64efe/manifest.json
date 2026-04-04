@@ -1,0 +1,51 @@
+{
+  "iteration_id": "iter-001-2026-04-04T10-10-55-5cd64efe",
+  "timestamp": "2026-04-04T10:14:51.833784",
+  "extracted_data_sources": [
+    "file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md",
+    "file:///home/Jit-Paul-2008/Desktop/Hexamind/*.md",
+    "file:///home/Jit-Paul-2008/Desktop/Hexamind/ARIA_Healthcare_AI_Report.txt"
+  ],
+  "coverage_summary": {
+    "sourceCount": 3,
+    "uniqueDomains": 1,
+    "extractedChars": 141472,
+    "sourceCoverageRatio": 0.75,
+    "sourceDiversityRatio": 0.5,
+    "extractedCharRatio": 0.993,
+    "overallCoverage": 0.748,
+    "allowWebResearch": true
+  },
+  "quality_metrics": {
+    "evidence_depth": 0.75,
+    "contradiction_detection": 0.8,
+    "source_coverage": 0.85,
+    "citation_precision": 0.9,
+    "claim_verification_rate": 0.8,
+    "methodology_clarity": 0.85,
+    "overall_score": 0.825,
+    "metadata": {}
+  },
+  "comparison": {
+    "semantic_changes": [],
+    "delta": {
+      "new_claims": 0,
+      "modified_claims": 0,
+      "retracted_claims": 0,
+      "avg_claim_confidence_change": 0.0,
+      "evidence_base_delta": 0.0
+    },
+    "previous_exists": false
+  },
+  "improvements_applied": [
+    "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+    "AUTONOMOUS_MIN_SOURCE_COUNT",
+    "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+    "HEXAMIND_WEB_RESEARCH",
+    "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+    "AUTONOMOUS_IMPROVEMENT_MIN_DELTA",
+    "AUTONOMOUS_IMPROVEMENT_MIN_CONFIDENCE",
+    "AUTONOMOUS_IMPROVEMENT_MAX_SUGGESTIONS"
+  ],
+  "report_path": "/home/Jit-Paul-2008/Desktop/Hexamind/reports-versioned/iterations/iter-001-2026-04-04T10-10-55-5cd64efe/research/full-report.md"
+}

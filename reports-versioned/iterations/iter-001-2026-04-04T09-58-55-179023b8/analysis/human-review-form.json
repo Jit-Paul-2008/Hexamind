@@ -1,0 +1,16 @@
+{
+  "iterationId": "iter-001-2026-04-04T09-58-55-179023b8",
+  "status": "pending",
+  "reviewer": "",
+  "reviewedAt": "",
+  "scoringScale": "0-10",
+  "scores": {
+    "accuracy": null,
+    "humanLikeResponse": null,
+    "usefulness": null,
+    "overallHumanReviewScore": null
+  },
+  "notes": "",
+  "actionItems": [],
+  "instructions": "Fill numeric scores (0-10). Set overallHumanReviewScore explicitly or leave null to auto-average when dashboard reads it."
+}
