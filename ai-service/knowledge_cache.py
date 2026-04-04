@@ -11,7 +11,13 @@ from typing import Any
 
 class LocalKnowledgeCache:
     def __init__(self, cache_dir: Path | None = None) -> None:
-        self._cache_dir = cache_dir or Path(__file__).resolve().with_name(".data").joinpath("knowledge-cache")
+        if cache_dir is None:
+            env_cache_dir = os.getenv("HEXAMIND_KNOWLEDGE_CACHE_DIR", "").strip()
+            if env_cache_dir:
+                cache_dir = Path(env_cache_dir)
+            else:
+                cache_dir = Path(__file__).resolve().with_name(".data").joinpath("knowledge-cache")
+        self._cache_dir = cache_dir
         self._cache_dir.mkdir(parents=True, exist_ok=True)
         self._ttl_seconds = max(60.0, _env_float("HEXAMIND_KNOWLEDGE_CACHE_TTL_SECONDS", 7 * 24 * 60 * 60))
 

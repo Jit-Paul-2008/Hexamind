@@ -3,9 +3,14 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
+
+_CACHE_DIR = Path(tempfile.mkdtemp(prefix="hexamind-research-cache-"))
+os.environ["HEXAMIND_KNOWLEDGE_CACHE_DIR"] = str(_CACHE_DIR)
 
 ROOT = Path(__file__).resolve().parents[2]
 SERVICE_DIR = ROOT / "ai-service"
