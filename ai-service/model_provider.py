@@ -11,6 +11,8 @@ from typing import Awaitable, Callable, Protocol, TypeVar
 
 import httpx
 
+from agent_model_config import get_agent_model_config
+from huggingface_provider import get_huggingface_provider
 from research import ResearchContext, format_research_context, source_inventory_markdown
 from prompt_registry import prompt_fingerprint, prompt_registry_snapshot
 
@@ -2454,16 +2456,19 @@ class LocalPipelineModelProvider:
                 model_name=default_model,
                 reason="Local runtime call failed",
             )
+        self._hf_provider = get_huggingface_provider()
+        self._hf_enabled = os.getenv("HEXAMIND_ENABLE_HF_FALLBACK", "1").strip().lower() not in {"0", "false", "no"}
         self._tier_models = {
             "small": os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", default_model).strip() or default_model,
             "medium": os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", default_model).strip() or default_model,
             "large": os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", default_model).strip() or default_model,
         }
         self._model_by_role = {
-            "advocate": _cost_aware_agent_model("local", "advocate", default_model),
-            "skeptic": _cost_aware_agent_model("local", "skeptic", default_model),
-            "synthesiser": _cost_aware_agent_model("local", "synthesiser", default_model),
-            "oracle": _cost_aware_agent_model("local", "oracle", default_model),
+            "advocate": _cost_aware_agent_model("local", "advocate", get_agent_model_config("advocate").primary_ollama_model),
+            "skeptic": _cost_aware_agent_model("local", "skeptic", get_agent_model_config("skeptic").primary_ollama_model),
+            "synthesiser": _cost_aware_agent_model("local", "synthesiser", get_agent_model_config("synthesiser").primary_ollama_model),
+            "oracle": _cost_aware_agent_model("local", "oracle", get_agent_model_config("oracle").primary_ollama_model),
+            "verifier": _cost_aware_agent_model("local", "verifier", get_agent_model_config("verifier").primary_ollama_model),
             "final": _cost_aware_agent_model("local", "final", default_model),
         }
         self._token_budget = TokenBudget()
@@ -2584,6 +2589,11 @@ class LocalPipelineModelProvider:
 
         if self._strict_local:
             raise RuntimeError("Local provider is unavailable in strict local mode.")
+
+        hf_result = await self._hf_agent_fallback(agent_id, query, research)
+        if hf_result:
+            return hf_result
+
         if not self._fallback:
             raise RuntimeError("Local provider fallback is unavailable.")
         return await self._fallback.build_agent_text(agent_id, query, research)
@@ -2653,6 +2663,11 @@ class LocalPipelineModelProvider:
 
         if self._strict_local:
             raise RuntimeError("Local provider is unavailable in strict local mode.")
+
+        hf_result = await self._hf_final_fallback(query, outputs, research, refinement_note)
+        if hf_result:
+            return hf_result
+
         if not self._fallback:
             raise RuntimeError("Local provider fallback is unavailable.")
         return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
@@ -2684,6 +2699,8 @@ class LocalPipelineModelProvider:
             "strictLocal": self._strict_local,
             "lastError": self._last_error,
             "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
+            "hfFallbackEnabled": self._hf_enabled,
+            "hfFallbackAvailable": self._hf_provider.available,
             "tokenBudgetLimit": self._token_budget.total_limit,
             "tokenBudgetUsed": self._token_budget.used,
             "tokenBudgetRemaining": self._token_budget.remaining(),
@@ -2691,6 +2708,71 @@ class LocalPipelineModelProvider:
             "promptRegistrySize": registry_size,
             **breaker_state,
         }
+
+    async def _hf_agent_fallback(
+        self,
+        agent_id: str,
+        query: str,
+        research: ResearchContext | None,
+    ) -> str | None:
+        if not self._hf_enabled or not self._hf_provider.available:
+            return None
+        try:
+            config = get_agent_model_config(agent_id)
+            research_block = _compressed_research_block(research, 2400)
+            prompt = (
+                f"You are the {agent_id.upper()} agent."
+                f" {config.system_prompt_suffix}\n\n"
+                f"Question: {query.strip()}\n\n"
+                f"Research:\n{research_block}\n\n"
+                "Return concise, evidence-backed markdown with clear section headings and citations when present."
+            )
+            result = await self._hf_provider.generate(
+                agent_id=agent_id,
+                prompt=prompt,
+                temperature=config.temperature,
+                max_tokens=config.max_tokens,
+            )
+            if result and len(result.strip()) >= 120:
+                return result.strip()
+            return None
+        except Exception:
+            return None
+
+    async def _hf_final_fallback(
+        self,
+        query: str,
+        outputs: dict[str, str],
+        research: ResearchContext | None,
+        refinement_note: str | None,
+    ) -> str | None:
+        if not self._hf_enabled or not self._hf_provider.available:
+            return None
+        try:
+            research_block = _compressed_research_block(research, 3200)
+            prompt = (
+                "Produce a structured final research report with sections: "
+                "Executive Summary, Abstract, 1. Introduction, 2. Methodology, 3. Results, 4. Discussion, 5. Limitations and Counterarguments, 6. Conclusion, References.\n\n"
+                f"Question: {query.strip()}\n\n"
+                f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
+                f"SKEPTIC:\n{outputs.get('skeptic', '')}\n\n"
+                f"SYNTHESISER:\n{outputs.get('synthesiser', '')}\n\n"
+                f"ORACLE:\n{outputs.get('oracle', '')}\n\n"
+                f"VERIFIER:\n{outputs.get('verifier', '')}\n\n"
+                f"RESEARCH:\n{research_block}\n"
+                + (f"\nREFINEMENT: {refinement_note.strip()}\n" if refinement_note and refinement_note.strip() else "")
+            )
+            result = await self._hf_provider.generate(
+                agent_id="synthesiser",
+                prompt=prompt,
+                temperature=0.35,
+                max_tokens=1800,
+            )
+            if result and len(result.strip()) >= 500:
+                return result.strip()
+            return None
+        except Exception:
+            return None
 
     async def _chat(self, model: str, system_prompt: str, user_prompt: str, max_tokens: int) -> str:
         payload = {
