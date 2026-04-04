@@ -171,16 +171,16 @@ class InternetResearcher:
         r"(?:in\s+\d{4},?)\s+([^.]+\.)",  # Time-anchored claims
     ]
     
-    def __init__(self, timeout_seconds: float = 15.0, max_sources: int = 12) -> None:
+    def __init__(self, timeout_seconds: float = 15.0, max_sources: int = 14) -> None:
         self._timeout_seconds = timeout_seconds
         self._tavily_api_key = os.getenv("TAVILY_API_KEY", "").strip()
         self._search_provider = _research_provider(self._tavily_api_key)
         # Increased defaults for deeper research
-        configured_max_sources = _env_int("HEXAMIND_RESEARCH_MAX_SOURCES", max(max_sources, 12))
+        configured_max_sources = _env_int("HEXAMIND_RESEARCH_MAX_SOURCES", max(max_sources, 14))
         self._max_sources = max(6, configured_max_sources)  # Minimum 6 for triangulation
         self._max_sources_per_domain = max(2, _env_int("HEXAMIND_MAX_SOURCES_PER_DOMAIN", 3))
         self._max_terms = max(5, _env_int("HEXAMIND_RESEARCH_MAX_TERMS", 8))  # More search terms
-        self._max_hits_per_term = max(5, _env_int("HEXAMIND_RESEARCH_MAX_HITS_PER_TERM", 6))
+        self._max_hits_per_term = max(5, _env_int("HEXAMIND_RESEARCH_MAX_HITS_PER_TERM", 10))
         self._tavily_max_calls = max(3, _env_int("HEXAMIND_TAVILY_MAX_CALLS", 5))  # More API calls
         self._fetch_concurrency = max(3, _env_int("HEXAMIND_RESEARCH_FETCH_CONCURRENCY", 8))
         self._min_relevance_score = max(0.0, _env_float("HEXAMIND_RESEARCH_MIN_RELEVANCE", 0.20))  # Lower threshold

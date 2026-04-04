@@ -19,7 +19,7 @@ SERVICE_DIR = ROOT / "ai-service"
 if str(SERVICE_DIR) not in sys.path:
     sys.path.insert(0, str(SERVICE_DIR))
 
-from import compare_with_previous_report, extended_benchmark_suite, run_benchmark_suite, save_benchmark_report
+from benchmarking import compare_with_previous_report, extended_benchmark_suite, run_benchmark_suite, save_benchmark_report
 from main import _benchmark_local_models
 from model_provider import LocalPipelineModelProvider
 from pipeline import PipelineService
@@ -61,10 +61,10 @@ class RunArtifacts:
 @dataclass
 class TuningState:
     model_name: str = "llama3.1:8b"
-    token_mode: str = "smart"
-    max_sources: int = 8
+    token_mode: str = "lean"
+    max_sources: int = 14
     max_terms: int = 8
-    max_hits_per_term: int = 6
+    max_hits_per_term: int = 10
     min_relevance: float = 0.2
     parallel_agents: bool = False
 
