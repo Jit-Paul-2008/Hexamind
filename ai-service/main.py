@@ -17,7 +17,7 @@ from sse_starlette.sse import EventSourceResponse
 load_dotenv()
 
 from agents import AGENTS
-from api.routes import cases_router, projects_router, runs_router, workspaces_router
+from api.routes import auth_router, cases_router, projects_router, runs_router, workspaces_router
 from database.connection import init_db
 from governance import resolve_tenant_resolution
 from pipeline import pipeline_service
@@ -56,6 +56,7 @@ app.include_router(workspaces_router)
 app.include_router(projects_router)
 app.include_router(cases_router)
 app.include_router(runs_router)
+app.include_router(auth_router)
 
 
 @app.middleware("http")
