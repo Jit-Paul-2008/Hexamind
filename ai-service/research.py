@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import html as html_lib
 import os
+import random
 import re
 import time
 from dataclasses import dataclass, replace
@@ -184,6 +185,13 @@ class InternetResearcher:
         self._tavily_max_calls = max(3, _env_int("HEXAMIND_TAVILY_MAX_CALLS", 5))  # More API calls
         self._fetch_concurrency = max(3, _env_int("HEXAMIND_RESEARCH_FETCH_CONCURRENCY", 8))
         self._min_relevance_score = max(0.0, _env_float("HEXAMIND_RESEARCH_MIN_RELEVANCE", 0.20))  # Lower threshold
+        self._search_retry_attempts = max(1, _env_int("HEXAMIND_SEARCH_RETRY_ATTEMPTS", 5))
+        self._search_backoff_seconds = max(0.1, _env_float("HEXAMIND_SEARCH_BACKOFF_SECONDS", 0.4))
+        self._search_backoff_max_seconds = max(self._search_backoff_seconds, _env_float("HEXAMIND_SEARCH_BACKOFF_MAX_SECONDS", 3.0))
+        self._search_throttle_seconds = max(0.0, _env_float("HEXAMIND_SEARCH_THROTTLE_SECONDS", 0.35))
+        self._search_jitter_seconds = max(0.0, _env_float("HEXAMIND_SEARCH_JITTER_SECONDS", 0.2))
+        self._next_search_request_at = 0.0
+        self._search_throttle_lock = asyncio.Lock()
         self._cache_ttl_seconds = max(120.0, _env_float("HEXAMIND_RESEARCH_CACHE_TTL_SECONDS", 1800.0))
         self._semantic_cache_threshold = min(0.98, max(0.65, _env_float("HEXAMIND_RESEARCH_SEMANTIC_CACHE_THRESHOLD", 0.68)))
         self._research_cache: dict[str, tuple[float, ResearchContext]] = {}
@@ -424,11 +432,12 @@ class InternetResearcher:
                     if not _term_matches_pass(term, pass_name):
                         continue
                     try:
-                        response = await client.get(
+                        response = await self._request_with_retries(
+                            client,
+                            "GET",
                             "https://html.duckduckgo.com/html/",
                             params={"q": term},
                         )
-                        response.raise_for_status()
                     except httpx.HTTPError:
                         continue
 
@@ -492,8 +501,12 @@ class InternetResearcher:
                     }
 
                     try:
-                        response = await client.post("https://api.tavily.com/search", json=payload)
-                        response.raise_for_status()
+                        response = await self._request_with_retries(
+                            client,
+                            "POST",
+                            "https://api.tavily.com/search",
+                            json=payload,
+                        )
                         body = response.json()
                     except Exception:
                         calls_made += 1
@@ -531,6 +544,52 @@ class InternetResearcher:
                     break
 
         return _dedupe_hits(results)
+
+    async def _request_with_retries(
+        self,
+        client: httpx.AsyncClient,
+        method: str,
+        url: str,
+        **kwargs,
+    ) -> httpx.Response:
+        last_error: Exception | None = None
+        retryable_status = {408, 425, 429, 500, 502, 503, 504}
+
+        for attempt in range(self._search_retry_attempts):
+            await self._throttle_search_requests()
+            try:
+                response = await client.request(method, url, **kwargs)
+                if response.status_code in retryable_status:
+                    raise httpx.HTTPStatusError(
+                        f"Retryable status {response.status_code}",
+                        request=response.request,
+                        response=response,
+                    )
+                response.raise_for_status()
+                return response
+            except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
+                last_error = exc
+                if attempt >= self._search_retry_attempts - 1:
+                    break
+                backoff = min(self._search_backoff_seconds * (2 ** attempt), self._search_backoff_max_seconds)
+                jitter = random.uniform(0.0, self._search_jitter_seconds)
+                await asyncio.sleep(backoff + jitter)
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("search request failed without a captured exception")
+
+    async def _throttle_search_requests(self) -> None:
+        if self._search_throttle_seconds <= 0.0 and self._search_jitter_seconds <= 0.0:
+            return
+
+        async with self._search_throttle_lock:
+            now = time.monotonic()
+            wait_time = max(0.0, self._next_search_request_at - now)
+            if wait_time > 0.0:
+                await asyncio.sleep(wait_time)
+            cooldown = self._search_throttle_seconds + random.uniform(0.0, self._search_jitter_seconds)
+            self._next_search_request_at = time.monotonic() + cooldown
 
     async def _build_candidates(
         self,
