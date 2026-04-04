@@ -2,7 +2,7 @@
 
 Auto-updated after each autonomous run.
 
-Latest iteration: iter-001-2026-04-04T08-47-11-29ed2a1a
+Latest iteration: iter-001-2026-04-04T09-07-11-b32c6376
 Latest provider: local-unavailable
 API present: yes
 
@@ -11,21 +11,21 @@ API present: yes
 ```mermaid
 xychart-beta
     title "Run Speed and Quality Trends"
-    x-axis "Run" [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    x-axis "Run" [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     y-axis "Score / Seconds" 0 --> 100
-    line "Accuracy" [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    line "Human-like" [95.51, 95.42, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12]
-    line "Usefulness" [48.39, 48.2, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17]
-    line "HumanReview" [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    line "SpeedSeconds" [187.48, 238.47, 237.45, 236.94, 236.7, 236.62, 236.35, 236.35, 236.43, 236.48, 236.36, 236.37, 236.38, 236.58]
+    line "Accuracy" [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    line "Human-like" [95.51, 95.42, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12, 95.12]
+    line "Usefulness" [48.39, 48.2, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17, 48.17]
+    line "HumanReview" [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    line "SpeedSeconds" [187.48, 238.47, 237.45, 236.94, 236.7, 236.62, 236.35, 236.35, 236.43, 236.48, 236.36, 236.37, 236.38, 236.58, 236.46, 236.59, 236.56, 236.52, 236.52]
 ```
 
 ```mermaid
 xychart-beta
     title "Token Usage Per Run"
-    x-axis "Run" [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    x-axis "Run" [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     y-axis "Tokens" 0 --> 50000
-    bar "TokensUsed" [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    bar "TokensUsed" [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 ```
 
 ## Run Table
@@ -46,6 +46,11 @@ xychart-beta
 | 12 | iter-001-2026-04-04T08-36-13-2dbceeb7 | local-unavailable | yes | 236.37 | 0.00 | 95.12 | 48.17 | pending | 0 | 70.00 | 0.00 |
 | 13 | iter-001-2026-04-04T08-40-13-47de5cac | local-unavailable | yes | 236.38 | 0.00 | 95.12 | 48.17 | pending | 0 | 70.00 | 0.00 |
 | 14 | iter-001-2026-04-04T08-47-11-29ed2a1a | local-unavailable | yes | 236.58 | 0.00 | 95.12 | 48.17 | pending | 0 | 70.00 | 0.00 |
+| 15 | iter-001-2026-04-04T08-51-11-af7023d2 | local-unavailable | yes | 236.46 | 0.00 | 95.12 | 48.17 | pending | 0 | 70.00 | 0.00 |
+| 16 | iter-001-2026-04-04T08-55-11-762cdb61 | local-unavailable | yes | 236.59 | 0.00 | 95.12 | 48.17 | pending | 0 | 70.00 | 0.00 |
+| 17 | iter-001-2026-04-04T08-59-11-ea1794de | local-unavailable | yes | 236.56 | 0.00 | 95.12 | 48.17 | pending | 0 | 70.00 | 0.00 |
+| 18 | iter-001-2026-04-04T09-03-11-14de4d2f | local-unavailable | yes | 236.52 | 0.00 | 95.12 | 48.17 | pending | 0 | 70.00 | 0.00 |
+| 19 | iter-001-2026-04-04T09-07-11-b32c6376 | local-unavailable | yes | 236.52 | 0.00 | 95.12 | 48.17 | pending | 0 | 70.00 | 0.00 |
 
 *Accuracy, Human-like, and Usefulness are proxy metrics for continuous comparison.
 *Human Review is a manual score from the per-run review form (0.00/pending means not yet filled).
