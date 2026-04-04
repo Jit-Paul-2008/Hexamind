@@ -10,6 +10,7 @@ export type PipelineStreamHandlers = {
   onQualityLoading: () => void;
   onQualityReady: (report: PipelineQualityReport) => void;
   onQualityError: () => void;
+  onError?: (message: string) => void;
 };
 
 export async function runPipelineStream(
@@ -25,5 +26,6 @@ export async function runPipelineStream(
     setQualityLoading: handlers.onQualityLoading,
     setQualityReport: handlers.onQualityReady,
     setQualityError: handlers.onQualityError,
+    setPipelineError: handlers.onError ?? (() => undefined),
   });
 }

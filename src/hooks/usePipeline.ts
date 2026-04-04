@@ -75,6 +75,14 @@ export function usePipeline() {
             error: prev.error || "Quality report fetch failed.",
           }));
         },
+        onError: (message) => {
+          setState((prev) => ({
+            ...prev,
+            isRunning: false,
+            qualityLoading: false,
+            error: message || "Pipeline failed.",
+          }));
+        },
       });
 
       if (!source) {

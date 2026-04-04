@@ -27,7 +27,7 @@ export default function RootLayout({
       lang="en"
       className={`${spaceGrotesk.variable} ${playfair.variable} h-full antialiased dark`}
     >
-      <body className="h-screen overflow-hidden bg-[#0a0b0f] text-foreground selection:bg-indigo-charcoal selection:text-white">
+      <body className="min-h-screen overflow-x-hidden bg-[#0a0b0f] text-foreground selection:bg-indigo-charcoal selection:text-white">
         {children}
       </body>
     </html>
