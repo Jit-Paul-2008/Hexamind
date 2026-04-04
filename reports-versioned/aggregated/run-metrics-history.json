@@ -164,5 +164,137 @@
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
     ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T08-12-12-4cfa68e5",
+    "timestamp": "2026-04-04T08:16:10.379470",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 0,
+    "speedSeconds": 236.624,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 95.12,
+    "usefulnessScore": 48.17,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 2,
+      "uniqueDomains": 1,
+      "extractedChars": 36251,
+      "sourceCoverageRatio": 0.667,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.973,
+      "overallCoverage": 0.658,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T08-16-12-f43afa37",
+    "timestamp": "2026-04-04T08:20:10.183500",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 0,
+    "speedSeconds": 236.35,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 95.12,
+    "usefulnessScore": 48.17,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 2,
+      "uniqueDomains": 1,
+      "extractedChars": 36251,
+      "sourceCoverageRatio": 0.667,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.973,
+      "overallCoverage": 0.658,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T08-20-12-a9bbe589",
+    "timestamp": "2026-04-04T08:24:10.227221",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 0,
+    "speedSeconds": 236.349,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 95.12,
+    "usefulnessScore": 48.17,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 2,
+      "uniqueDomains": 1,
+      "extractedChars": 36251,
+      "sourceCoverageRatio": 0.667,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.973,
+      "overallCoverage": 0.658,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T08-24-12-db2af632",
+    "timestamp": "2026-04-04T08:28:10.357620",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 0,
+    "speedSeconds": 236.433,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 95.12,
+    "usefulnessScore": 48.17,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 2,
+      "uniqueDomains": 1,
+      "extractedChars": 36251,
+      "sourceCoverageRatio": 0.667,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.973,
+      "overallCoverage": 0.658,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
   }
 ]
