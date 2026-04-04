@@ -4,7 +4,6 @@ import asyncio
 import sys
 from pathlib import Path
 
-# Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(project_root / "ai-service"))
@@ -18,7 +17,7 @@ async def main():
     orchestrator = AutonomousOrchestrator(config)
     
     print("=" * 70)
-    print("🔬 HEXAMIND SINGLE ITERATION")
+    print("HEXAMIND SINGLE ITERATION")
     print("=" * 70)
     print(f"Models: Small={config.small_model}, Large={config.large_model}")
     print(f"Sources: {config.get_data_sources_list()}")
@@ -27,10 +26,10 @@ async def main():
     
     try:
         await orchestrator.run_single_iteration()
-        print("\n✓ Iteration complete")
+        print("\nIteration complete")
         return 0
     except Exception as e:
-        print(f"\n❌ Error: {type(e).__name__}: {e}")
+        print(f"\nError: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
         return 1
