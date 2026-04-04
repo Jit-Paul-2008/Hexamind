@@ -62,6 +62,11 @@ commit_batch_if_due() {
       log_line "[$(timestamp)] No changes staged for commit ${commit_message}"
     elif git commit -m "$commit_message"; then
       log_line "[$(timestamp)] Commit created: ${commit_message}"
+      if git push origin main; then
+        log_line "[$(timestamp)] Push successful: ${commit_message}"
+      else
+        log_line "[$(timestamp)] Push failed for: ${commit_message}"
+      fi
     else
       log_line "[$(timestamp)] Commit failed: ${commit_message}"
       break
