@@ -34,7 +34,7 @@ class CostPerformanceMilestoneTests(unittest.TestCase):
         self.assertEqual(_local_model_tier(high_context.query, high_context), "large")
 
     def test_cost_aware_agent_model_prefers_cheaper_defaults(self) -> None:
-        with unittest.mock.patch.dict(os.environ, {"HEXAMIND_COST_MODE": "free", "HEXAMIND_AGENT_MODEL_ADVOCATE": ""}, clear=False):
+        with unittest.mock.patch.dict(os.environ, {"HEXAMIND_COST_MODE": "free", "HEXAMIND_AGENT_MODEL_ADVOCATE": "", "HEXAMIND_MODEL_NAME": "google/gemini-2.0-flash-exp:free"}, clear=False):
             model_name = _cost_aware_agent_model("openrouter", "advocate", "default-model")
 
         self.assertEqual(model_name, "google/gemini-2.0-flash-exp:free")

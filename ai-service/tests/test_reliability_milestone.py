@@ -88,6 +88,7 @@ class ReliabilityMilestoneTests(unittest.TestCase):
                 "HEXAMIND_STREAM_STEP_DELAY_MS": "0",
                 "HEXAMIND_NEVER_FAIL_REPORT": "1",
                 "HEXAMIND_AUTO_REGENERATE_ON_FAIL": "1",
+                "HEXAMIND_DISABLE_FAILSAFE_FALLBACK": "0",
             },
             clear=False,
         ):

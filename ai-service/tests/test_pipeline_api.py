@@ -14,6 +14,7 @@ if str(SERVICE_DIR) not in sys.path:
 import os
 
 os.environ["HEXAMIND_WEB_RESEARCH"] = "0"
+os.environ["HEXAMIND_DISABLE_FAILSAFE_FALLBACK"] = "0"
 
 from fastapi.testclient import TestClient
 

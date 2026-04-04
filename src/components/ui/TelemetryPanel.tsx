@@ -72,6 +72,7 @@ export default function TelemetryPanel() {
 
   useEffect(() => {
     mountedRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadTelemetry(false);
     const timer = setInterval(() => void loadTelemetry(false), 30_000);
     return () => {
