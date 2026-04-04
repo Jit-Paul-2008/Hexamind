@@ -65,5 +65,104 @@
       "AUTONOMOUS_MIN_EXTRACTED_CHARS",
       "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
     ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T07-55-49-a0c898b9",
+    "timestamp": "2026-04-04T07:59:48.042004",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 0,
+    "speedSeconds": 237.446,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 95.12,
+    "usefulnessScore": 48.17,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 2,
+      "uniqueDomains": 1,
+      "extractedChars": 36251,
+      "sourceCoverageRatio": 0.667,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.973,
+      "overallCoverage": 0.658,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T08-00-57-fb1e3d64",
+    "timestamp": "2026-04-04T08:04:55.388087",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 0,
+    "speedSeconds": 236.945,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 95.12,
+    "usefulnessScore": 48.17,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 2,
+      "uniqueDomains": 1,
+      "extractedChars": 36251,
+      "sourceCoverageRatio": 0.667,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.973,
+      "overallCoverage": 0.658,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
+  },
+  {
+    "iterationId": "iter-001-2026-04-04T08-08-12-d5ea97a8",
+    "timestamp": "2026-04-04T08:12:10.439143",
+    "provider": "local-unavailable",
+    "apiPresent": true,
+    "tokenUsed": 0,
+    "speedSeconds": 236.7,
+    "overallScore": 70.0,
+    "trustScore": 0.0,
+    "accuracyProxy": 0.0,
+    "humanLikeScore": 95.12,
+    "usefulnessScore": 48.17,
+    "humanReviewScore": null,
+    "citationCount": 1,
+    "coverage": {
+      "sourceCount": 2,
+      "uniqueDomains": 1,
+      "extractedChars": 36251,
+      "sourceCoverageRatio": 0.667,
+      "sourceDiversityRatio": 0.333,
+      "extractedCharRatio": 0.973,
+      "overallCoverage": 0.658,
+      "allowWebResearch": true
+    },
+    "improvementsApplied": [
+      "AUTONOMOUS_MIN_SOURCE_COVERAGE",
+      "AUTONOMOUS_MIN_SOURCE_COUNT",
+      "AUTONOMOUS_MIN_SOURCE_DIVERSITY",
+      "HEXAMIND_WEB_RESEARCH",
+      "AUTONOMOUS_MIN_EXTRACTED_CHARS",
+      "AUTONOMOUS_IMPROVEMENT_MIN_DELTA"
+    ]
   }
 ]
