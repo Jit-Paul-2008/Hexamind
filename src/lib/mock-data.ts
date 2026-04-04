@@ -31,6 +31,7 @@ export type QualityItem = {
 export type RunItem = {
   id: string;
   caseId: string;
+  backendSessionId?: string;
   mode: AriaMode;
   createdAt: string;
   answer: string;

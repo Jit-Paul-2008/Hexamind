@@ -1,9 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useCaseStore } from "@/store/caseStore";
 import { useRunStore } from "@/store/runStore";
+import { modeLabels } from "@/lib/mock-data";
+import { usePipeline } from "@/hooks/usePipeline";
+import { exportDocx } from "@/lib/api/export";
 import ModeSelector from "@/components/case/ModeSelector";
 import RunHistory from "@/components/case/RunHistory";
 
@@ -14,7 +17,17 @@ type Props = {
 export default function CaseView({ caseId }: Props) {
   const [prompt, setPrompt] = useState("");
   const { cases } = useCaseStore();
-  const { selectedRunId, getRunsByCase, createMockRun } = useRunStore();
+  const {
+    selectedRunId,
+    selectedMode,
+    getRunsByCase,
+    createMockRun,
+    addLiveRun,
+    updateRunQuality,
+  } = useRunStore();
+  const { run, sessionId, isRunning, finalAnswer, liveOutput, qualityReport, error } =
+    usePipeline();
+  const createdFromSessionRef = useRef<string>("");
 
   const currentCase = useMemo(
     () => cases.find((item) => item.id === caseId),
@@ -23,6 +36,42 @@ export default function CaseView({ caseId }: Props) {
 
   const runs = getRunsByCase(caseId);
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0];
+
+  useEffect(() => {
+    if (!sessionId || !finalAnswer.trim()) {
+      return;
+    }
+    if (createdFromSessionRef.current === sessionId) {
+      return;
+    }
+
+    const liveRunId = `live-${sessionId.slice(-8)}`;
+    addLiveRun({
+      id: liveRunId,
+      backendSessionId: sessionId,
+      caseId,
+      mode: selectedMode,
+      createdAt: new Date().toISOString(),
+      answer: finalAnswer,
+      sources: [],
+      quality: {
+        trustScore: 0,
+        overallScore: 0,
+        contradictionCount: 0,
+        sourceCount: 0,
+      },
+      contradictions: [],
+    });
+    createdFromSessionRef.current = sessionId;
+  }, [addLiveRun, caseId, finalAnswer, selectedMode, sessionId]);
+
+  useEffect(() => {
+    if (!qualityReport || !sessionId) {
+      return;
+    }
+    const liveRunId = `live-${sessionId.slice(-8)}`;
+    updateRunQuality(liveRunId, qualityReport);
+  }, [qualityReport, sessionId, updateRunQuality]);
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -50,13 +99,46 @@ export default function CaseView({ caseId }: Props) {
           />
           <button
             type="button"
-            onClick={() => createMockRun(caseId, prompt || currentCase?.question || "Untitled")}
+            onClick={async () => {
+              const activePrompt = prompt || currentCase?.question || "Untitled";
+              try {
+                await run(activePrompt);
+              } catch {
+                createMockRun(caseId, activePrompt);
+              }
+            }}
             className="mt-2 rounded-md border border-emerald-300/40 bg-emerald-300/15 px-3 py-2 text-xs uppercase tracking-[0.12em] text-emerald-100 hover:bg-emerald-300/20"
           >
-            Run ARIA
+            {isRunning ? "Running..." : `Run ARIA (${modeLabels[selectedMode]})`}
           </button>
+          {sessionId && (
+            <button
+              type="button"
+              onClick={async () => {
+                const doc = await exportDocx(sessionId, {
+                  targetLanguageCode: "en-IN",
+                  instruction: "keep concise and structured",
+                });
+                const url = URL.createObjectURL(doc.blob);
+                const anchor = document.createElement("a");
+                anchor.href = url;
+                anchor.download = doc.filename;
+                anchor.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="ml-2 mt-2 rounded-md border border-white/30 bg-white/10 px-3 py-2 text-xs uppercase tracking-[0.12em] text-white/80 hover:bg-white/20"
+            >
+              Export DOCX
+            </button>
+          )}
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-md border border-red-300/30 bg-red-300/10 px-3 py-2 text-xs text-red-100">
+          {error}
+        </div>
+      )}
 
       <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-3">
         <div className="lg:col-span-1">
@@ -70,7 +152,7 @@ export default function CaseView({ caseId }: Props) {
                 {selectedRun.id} · {new Date(selectedRun.createdAt).toLocaleString()}
               </p>
               <p className="whitespace-pre-wrap text-sm leading-6 text-white/85">
-                {selectedRun.answer}
+                {isRunning && liveOutput ? liveOutput : selectedRun.answer}
               </p>
             </>
           ) : (

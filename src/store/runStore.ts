@@ -5,6 +5,7 @@ import {
   type AriaMode,
   type RunItem,
 } from "@/lib/mock-data";
+import type { PipelineQualityReport } from "@/types/pipeline";
 
 type RunState = {
   runs: RunItem[];
@@ -14,6 +15,8 @@ type RunState = {
   selectMode: (mode: AriaMode) => void;
   getRunsByCase: (caseId: string) => RunItem[];
   createMockRun: (caseId: string, prompt: string) => RunItem;
+  addLiveRun: (run: RunItem) => void;
+  updateRunQuality: (runId: string, report: PipelineQualityReport) => void;
 };
 
 const modeKeys = Object.keys(modeLabels) as AriaMode[];
@@ -63,5 +66,30 @@ export const useRunStore = create<RunState>((set, get) => ({
 
     set({ runs: [nextRun, ...currentRuns], selectedRunId: nextRun.id });
     return nextRun;
+  },
+  addLiveRun: (run: RunItem) => {
+    set((state) => ({
+      runs: [run, ...state.runs],
+      selectedRunId: run.id,
+    }));
+  },
+  updateRunQuality: (runId: string, report: PipelineQualityReport) => {
+    set((state) => ({
+      runs: state.runs.map((run) => {
+        if (run.id !== runId) {
+          return run;
+        }
+        return {
+          ...run,
+          quality: {
+            trustScore: Math.round(Number(report.trustScore ?? report.overallScore ?? 0)),
+            overallScore: Math.round(report.overallScore ?? 0),
+            contradictionCount: Number(report.metrics?.contradictionCount ?? 0),
+            sourceCount: Number(report.metrics?.sourceCount ?? 0),
+          },
+          contradictions: (report.contradictionFindings ?? []).map((finding) => finding.reason),
+        };
+      }),
+    }));
   },
 }));

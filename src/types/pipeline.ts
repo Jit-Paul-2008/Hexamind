@@ -61,6 +61,8 @@ export interface PipelineQualityReport {
   sessionId: string;
   status: "pending" | "ready";
   overallScore: number;
+  trustScore?: number;
+  trustGrade?: string;
   passing: boolean;
   regenerated?: boolean;
   runMetadata?: PipelineRunMetadata;
