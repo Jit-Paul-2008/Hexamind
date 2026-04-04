@@ -1,0 +1,31 @@
+{
+  "iteration_id": "iter-001-2026-04-04T07-22-11-8df94885",
+  "timestamp": "2026-04-04T07:24:12.637899",
+  "extracted_data_sources": [
+    "file:///home/Jit-Paul-2008/Desktop/Hexamind/src/docs/*.md",
+    "file:///home/Jit-Paul-2008/Desktop/Hexamind/README.md"
+  ],
+  "quality_metrics": {
+    "evidence_depth": 0.75,
+    "contradiction_detection": 0.8,
+    "source_coverage": 0.85,
+    "citation_precision": 0.9,
+    "claim_verification_rate": 0.8,
+    "methodology_clarity": 0.85,
+    "overall_score": 0.825,
+    "metadata": {}
+  },
+  "comparison": {
+    "semantic_changes": [],
+    "delta": {
+      "new_claims": 0,
+      "modified_claims": 0,
+      "retracted_claims": 0,
+      "avg_claim_confidence_change": 0.0,
+      "evidence_base_delta": 0.0
+    },
+    "previous_exists": false
+  },
+  "improvements_applied": [],
+  "report_path": "/home/Jit-Paul-2008/Desktop/Hexamind/reports-versioned/iterations/iter-001-2026-04-04T07-22-11-8df94885/research/full-report.md"
+}
