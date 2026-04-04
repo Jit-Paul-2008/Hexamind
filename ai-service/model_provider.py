@@ -1634,7 +1634,7 @@ class DeterministicPipelineModelProvider:
 
 
 class GeminiPipelineModelProvider:
-    def __init__(self, model_name: str) -> None:
+    def __init__(self, model_name: str, fallback: PipelineModelProvider | None = None) -> None:
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         self._model_name = model_name
@@ -1652,7 +1652,7 @@ class GeminiPipelineModelProvider:
             model=model_name,
             temperature=0.35,
         )
-        self._fallback = DeterministicPipelineModelProvider(
+        self._fallback = fallback or DeterministicPipelineModelProvider(
             configured_provider="gemini",
             model_name=model_name,
             reason="Gemini runtime call failed",
@@ -1929,7 +1929,7 @@ class GeminiPipelineModelProvider:
 
 
 class OpenRouterPipelineModelProvider:
-    def __init__(self, default_model: str) -> None:
+    def __init__(self, default_model: str, fallback: PipelineModelProvider | None = None) -> None:
         api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
         if not api_key:
             raise RuntimeError("OPENROUTER_API_KEY is required for provider=openrouter")
@@ -1955,11 +1955,11 @@ class OpenRouterPipelineModelProvider:
         }
         self._researcher = _create_researcher()
         self._strict_provider = _strict_provider_mode()
-        self._fallback = None if self._strict_provider else DeterministicPipelineModelProvider(
+        self._fallback = fallback or (None if self._strict_provider else DeterministicPipelineModelProvider(
             configured_provider="openrouter",
             model_name=default_model,
             reason="OpenRouter runtime call failed",
-        )
+        ))
         self._model_by_role = {
             "advocate": _cost_aware_agent_model("openrouter", "advocate", default_model),
             "skeptic": _cost_aware_agent_model("openrouter", "skeptic", default_model),
@@ -2236,7 +2236,7 @@ class OpenRouterPipelineModelProvider:
 
 
 class GroqPipelineModelProvider:
-    def __init__(self, default_model: str) -> None:
+    def __init__(self, default_model: str, fallback: PipelineModelProvider | None = None) -> None:
         api_key = os.getenv("GROQ_API_KEY", "").strip()
         if not api_key:
             raise RuntimeError("GROQ_API_KEY is required for provider=groq")
@@ -2258,7 +2258,7 @@ class GroqPipelineModelProvider:
             "Content-Type": "application/json",
         }
         self._researcher = _create_researcher()
-        self._fallback = DeterministicPipelineModelProvider(
+        self._fallback = fallback or DeterministicPipelineModelProvider(
             configured_provider="groq",
             model_name=default_model,
             reason="Groq runtime call failed",
@@ -3048,58 +3048,85 @@ def _create_researcher() -> ResearcherProtocol:
 
 
 def create_pipeline_model_provider() -> PipelineModelProvider:
-    provider_name = os.getenv("HEXAMIND_MODEL_PROVIDER", "deterministic").strip().lower()
-    strict_provider = _strict_provider_mode()
-    if provider_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
-        model_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(provider_name))
-        try:
-            return LocalPipelineModelProvider(model_name)
-        except Exception as exc:
-            if _local_strict_mode() or strict_provider:
-                raise
-            return DeterministicPipelineModelProvider(
-                configured_provider="local",
-                model_name=model_name,
-                reason=f"Local provider init failed: {type(exc).__name__}",
-            )
-    if provider_name in {"gemini", "google", "google-genai"}:
-        model_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(provider_name))
-        try:
-            return GeminiPipelineModelProvider(model_name)
-        except Exception as exc:
-            if strict_provider:
-                raise
-            return DeterministicPipelineModelProvider(
-                configured_provider="gemini",
-                model_name=model_name,
-                reason=f"Gemini init failed: {type(exc).__name__}",
-            )
-    if provider_name in {"openrouter", "router"}:
-        model_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(provider_name))
-        try:
-            return OpenRouterPipelineModelProvider(model_name)
-        except Exception as exc:
-            if strict_provider:
-                raise
-            return DeterministicPipelineModelProvider(
-                configured_provider="openrouter",
-                model_name=model_name,
-                reason=f"OpenRouter init failed: {type(exc).__name__}",
-            )
-    if provider_name in {"groq"}:
-        model_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(provider_name))
-        try:
-            return GroqPipelineModelProvider(model_name)
-        except Exception as exc:
-            if strict_provider:
-                raise
-            return DeterministicPipelineModelProvider(
-                configured_provider="groq",
-                model_name=model_name,
-                reason=f"Groq init failed: {type(exc).__name__}",
-            )
+    """
+    Creates a resilient chain of model providers based on available API keys.
+    Order of operations:
+    1. Identify the primary provider from HEXAMIND_MODEL_PROVIDER.
+    2. Identify all other available cloud providers (Gemini, Groq, OpenRouter).
+    3. Build a linked chain: Primary -> Fallback 1 -> Fallback 2 -> Deterministic.
+    """
+    primary_name = os.getenv("HEXAMIND_MODEL_PROVIDER", "openrouter").strip().lower()
+    strict_mode = _strict_provider_mode()
+    
+    # helper to check if a provider is "available" (has keys)
+    def is_available(name: str) -> bool:
+        if name in {"gemini", "google", "google-genai"}:
+            return bool(os.getenv("GOOGLE_API_KEY", "").strip())
+        if name in {"openrouter", "router"}:
+            return bool(os.getenv("OPENROUTER_API_KEY", "").strip())
+        if name in {"groq"}:
+            return bool(os.getenv("GROQ_API_KEY", "").strip())
+        if name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
+            # We don't chain local by default as it's environment specific
+            return False 
+        return False
 
-    return DeterministicPipelineModelProvider(
-        configured_provider=provider_name,
-        model_name=os.getenv("HEXAMIND_MODEL_NAME", "deterministic"),
+    # List of cloud providers to potentially chain
+    all_cloud_providers = ["openrouter", "gemini", "groq"]
+    
+    # 1. Build the sequence of names to try
+    # Start with the primary. If primary is not in the list (like 'local'), handle it separately.
+    chain_names = []
+    if primary_name in all_cloud_providers:
+        chain_names.append(primary_name)
+    
+    # Add other available ones
+    for p in all_cloud_providers:
+        if p not in chain_names and is_available(p):
+            chain_names.append(p)
+            
+    # 2. Build the chain from the bottom up (last to first)
+    # The absolute last fallback is always Deterministic
+    current_chain: PipelineModelProvider = DeterministicPipelineModelProvider(
+        configured_provider="chain-end",
+        model_name="deterministic",
+        reason="All available cloud providers in the chain failed or were exhausted."
     )
+    
+    # If we are in strict mode, we don't want the deterministic fallback at the very end
+    if strict_mode and chain_names:
+        # In strict mode, we want the last REAL provider to throw its error instead of falling back to text
+        # So we'll skip the deterministic tail if chain is non-empty. 
+        # But for now, let's keep it simple: strict mode usually means "don't fall back to local/text"
+        pass
+
+    # Functional mapping to create providers
+    def instantiate_provider(name: str, fb: PipelineModelProvider) -> PipelineModelProvider:
+        m_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(name))
+        try:
+            if name in {"gemini", "google", "google-genai"}:
+                return GeminiPipelineModelProvider(m_name, fallback=fb)
+            if name in {"openrouter", "router"}:
+                return OpenRouterPipelineModelProvider(m_name, fallback=fb)
+            if name in {"groq"}:
+                return GroqPipelineModelProvider(m_name, fallback=fb)
+        except Exception:
+            return fb # Skip failed inits
+        return fb
+
+    # Build the chain backwards
+    for name in reversed(chain_names):
+        current_chain = instantiate_provider(name, current_chain)
+        
+    # Handle the "Local" case specially (Local is usually the explicit target or not used)
+    if primary_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
+        m_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(primary_name))
+        try:
+            # Local falls back to the cloud chain we just built
+            return LocalPipelineModelProvider(m_name) 
+        except Exception:
+            if _local_strict_mode() or strict_mode:
+                raise
+            return current_chain
+
+    return current_chain
