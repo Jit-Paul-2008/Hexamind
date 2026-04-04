@@ -36,6 +36,18 @@ class PipelineApiTests(unittest.TestCase):
         self.assertIn("activeProvider", health_payload)
         self.assertIn("isFallback", health_payload)
 
+        liveness_response = self.client.get("/health/liveness")
+        self.assertEqual(liveness_response.status_code, 200)
+        self.assertEqual(liveness_response.json()["status"], "alive")
+
+        readiness_response = self.client.get("/health/readiness")
+        self.assertEqual(readiness_response.status_code, 200)
+        self.assertEqual(readiness_response.json()["status"], "ready")
+
+        metrics_response = self.client.get("/metrics")
+        self.assertEqual(metrics_response.status_code, 200)
+        self.assertIn("hexamind_http_requests_total", metrics_response.text)
+
         with patch("main._local_model_status", new=AsyncMock(return_value={"baseUrl": "http://127.0.0.1:11434/v1", "installed": ["llama3.1:8b"], "installedCount": 1, "required": ["llama3.1:8b", "qwen2.5:7b", "mistral:7b"], "missing": ["qwen2.5:7b", "mistral:7b"], "ready": False, "endpoint": "http://127.0.0.1:11434/api/tags"})):
             status_response = self.client.get("/api/models/status")
         self.assertEqual(status_response.status_code, 200)

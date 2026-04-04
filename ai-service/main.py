@@ -8,6 +8,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 
 import httpx
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
@@ -36,6 +37,16 @@ app = FastAPI(title="Hexamind AI Service", version="1.0.0")
 sarvam_service = SarvamService()
 _REQUEST_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
 _AUDIT_LOG_PATH = Path(__file__).resolve().with_name(".data").joinpath("audit-log.jsonl")
+_REQUEST_TOTAL = Counter(
+    "hexamind_http_requests_total",
+    "Total HTTP requests handled by Hexamind service",
+    ["method", "path", "status"],
+)
+_REQUEST_DURATION_SECONDS = Histogram(
+    "hexamind_http_request_duration_seconds",
+    "HTTP request latency for Hexamind service",
+    ["method", "path"],
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -98,15 +109,18 @@ async def security_and_audit_middleware(request: Request, call_next):
             return response
 
     response = await call_next(request)
+    elapsed = round(time.perf_counter() - started_at, 4)
     _append_audit_log(
         request_id=request_id,
         request=request,
         status_code=response.status_code,
-        duration_seconds=round(time.perf_counter() - started_at, 4),
+        duration_seconds=elapsed,
         client_ip=client_ip,
         tenant_id=tenant_resolution.tenant_id,
         rate_limited=False,
     )
+    _REQUEST_TOTAL.labels(request.method, request.url.path, str(response.status_code)).inc()
+    _REQUEST_DURATION_SECONDS.labels(request.method, request.url.path).observe(elapsed)
     response.headers["X-Request-Id"] = request_id
     return response
 
@@ -118,6 +132,24 @@ def health_check() -> dict[str, str | int | bool]:
     payload["auditLoggingEnabled"] = True
     payload["authRequired"] = _auth_token_required()
     return payload
+
+
+@app.get("/health/liveness")
+def health_liveness() -> dict[str, str]:
+    return {"status": "alive"}
+
+
+@app.get("/health/readiness")
+def health_readiness() -> dict[str, str | bool]:
+    return {
+        "status": "ready",
+        "databasePersistenceEnabled": _db_persistence_enabled(),
+    }
+
+
+@app.get("/metrics")
+def metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/api/models/status")

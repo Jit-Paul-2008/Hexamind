@@ -16,3 +16,4 @@ asyncpg>=0.29
 aiosqlite>=0.20
 passlib>=1.7
 python-jose[cryptography]>=3.3
+prometheus-client>=0.21
