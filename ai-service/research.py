@@ -253,6 +253,24 @@ class InternetResearcher:
             fallback_candidates = await self._build_candidates(sanitized_query, fallback_hits, workflow_profile)
             candidates.extend(fallback_candidates)
         
+        # Phase 2.5: FREE API Integration (DuckDuckGo + Wikipedia as primary sources)
+        # These are always included for maximum research diversity at zero cost
+        try:
+            ddg_sources = await search_duckduckgo(sanitized_query, max_results=3, timeout_seconds=5.0)
+            for source in ddg_sources:
+                # Convert ResearchSource to candidate tuple (score, source)
+                candidates.append((0.7, source))
+        except Exception:
+            pass  # Silent fallback if DuckDuckGo unavailable
+        
+        try:
+            wiki_sources = await search_wikipedia(sanitized_query, max_results=2, timeout_seconds=5.0)
+            for source in wiki_sources:
+                # Wikipedia has higher credibility, higher score
+                candidates.append((0.8, source))
+        except Exception:
+            pass  # Silent fallback if Wikipedia unavailable
+        
         sources = _select_sources_with_diversity(
             candidates,
             effective_max_sources,
@@ -1787,6 +1805,253 @@ def _credibility_score(url: str) -> float:
         score -= 0.05
     
     return max(0.10, min(1.0, score))
+
+
+async def search_duckduckgo(
+    query: str,
+    max_results: int = 5,
+    timeout_seconds: float = 8.0,
+) -> list[ResearchSource]:
+    """
+    Search the web using DuckDuckGo API (FREE, no key required).
+    
+    Returns research sources with medium credibility (0.60).
+    No rate limiting, unrestricted use.
+    
+    Args:
+        query: Search query string
+        max_results: Maximum number of results to return (1-10)
+        timeout_seconds: HTTP request timeout
+    
+    Returns:
+        List of ResearchSource objects from web search results
+    """
+    sanitized_query = redact_pii(query.strip())
+    if not sanitized_query:
+        return []
+    
+    results: list[ResearchSource] = []
+    
+    try:
+        async with httpx.AsyncClient(
+            timeout=timeout_seconds,
+            follow_redirects=True,
+            headers={"User-Agent": "HexamindResearch/1.0 (+https://example.com)"},
+        ) as client:
+            params = {
+                "q": sanitized_query,
+                "format": "json",
+                "no_redirect": 1,
+            }
+            
+            response = await client.get("https://api.duckduckgo.com/", params=params)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Try regular Results first
+            search_results = data.get("Results", [])
+            for i, result in enumerate(search_results[:max_results]):
+                title = str(result.get("Title", "")).strip()
+                url = str(result.get("FirstURL", "")).strip()
+                snippet = str(result.get("Text", "")).strip()
+                
+                if not title or not url or not snippet:
+                    continue
+                
+                domain = urlparse(url).netloc or url
+                excerpt = _extract_evidence_excerpt(snippet, sanitized_query, 600)
+                if not excerpt:
+                    excerpt = _trim_text(snippet, 600)
+                
+                source = ResearchSource(
+                    id=f"ddg_{i}",
+                    title=_trim_text(title, 140),
+                    url=_canonicalize_url(url),
+                    domain=domain,
+                    snippet=_trim_text(snippet, 220),
+                    excerpt=excerpt,
+                    authority="medium",
+                    credibility_score=0.60,
+                    recency_score=0.0,
+                    discovery_pass="web_search_primary",
+                )
+                results.append(source)
+            
+            # If no Results, try Abstract (direct answer)
+            if not search_results:
+                abstract = str(data.get("Abstract", "")).strip()
+                abstract_url = str(data.get("AbstractURL", "")).strip()
+                
+                if abstract and abstract_url and len(abstract) > 50:
+                    domain = urlparse(abstract_url).netloc or abstract_url
+                    excerpt = _extract_evidence_excerpt(abstract, sanitized_query, 600)
+                    if not excerpt:
+                        excerpt = _trim_text(abstract, 600)
+                    
+                    if excerpt:
+                        source = ResearchSource(
+                            id="ddg_abstract",
+                            title=f"Answer to: {_trim_text(sanitized_query, 80)}",
+                            url=_canonicalize_url(abstract_url),
+                            domain=domain,
+                            snippet=_trim_text(abstract, 220),
+                            excerpt=excerpt,
+                            authority="medium",
+                            credibility_score=0.65,
+                            recency_score=0.0,
+                            discovery_pass="web_search_abstract",
+                        )
+                        results.append(source)
+                
+                # Also try RelatedTopics
+                related_topics = data.get("RelatedTopics", [])
+                for i, topic in enumerate(related_topics[:max_results]):
+                    if isinstance(topic, dict):
+                        title = str(topic.get("FirstURL", "")).strip() or \
+                                str(topic.get("Name", "")).strip()
+                        url = str(topic.get("FirstURL", "")).strip()
+                        snippet = str(topic.get("Text", "")).strip()
+                        
+                        if not title or not url:
+                            continue
+                        
+                        if not snippet:
+                            # Try to get text from Topics (related subtopics)
+                            topics = topic.get("Topics", [])
+                            if topics and isinstance(topics[0], dict):
+                                snippet = str(topics[0].get("Text", "")).strip()
+                        
+                        if not snippet:
+                            continue
+                        
+                        domain = urlparse(url).netloc or url
+                        excerpt = _extract_evidence_excerpt(snippet, sanitized_query, 600)
+                        if not excerpt:
+                            excerpt = _trim_text(snippet, 600)
+                        
+                        source = ResearchSource(
+                            id=f"ddg_related_{i}",
+                            title=_trim_text(title[:140], 140),
+                            url=_canonicalize_url(url),
+                            domain=domain,
+                            snippet=_trim_text(snippet, 220),
+                            excerpt=excerpt,
+                            authority="medium",
+                            credibility_score=0.55,
+                            recency_score=0.0,
+                            discovery_pass="web_search_related",
+                        )
+                        results.append(source)
+                        
+                        if len(results) >= max_results:
+                            break
+    
+    except Exception:
+        pass
+    
+    return results[:max_results]
+
+
+async def search_wikipedia(
+    query: str,
+    max_results: int = 3,
+    timeout_seconds: float = 8.0,
+) -> list[ResearchSource]:
+    """
+    Search Wikipedia using the Wikipedia API (FREE, no key required).
+    
+    Returns research sources with high credibility (0.75-0.85).
+    Excellent for facts, definitions, historical context.
+    No rate limiting (200 req/sec very generous).
+    
+    Args:
+        query: Search query string
+        max_results: Maximum number of results to return (1-10)
+        timeout_seconds: HTTP request timeout
+    
+    Returns:
+        List of high-authority ResearchSource objects from Wikipedia
+    """
+    sanitized_query = redact_pii(query.strip())
+    if not sanitized_query:
+        return []
+    
+    results: list[ResearchSource] = []
+    
+    try:
+        async with httpx.AsyncClient(
+            timeout=timeout_seconds,
+            follow_redirects=True,
+            headers={"User-Agent": "HexamindResearch/1.0 (+https://example.com)"},
+        ) as client:
+            # Step 1: Search for Wikipedia pages
+            search_params = {
+                "action": "query",
+                "format": "json",
+                "list": "search",
+                "srsearch": sanitized_query,
+                "srlimit": min(max_results, 10),
+                "utf8": "1",
+            }
+            
+            search_response = await client.get(
+                "https://en.wikipedia.org/w/api.php",
+                params=search_params,
+            )
+            search_response.raise_for_status()
+            search_data = search_response.json()
+            
+            entries = search_data.get("query", {}).get("search", [])
+            if not isinstance(entries, list):
+                return results
+            
+            # Step 2: For each result, get the full extract
+            for i, entry in enumerate(entries[:max_results]):
+                title = str(entry.get("title", "")).strip()
+                snippet = _clean_text(str(entry.get("snippet", "")))
+                
+                if not title:
+                    continue
+                
+                # Get full page extract using REST API
+                try:
+                    summary_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{quote(title)}"
+                    summary_response = await client.get(summary_url)
+                    summary_response.raise_for_status()
+                    summary_data = summary_response.json()
+                    extract = _clean_text(str(summary_data.get("extract", "")))
+                except Exception:
+                    extract = snippet
+                
+                # Use extract if available, fallback to snippet
+                best_text = extract or snippet
+                excerpt = _extract_evidence_excerpt(best_text, sanitized_query, 600)
+                if not excerpt:
+                    excerpt = _trim_text(best_text, 600)
+                
+                if not excerpt:
+                    continue
+                
+                page_url = f"https://en.wikipedia.org/wiki/{quote(title.replace(' ', '_'))}"
+                
+                source = ResearchSource(
+                    id=f"wiki_{i}",
+                    title=_trim_text(title, 140),
+                    url=page_url,
+                    domain="en.wikipedia.org",
+                    snippet=_trim_text(snippet, 220),
+                    excerpt=excerpt,
+                    authority="high",
+                    credibility_score=0.80,
+                    recency_score=_recency_score(page_url, title, snippet, extract),
+                    discovery_pass="wiki_search_primary",
+                )
+                results.append(source)
+    
+    except Exception:
+        pass
+    
+    return results
 
 
 def _clean_text(text: str) -> str:
