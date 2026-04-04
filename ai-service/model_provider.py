@@ -313,11 +313,11 @@ def _cost_aware_agent_model(provider_name: str, agent_id: str, default_model: st
 
     provider_defaults = {
         "openrouter": {
-            "advocate": "google/gemini-2.0-flash-exp:free",
-            "skeptic": "google/gemini-2.0-flash-exp:free",
+            "advocate": "google/gemma-3-12b-it:free",
+            "skeptic": "google/gemma-3-12b-it:free",
             "synthesiser": default_model,
-            "oracle": "google/gemini-2.0-flash-exp",
-            "verifier": "google/gemini-2.0-flash-exp:free",
+            "oracle": "google/gemma-3-12b-it:free",
+            "verifier": "google/gemma-3-12b-it:free",
             "final": default_model,
         },
         "groq": {
@@ -1965,6 +1965,7 @@ class OpenRouterPipelineModelProvider:
             "skeptic": _cost_aware_agent_model("openrouter", "skeptic", default_model),
             "synthesiser": _cost_aware_agent_model("openrouter", "synthesiser", default_model),
             "oracle": _cost_aware_agent_model("openrouter", "oracle", default_model),
+            "verifier": _cost_aware_agent_model("openrouter", "verifier", default_model),
             "final": _cost_aware_agent_model("openrouter", "final", default_model),
         }
         self._token_budget = TokenBudget()
@@ -2196,7 +2197,34 @@ class OpenRouterPipelineModelProvider:
             )
             if retry.is_success:
                 return retry.json()
-            raise RuntimeError(f"Groq 400 after compact retry: {retry.text[:200]}")
+
+            # Some OpenRouter-backed providers reject system/developer instructions.
+            # Fall back to a single user message that inlines the instruction block.
+            error_text = (retry.text or response.text or "").lower()
+            if "developer instruction" in error_text:
+                compatibility_payload = {
+                    "model": model,
+                    "temperature": 0.2,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": (
+                                f"System instructions:\n{_trim_for_prompt(system_prompt, 1200)}\n\n"
+                                f"User request:\n{_trim_for_prompt(user_prompt, 3200)}"
+                            ),
+                        }
+                    ],
+                }
+                compat = await client.post(
+                    f"{self._base_url}/chat/completions",
+                    headers=self._headers,
+                    json=compatibility_payload,
+                )
+                if compat.is_success:
+                    return compat.json()
+                raise RuntimeError(f"OpenRouter 400 after compatibility retry: {compat.text[:200]}")
+
+            raise RuntimeError(f"OpenRouter 400 after compact retry: {retry.text[:200]}")
 
         response.raise_for_status()
         return response.json()
@@ -3005,7 +3033,7 @@ def _default_model_for_provider(provider_name: str) -> str:
         return "gemini-2.0-flash"
     if provider_name in {"openrouter", "router"}:
         # Free-tier oriented default. Override per role with HEXAMIND_AGENT_MODEL_* env vars.
-        return "google/gemini-2.0-flash-exp:free"
+        return "google/gemma-3-12b-it:free"
     if provider_name in {"groq"}:
         return "llama-3.1-8b-instant"
     if provider_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:

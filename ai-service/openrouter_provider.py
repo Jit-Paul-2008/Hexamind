@@ -16,11 +16,11 @@ class OpenRouterProvider:
     """OpenRouter chat-completions provider for tertiary fallback."""
 
     MODEL_RECOMMENDATIONS = {
-        "advocate": "google/gemini-2.0-flash-exp:free",
-        "skeptic": "meta-llama/llama-3.1-8b-instruct:free",
-        "synthesiser": "mistralai/mistral-7b-instruct:free",
-        "oracle": "google/gemini-2.0-flash-exp:free",
-        "verifier": "meta-llama/llama-3.1-8b-instruct:free",
+        "advocate": "openai/gpt-oss-20b:free",
+        "skeptic": "openai/gpt-oss-20b:free",
+        "synthesiser": "openai/gpt-oss-20b:free",
+        "oracle": "openai/gpt-oss-20b:free",
+        "verifier": "openai/gpt-oss-20b:free",
     }
 
     def __init__(self, api_key: Optional[str] = None, timeout_seconds: float = 35.0) -> None:
@@ -39,7 +39,7 @@ class OpenRouterProvider:
         if not self.available:
             return None
 
-        model = self.MODEL_RECOMMENDATIONS.get(agent_id, "google/gemini-2.0-flash-exp:free")
+        model = self.MODEL_RECOMMENDATIONS.get(agent_id, "google/gemma-3-12b-it:free")
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",

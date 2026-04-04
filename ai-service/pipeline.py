@@ -38,7 +38,19 @@ class PipelineService:
         self._storage_path = storage_path or Path(__file__).resolve().with_name(
             ".data"
         ).joinpath("pipeline-sessions.json")
-        self._model_provider = model_provider or create_pipeline_model_provider()
+        # Ensure provider is never None - use deterministic fallback if creation fails
+        if model_provider:
+            self._model_provider = model_provider
+        else:
+            try:
+                self._model_provider = create_pipeline_model_provider()
+            except Exception as exc:
+                # If provider initialization fails (e.g., API errors), use deterministic fallback
+                self._model_provider = DeterministicPipelineModelProvider(
+                    configured_provider="failsafe",
+                    model_name="deterministic",
+                    reason=f"Provider init failed: {type(exc).__name__}: {str(exc)[:100]}",
+                )
         self._sessions: dict[str, PipelineSession] = self._load_sessions()
         self._quality_reports: dict[str, dict[str, object]] = {}
         self._final_reports: dict[str, str] = {}
@@ -86,9 +98,9 @@ class PipelineService:
         return True
 
     def health(self) -> dict[str, str | int | bool]:
-        diagnostics = self._model_provider.diagnostics()
+        diagnostics = self._model_provider.diagnostics() if self._model_provider else {}
         return {
-            "status": "ok",
+            "status": "ok" if self._model_provider else "degraded",
             "sessions": len(self._sessions),
             "tenants": len(self._tenant_memory),
             "webResearchEnabled": os.getenv("HEXAMIND_WEB_RESEARCH", "1").strip() not in {"0", "false", "no"},
@@ -243,6 +255,10 @@ class PipelineService:
         effective_query = self._build_contextual_query(session)
 
         try:
+            # Ensure provider is available before proceeding
+            if self._model_provider is None:
+                raise RuntimeError("Model provider is not available. Cannot execute pipeline.")
+            
             research_task = asyncio.create_task(self._model_provider.build_research_context(effective_query))
             retrieval_error = ""
             
@@ -501,7 +517,7 @@ class PipelineService:
                 research=research_context,
                 final_answer=final_answer,
                 assembled=assembled,
-                provider_state=self._model_provider.diagnostics(),
+                provider_state=self._model_provider.diagnostics() if self._model_provider else {},
                 started_at=started_at,
             )
             quality_report["regenerated"] = regenerated
@@ -542,7 +558,7 @@ class PipelineService:
                 research=research_context,
                 final_answer=failure_message,
                 assembled=assembled,
-                provider_state=self._model_provider.diagnostics(),
+                provider_state=self._model_provider.diagnostics() if self._model_provider else {},
                 started_at=started_at,
             )
             quality_report["regenerated"] = False
