@@ -155,7 +155,7 @@ class PipelineService:
         self,
         query: str,
         research_context: ResearchContext | None,
-        fallback_provider: DeterministicPipelineModelProvider,
+        fallback_provider: DeterministicPipelineModelProvider | None,
         agent_ids: list[str],
     ) -> dict[str, str]:
         """
@@ -181,6 +181,8 @@ class PipelineService:
                 pass
             
             # Fallback to deterministic provider
+            if fallback_provider is None:
+                return (agent_id, f"## Agent Error\nLive provider unavailable for `{agent_id}`. Please retry shortly.")
             try:
                 content = await asyncio.wait_for(
                     fallback_provider.build_agent_text(
@@ -214,7 +216,8 @@ class PipelineService:
         session = self._get_session(session_id, tenant_id)
         assembled: dict[str, str] = {}
         started_at = time.perf_counter()
-        fallback_provider = DeterministicPipelineModelProvider(
+        disable_failsafe = os.getenv("HEXAMIND_DISABLE_FAILSAFE_FALLBACK", "0").strip().lower() in {"1", "true", "yes", "on"}
+        fallback_provider = None if disable_failsafe else DeterministicPipelineModelProvider(
             configured_provider="failsafe",
             model_name="deterministic",
             reason="Auto-recovery fallback",
@@ -357,9 +360,9 @@ class PipelineService:
                         )
                         timings["agentSeconds"] += time.perf_counter() - agent_started
                     except Exception:
-                        content = ""
+                        content = f"## Agent Error\nLive provider unavailable for `{agent.id}`. Please retry shortly." if disable_failsafe else ""
 
-                    if not content.strip():
+                    if not content.strip() and fallback_provider is not None:
                         agent_started = time.perf_counter()
                         content = await asyncio.wait_for(
                             fallback_provider.build_agent_text(
@@ -411,9 +414,9 @@ class PipelineService:
                 )
                 timings["finalSeconds"] += time.perf_counter() - final_started
             except Exception:
-                final_answer = ""
+                final_answer = "## Final Report Error\nLive provider request failed. Please retry in a moment." if disable_failsafe else ""
 
-            if not final_answer.strip():
+            if not final_answer.strip() and fallback_provider is not None:
                 final_started = time.perf_counter()
                 final_answer = await asyncio.wait_for(
                     fallback_provider.compose_final_answer(

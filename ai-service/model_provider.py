@@ -202,6 +202,10 @@ def _local_strict_mode() -> bool:
     return os.getenv("HEXAMIND_LOCAL_STRICT", "0").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _strict_provider_mode() -> bool:
+    return os.getenv("HEXAMIND_STRICT_PROVIDER", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _get_agent_api_key(agent_id: str, default_provider: str, global_key: str) -> str:
     """Get API key for specific agent, with fallback to global key."""
     agent_key = os.getenv(f"HEXAMIND_AGENT_API_KEY_{agent_id.upper()}", "").strip()
@@ -1950,7 +1954,8 @@ class OpenRouterPipelineModelProvider:
             "Content-Type": "application/json",
         }
         self._researcher = _create_researcher()
-        self._fallback = DeterministicPipelineModelProvider(
+        self._strict_provider = _strict_provider_mode()
+        self._fallback = None if self._strict_provider else DeterministicPipelineModelProvider(
             configured_provider="openrouter",
             model_name=default_model,
             reason="OpenRouter runtime call failed",
@@ -1987,6 +1992,8 @@ class OpenRouterPipelineModelProvider:
         research: ResearchContext | None = None,
     ) -> str:
         if not self._health.can_attempt():
+            if self._strict_provider:
+                raise RuntimeError("OpenRouter circuit breaker is open")
             return await self._fallback.build_agent_text(agent_id, query, research)
 
         complexity_score = research.workflow_profile.complexity_score if research else _query_complexity_score(query)
@@ -2010,6 +2017,8 @@ class OpenRouterPipelineModelProvider:
 
         estimated_tokens = _estimate_tokens(system_prompt) + _estimate_tokens(user_prompt)
         if not self._token_budget.can_afford(estimated_tokens):
+            if self._strict_provider:
+                raise RuntimeError("OpenRouter token budget exhausted")
             return await self._fallback.build_agent_text(agent_id, query, research)
 
         try:
@@ -2029,6 +2038,8 @@ class OpenRouterPipelineModelProvider:
             return resolved
         except Exception as exc:
             self._register_fallback(exc)
+            if self._strict_provider:
+                raise
 
         return await self._fallback.build_agent_text(agent_id, query, research)
 
@@ -2040,6 +2051,8 @@ class OpenRouterPipelineModelProvider:
         refinement_note: str | None = None,
     ) -> str:
         if not self._health.can_attempt():
+            if self._strict_provider:
+                raise RuntimeError("OpenRouter circuit breaker is open")
             return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
 
         # Compress research context for final stage
@@ -2096,6 +2109,8 @@ class OpenRouterPipelineModelProvider:
             return resolved
         except Exception as exc:
             self._register_fallback(exc)
+            if self._strict_provider:
+                raise
 
         return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
 
@@ -2113,12 +2128,13 @@ class OpenRouterPipelineModelProvider:
         registry_version, registry_size = _prompt_registry_summary(registry)
         return {
             "configuredProvider": "openrouter",
-            "activeProvider": "deterministic-fallback" if self._health.is_open() else "openrouter",
+            "activeProvider": "openrouter",
             "modelName": self._default_model,
             "costMode": self._cost_mode,
-            "isFallback": self._fallback_count > 0,
+            "isFallback": (self._fallback_count > 0) and (not self._strict_provider),
             "fallbackCount": self._fallback_count,
             "lastError": self._last_error,
+            "strictProvider": self._strict_provider,
             "agentModelMap": json.dumps(self._model_by_role, sort_keys=True),
             "tokenBudgetLimit": self._token_budget.total_limit,
             "tokenBudgetUsed": self._token_budget.used,
@@ -3005,12 +3021,13 @@ def _create_researcher() -> ResearcherProtocol:
 
 def create_pipeline_model_provider() -> PipelineModelProvider:
     provider_name = os.getenv("HEXAMIND_MODEL_PROVIDER", "deterministic").strip().lower()
+    strict_provider = _strict_provider_mode()
     if provider_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
         model_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(provider_name))
         try:
             return LocalPipelineModelProvider(model_name)
         except Exception as exc:
-            if _local_strict_mode():
+            if _local_strict_mode() or strict_provider:
                 raise
             return DeterministicPipelineModelProvider(
                 configured_provider="local",
@@ -3022,6 +3039,8 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
         try:
             return GeminiPipelineModelProvider(model_name)
         except Exception as exc:
+            if strict_provider:
+                raise
             return DeterministicPipelineModelProvider(
                 configured_provider="gemini",
                 model_name=model_name,
@@ -3032,6 +3051,8 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
         try:
             return OpenRouterPipelineModelProvider(model_name)
         except Exception as exc:
+            if strict_provider:
+                raise
             return DeterministicPipelineModelProvider(
                 configured_provider="openrouter",
                 model_name=model_name,
@@ -3042,6 +3063,8 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
         try:
             return GroqPipelineModelProvider(model_name)
         except Exception as exc:
+            if strict_provider:
+                raise
             return DeterministicPipelineModelProvider(
                 configured_provider="groq",
                 model_name=model_name,
