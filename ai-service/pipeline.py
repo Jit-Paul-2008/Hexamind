@@ -38,19 +38,7 @@ class PipelineService:
         self._storage_path = storage_path or Path(__file__).resolve().with_name(
             ".data"
         ).joinpath("pipeline-sessions.json")
-        # Ensure provider is never None - use deterministic fallback if creation fails
-        if model_provider:
-            self._model_provider = model_provider
-        else:
-            try:
-                self._model_provider = create_pipeline_model_provider()
-            except Exception as exc:
-                # If provider initialization fails (e.g., API errors), use deterministic fallback
-                self._model_provider = DeterministicPipelineModelProvider(
-                    configured_provider="failsafe",
-                    model_name="deterministic",
-                    reason=f"Provider init failed: {type(exc).__name__}: {str(exc)[:100]}",
-                )
+        self._model_provider = model_provider or create_pipeline_model_provider()
         self._sessions: dict[str, PipelineSession] = self._load_sessions()
         self._quality_reports: dict[str, dict[str, object]] = {}
         self._final_reports: dict[str, str] = {}
@@ -98,9 +86,9 @@ class PipelineService:
         return True
 
     def health(self) -> dict[str, str | int | bool]:
-        diagnostics = self._model_provider.diagnostics() if self._model_provider else {}
+        diagnostics = self._model_provider.diagnostics()
         return {
-            "status": "ok" if self._model_provider else "degraded",
+            "status": "ok",
             "sessions": len(self._sessions),
             "tenants": len(self._tenant_memory),
             "webResearchEnabled": os.getenv("HEXAMIND_WEB_RESEARCH", "1").strip() not in {"0", "false", "no"},
@@ -255,10 +243,6 @@ class PipelineService:
         effective_query = self._build_contextual_query(session)
 
         try:
-            # Ensure provider is available before proceeding
-            if self._model_provider is None:
-                raise RuntimeError("Model provider is not available. Cannot execute pipeline.")
-            
             research_task = asyncio.create_task(self._model_provider.build_research_context(effective_query))
             retrieval_error = ""
             
@@ -490,26 +474,27 @@ class PipelineService:
                     regenerated = False
 
             if _env_bool("HEXAMIND_NEVER_FAIL_REPORT", True) and not bool(quality_report.get("passing", False)):
-                final_answer = await asyncio.wait_for(
-                    fallback_provider.compose_final_answer(
-                        effective_query,
-                        assembled,
-                        research_context,
-                    ),
-                    timeout=self._final_timeout_seconds,
-                )
-                quality_report = analyze_pipeline_quality(
-                    query=session.query,
-                    assembled=assembled,
-                    final_answer=final_answer,
-                    research=research_context,
-                    workflow_profile=research_context.workflow_profile if research_context else None,
-                )
-                quality_report["recoveredFromFailure"] = True
-                quality_report["overallScore"] = max(float(quality_report.get("overallScore", 0.0)), 70.0)
-                notes = list(quality_report.get("notes", []))
-                notes.append("Auto-recovery mode delivered a report even though quality gates initially failed.")
-                quality_report["notes"] = notes
+                if fallback_provider is not None:
+                    final_answer = await asyncio.wait_for(
+                        fallback_provider.compose_final_answer(
+                            effective_query,
+                            assembled,
+                            research_context,
+                        ),
+                        timeout=self._final_timeout_seconds,
+                    )
+                    quality_report = analyze_pipeline_quality(
+                        query=session.query,
+                        assembled=assembled,
+                        final_answer=final_answer,
+                        research=research_context,
+                        workflow_profile=research_context.workflow_profile if research_context else None,
+                    )
+                    quality_report["recoveredFromFailure"] = True
+                    quality_report["overallScore"] = max(float(quality_report.get("overallScore", 0.0)), 70.0)
+                    notes = list(quality_report.get("notes", []))
+                    notes.append("Auto-recovery mode delivered a report even though quality gates initially failed.")
+                    quality_report["notes"] = notes
 
             quality_report["runMetadata"] = self._build_run_metadata(
                 session=session,
