@@ -1,15 +1,44 @@
 "use client";
 
-import { useState, useCallback, type FormEvent, type KeyboardEvent } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { motion } from "framer-motion";
 import { useProcessPipeline } from "@/hooks/useProcessPipeline";
 import { usePipelineStore } from "@/lib/store";
+
+const QUICK_PROMPTS = [
+  "Summarize key healthcare AI safety risks for the next 12 months",
+  "Compare local model architectures for reliability and cost",
+  "Generate an executive brief with citations and actionable recommendations",
+];
+
+const MAX_CHARS = 1800;
 
 export default function InputBar() {
   const [query, setQuery] = useState("");
   const { runPipeline } = useProcessPipeline();
   const pipelineStatus = usePipelineStore((s) => s.session?.status);
   const isRunning = pipelineStatus === "running";
+
+  const setPrompt = useCallback(
+    (prompt: string) => {
+      if (isRunning) {
+        return;
+      }
+      setQuery(prompt.slice(0, MAX_CHARS));
+      requestAnimationFrame(() => {
+        const input = document.getElementById("query-input") as HTMLTextAreaElement | null;
+        input?.focus();
+        input?.setSelectionRange(input.value.length, input.value.length);
+      });
+    },
+    [isRunning]
+  );
 
   const handleSubmit = useCallback(
     (e?: FormEvent) => {
@@ -32,6 +61,24 @@ export default function InputBar() {
     [handleSubmit]
   );
 
+  const handleGlobalShortcut = useCallback((e: globalThis.KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      const input = document.getElementById("query-input") as HTMLTextAreaElement | null;
+      input?.focus();
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleGlobalShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalShortcut);
+    };
+  }, [handleGlobalShortcut]);
+
+  const remainingChars = MAX_CHARS - query.length;
+  const isNearLimit = remainingChars <= 160;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -43,6 +90,19 @@ export default function InputBar() {
       <div className="h-12 bg-gradient-to-t from-[#0a0b0f] to-transparent" />
 
       <div className="bg-[#0a0b0f]/90 backdrop-blur-2xl border-t border-white/5 px-4 pb-4 pt-3 pointer-events-auto">
+        <div className="max-w-2xl mx-auto mb-3 flex flex-wrap items-center gap-2">
+          {QUICK_PROMPTS.map((prompt) => (
+            <button
+              key={prompt}
+              type="button"
+              disabled={isRunning}
+              onClick={() => setPrompt(prompt)}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] tracking-[0.12em] uppercase text-white/45 hover:text-white/80 hover:bg-white/[0.09] hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition"
+            >
+              {prompt.split(" ").slice(0, 4).join(" ")}
+            </button>
+          ))}
+        </div>
         <form
           onSubmit={handleSubmit}
           className="max-w-2xl mx-auto flex items-end gap-3"
@@ -57,6 +117,8 @@ export default function InputBar() {
               placeholder="Ask ARIA anything..."
               disabled={isRunning}
               rows={1}
+              maxLength={MAX_CHARS}
+              aria-label="Pipeline prompt input"
               className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 
                          font-sans text-sm text-white/90 placeholder:text-white/20
                          focus:outline-none focus:border-white/25 focus:bg-white/[0.07]
@@ -71,6 +133,7 @@ export default function InputBar() {
             type="submit"
             disabled={!query.trim() || isRunning}
             id="send-query-btn"
+            aria-label="Run pipeline"
             className="flex-shrink-0 rounded-xl border border-white/10 bg-white/5 px-4 py-3
                        text-white/50 hover:text-white hover:bg-white/10 hover:border-white/20
                        disabled:opacity-25 disabled:cursor-not-allowed
@@ -102,6 +165,16 @@ export default function InputBar() {
               </div>
             )}
           </button>
+
+          <button
+            type="button"
+            disabled={!query || isRunning}
+            onClick={() => setQuery("")}
+            aria-label="Clear query"
+            className="flex-shrink-0 rounded-xl border border-white/10 bg-transparent px-3 py-3 text-[10px] uppercase tracking-[0.2em] text-white/40 hover:text-white/75 hover:border-white/20 disabled:opacity-25 disabled:cursor-not-allowed transition"
+          >
+            Clear
+          </button>
         </form>
 
         {/* System info */}
@@ -109,9 +182,14 @@ export default function InputBar() {
           <p className="text-[9px] font-sans tracking-[0.3em] uppercase text-white/15">
             Hexamind · ARIA Pipeline v1.0
           </p>
-          <p className="text-[9px] font-sans text-white/15">
-            Enter to send · Shift+Enter for new line
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-[9px] font-sans text-white/15">
+              Enter to send · Shift+Enter for new line · Ctrl/Cmd+K focus
+            </p>
+            <p className={`text-[9px] font-sans ${isNearLimit ? "text-amber-200/60" : "text-white/15"}`}>
+              {remainingChars} chars
+            </p>
+          </div>
         </div>
       </div>
     </motion.div>

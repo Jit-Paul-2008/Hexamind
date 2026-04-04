@@ -1,13 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ReactFlow,
   Background,
   BackgroundVariant,
   Controls,
+  MiniMap,
+  Panel,
   useNodesState,
   useEdgesState,
+  type ReactFlowInstance,
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -23,6 +26,8 @@ import { INITIAL_EDGES } from "@/lib/edges";
 export default function HexamindCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, , onEdgesChange] = useEdgesState(INITIAL_EDGES);
+  const [flow, setFlow] = useState<ReactFlowInstance<Node> | null>(null);
+  const [showMiniMap, setShowMiniMap] = useState(false);
 
   const nodeTypes = useMemo(
     () => ({
@@ -46,6 +51,7 @@ export default function HexamindCanvas() {
       <ReactFlow
         nodes={nodes}
         edges={edges}
+        onInit={setFlow}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
@@ -74,10 +80,47 @@ export default function HexamindCanvas() {
           size={1}
           color="rgba(182,186,197,0.06)"
         />
+        {showMiniMap ? (
+          <MiniMap
+            nodeColor="#475569"
+            maskColor="rgba(10, 11, 15, 0.74)"
+            className="!rounded-xl !border !border-white/10 !bg-black/30 !backdrop-blur-xl"
+          />
+        ) : null}
         <Controls
           showInteractive={false}
           className="!bg-white/5 !border-white/10 !rounded-xl !backdrop-blur-xl [&>button]:!bg-transparent [&>button]:!border-white/10 [&>button]:!text-white/40 [&>button:hover]:!bg-white/10 [&>button:hover]:!text-white/70"
         />
+
+        <Panel position="top-center" className="pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/10 bg-black/35 px-3 py-2 backdrop-blur-xl">
+            <button
+              type="button"
+              onClick={() => flow?.fitView({ padding: 0.3, duration: 500 })}
+              className="rounded-full border border-white/10 px-2.5 py-1 text-[9px] uppercase tracking-[0.2em] text-white/55 hover:text-white/85 hover:border-white/20 transition"
+            >
+              Fit
+            </button>
+            <button
+              type="button"
+              onClick={() => flow?.setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 450 })}
+              className="rounded-full border border-white/10 px-2.5 py-1 text-[9px] uppercase tracking-[0.2em] text-white/55 hover:text-white/85 hover:border-white/20 transition"
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowMiniMap((value) => !value)}
+              className="rounded-full border border-white/10 px-2.5 py-1 text-[9px] uppercase tracking-[0.2em] text-white/55 hover:text-white/85 hover:border-white/20 transition"
+            >
+              {showMiniMap ? "Hide map" : "Show map"}
+            </button>
+            <div className="h-4 w-px bg-white/10" />
+            <span className="text-[9px] uppercase tracking-[0.2em] text-white/35">
+              Drag nodes to customize pipeline topology
+            </span>
+          </div>
+        </Panel>
       </ReactFlow>
     </div>
   );

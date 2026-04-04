@@ -9,9 +9,14 @@ const API_BASE_URL =
 
 export default function StatusIndicator() {
   const pipelineStatus = usePipelineStore((s) => s.session?.status);
+  const sessionCreatedAt = usePipelineStore((s) => s.session?.createdAt || 0);
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [modelLabel, setModelLabel] = useState("Model ...");
   const [circuitLabel, setCircuitLabel] = useState("Circuit unknown");
+  const [clockLabel, setClockLabel] = useState(() =>
+    new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  );
+  const [elapsedLabel, setElapsedLabel] = useState("0m 00s");
 
   useEffect(() => {
     let active = true;
@@ -60,6 +65,22 @@ export default function StatusIndicator() {
     };
   }, []);
 
+  useEffect(() => {
+    const id = setInterval(() => {
+      setClockLabel(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      if (!sessionCreatedAt) {
+        setElapsedLabel("0m 00s");
+        return;
+      }
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - sessionCreatedAt) / 1000));
+      const minutes = Math.floor(elapsedSeconds / 60);
+      const seconds = elapsedSeconds % 60;
+      setElapsedLabel(`${minutes}m ${String(seconds).padStart(2, "0")}s`);
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, [sessionCreatedAt]);
+
   const statusText = (() => {
     switch (pipelineStatus) {
       case "running":
@@ -94,7 +115,7 @@ export default function StatusIndicator() {
       initial={{ opacity: 0, x: 10 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6, delay: 0.2 }}
-      className="fixed top-5 right-6 z-50 flex items-center gap-2.5"
+      className="fixed top-5 right-6 z-50 flex max-w-[calc(100vw-2rem)] flex-wrap justify-end items-center gap-2"
     >
       <div className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/8 backdrop-blur-xl flex items-center gap-2">
         <div
@@ -126,6 +147,18 @@ export default function StatusIndicator() {
         <div className="w-1.5 h-1.5 rounded-full bg-amber-300/80 shadow-[0_0_6px_rgba(252,211,77,0.8)]" />
         <span className="font-sans text-[10px] tracking-[0.12em] uppercase text-white/45">
           {circuitLabel}
+        </span>
+      </div>
+      <div className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/8 backdrop-blur-xl flex items-center gap-2">
+        <div className="w-1.5 h-1.5 rounded-full bg-violet-300/80 shadow-[0_0_6px_rgba(196,181,253,0.8)]" />
+        <span className="font-sans text-[10px] tracking-[0.12em] uppercase text-white/45">
+          Uptime {elapsedLabel}
+        </span>
+      </div>
+      <div className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/8 backdrop-blur-xl flex items-center gap-2">
+        <div className="w-1.5 h-1.5 rounded-full bg-sky-300/80 shadow-[0_0_6px_rgba(125,211,252,0.8)]" />
+        <span className="font-sans text-[10px] tracking-[0.12em] uppercase text-white/45">
+          {clockLabel}
         </span>
       </div>
     </motion.div>
