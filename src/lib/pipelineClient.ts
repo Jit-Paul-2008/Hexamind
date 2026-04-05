@@ -3,7 +3,7 @@ import type {
   PipelineEvent,
   PipelineQualityReport,
 } from "../types/pipeline";
-import { publicApiBaseUrl } from "@/lib/publicApiBaseUrl";
+import { publicApiBaseUrl } from "./publicApiBaseUrl";
 
 export interface PipelineRunHandlers {
   startPipeline: (query: string) => void;
