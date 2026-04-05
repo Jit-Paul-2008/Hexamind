@@ -41,6 +41,7 @@ describe("startPipelineRun", () => {
     const startPipeline = vi.fn();
     const setBackendSessionId = vi.fn();
     const setNodeStatus = vi.fn();
+    const setPipelineError = vi.fn();
     const appendChunk = vi.fn();
     const setFinalAnswer = vi.fn();
     const setQualityLoading = vi.fn();
@@ -83,6 +84,7 @@ describe("startPipelineRun", () => {
         startPipeline,
         setBackendSessionId,
         setNodeStatus,
+        setPipelineError,
         appendChunk,
         setFinalAnswer,
         setQualityLoading,
@@ -145,6 +147,7 @@ describe("startPipelineRun", () => {
     const startPipeline = vi.fn();
     const setBackendSessionId = vi.fn();
     const setNodeStatus = vi.fn();
+    const setPipelineError = vi.fn();
 
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: false,
@@ -158,6 +161,7 @@ describe("startPipelineRun", () => {
         startPipeline,
         setBackendSessionId,
         setNodeStatus,
+        setPipelineError,
         appendChunk: vi.fn(),
         setFinalAnswer: vi.fn(),
         setQualityLoading: vi.fn(),
