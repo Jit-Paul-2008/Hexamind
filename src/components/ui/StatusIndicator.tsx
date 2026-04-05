@@ -112,49 +112,44 @@ export default function StatusIndicator() {
       initial={{ opacity: 0, x: 10 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6, delay: 0.2 }}
-      className="fixed top-5 right-6 z-50 flex max-w-[calc(100vw-2rem)] flex-wrap justify-end items-center gap-2"
+      className="fixed top-6 right-8 z-50 flex max-w-[calc(100vw-4rem)] flex-wrap justify-end items-center gap-3"
     >
-      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
+      <div className="px-4 py-2 rounded-full border-4 border-border-dark bg-white shadow-[4px_4px_0px_0px_var(--border-color)] flex items-center gap-3">
         <div
-          className={`w-2 h-2 rounded-full border border-border-dark transition-colors duration-500 ${
+          className={`w-3 h-3 rounded-full border-2 border-border-dark transition-colors duration-500 ${
             pipelineStatus === "running" ? "animate-pulse" : ""
           }`}
           style={{ backgroundColor: dotColor }}
         />
-        <span className="font-sans text-[10px] tracking-[0.1em] font-extrabold uppercase text-foreground">
+        <span className="font-sans text-[11px] tracking-[0.1em] font-black uppercase text-foreground">
           {statusText}
         </span>
       </div>
-      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
+      <div className="px-4 py-2 rounded-full border-4 border-border-dark bg-white shadow-[4px_4px_0px_0px_var(--border-color)] flex items-center gap-3">
         <div
-          className="w-2 h-2 rounded-full border border-border-dark transition-colors duration-500"
+          className="w-3 h-3 rounded-full border-2 border-border-dark transition-colors duration-500"
           style={{ backgroundColor: backendColor }}
         />
-        <span className="font-sans text-[10px] tracking-[0.1em] font-extrabold uppercase text-foreground">
+        <span className="font-sans text-[11px] tracking-[0.1em] font-black uppercase text-foreground">
           API {backendText}
         </span>
       </div>
-      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full border border-border-dark bg-[#93c5fd]" />
-        <span className="font-sans text-[10px] tracking-[0.05em] font-extrabold uppercase text-foreground/80">
+      <div className="px-4 py-2 rounded-full border-4 border-border-dark bg-white shadow-[4px_4px_0px_0px_var(--border-color)] flex items-center gap-3">
+        <div className="w-3 h-3 rounded-full border-2 border-border-dark bg-[#93c5fd]" />
+        <span className="font-sans text-[11px] tracking-[0.1em] font-black uppercase text-foreground/70">
           {modelLabel}
         </span>
       </div>
-      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full border border-border-dark bg-[#fcd34d]" />
-        <span className="font-sans text-[10px] tracking-[0.05em] font-extrabold uppercase text-foreground/80">
-          {circuitLabel}
+      <div className="px-4 py-1.5 rounded-full border-4 border-border-dark bg-white shadow-[4px_4px_0px_0px_var(--border-color)] flex items-center gap-2">
+        <span className="font-sans text-[11px] font-black uppercase text-foreground/50 italic mr-1">
+          Uptime
+        </span>
+        <span className="font-sans text-[11px] font-black uppercase text-foreground">
+          {elapsedLabel}
         </span>
       </div>
-      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full border border-border-dark bg-[#c4b5fd]" />
-        <span className="font-sans text-[10px] tracking-[0.05em] font-extrabold uppercase text-foreground/80">
-          Uptime {elapsedLabel}
-        </span>
-      </div>
-      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
-        <div className="w-2 h-2 rounded-full border border-border-dark bg-[#7dd3fc]" />
-        <span className="font-sans text-[10px] tracking-[0.05em] font-extrabold uppercase text-foreground/80">
+      <div className="px-5 py-2 rounded-full border-4 border-border-dark bg-pastel-yellow shadow-[4px_4px_0px_0px_var(--border-color)] flex items-center">
+        <span className="font-sans text-[12px] font-black uppercase text-foreground">
           {clockLabel}
         </span>
       </div>

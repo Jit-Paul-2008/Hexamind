@@ -87,9 +87,9 @@ export default function InputBar() {
       transition={{ duration: 0.8, delay: 0.3 }}
       className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none"
     >
-      <div className="bg-background px-4 pb-4 pt-3 pointer-events-auto border-t-4 border-border-dark">
+      <div className="bg-background px-4 pb-6 pt-4 pointer-events-auto border-t-8 border-border-dark">
         {pipelineStatus === "error" && pipelineError ? (
-          <div className="max-w-2xl mx-auto mb-3 retro-input bg-[#ffb3b3] px-3 py-2 text-[11px] text-foreground font-bold">
+          <div className="max-w-2xl mx-auto mb-4 retro-input bg-[#ffb3b3] p-4 text-xs text-foreground font-black uppercase tracking-wider">
             Pipeline error: {pipelineError}
           </div>
         ) : null}
@@ -101,7 +101,7 @@ export default function InputBar() {
               type="button"
               disabled={isRunning}
               onClick={() => setPrompt(prompt)}
-              className="retro-button px-3 py-1 text-[10px] tracking-[0.1em] uppercase font-bold bg-pastel-yellow hover:bg-pastel-peach transition disabled:opacity-40"
+              className="retro-button px-4 py-2 text-[11px] font-black bg-pastel-yellow hover:bg-pastel-peach transition disabled:opacity-50"
             >
               {prompt.split(" ").slice(0, 4).join(" ")}
             </button>
@@ -123,9 +123,9 @@ export default function InputBar() {
               rows={1}
               maxLength={MAX_CHARS}
               aria-label="Pipeline prompt input"
-              className="w-full resize-none retro-input px-4 py-3 font-sans text-sm text-foreground placeholder:text-foreground/40 font-medium
-                         focus:outline-none transition-all duration-200"
-              style={{ minHeight: 48, maxHeight: 120 }}
+              className="w-full resize-none retro-input px-5 py-4 font-sans text-sm text-foreground placeholder:text-foreground/30 font-bold
+                         focus:outline-none transition-all duration-200 shadow-[4px_4px_0px_0px_var(--border-color)]"
+              style={{ minHeight: 56, maxHeight: 120 }}
             />
           </div>
 
@@ -135,12 +135,12 @@ export default function InputBar() {
             disabled={!query.trim() || isRunning}
             id="send-query-btn"
             aria-label="Run pipeline"
-            className="flex-shrink-0 retro-button px-4 py-3 bg-pastel-yellow hover:bg-pastel-peach text-foreground transition-all duration-200 group"
+            className="flex-shrink-0 retro-button px-6 py-4 bg-[#7dd3fc] hover:bg-[#38bdf8] text-foreground transition-all duration-200 group h-[56px]"
           >
             {isRunning ? (
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 border-2 border-border-dark border-t-foreground/40 rounded-full animate-spin" />
-                <span className="text-xs font-sans font-bold uppercase tracking-wide">Processing</span>
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 border-4 border-border-dark border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm font-sans font-black uppercase tracking-widest">Wait</span>
               </div>
             ) : (
               <div className="flex items-center gap-2">
@@ -169,22 +169,22 @@ export default function InputBar() {
             disabled={!query || isRunning}
             onClick={() => setQuery("")}
             aria-label="Clear query"
-            className="flex-shrink-0 retro-button bg-white px-3 py-3 text-[10px] uppercase font-bold tracking-[0.1em] text-foreground hover:bg-pastel-yellow transition"
+            className="flex-shrink-0 retro-button bg-white px-5 py-4 text-[11px] font-black h-[56px] hover:bg-[#ffb3b3] transition"
           >
             Clear
           </button>
         </form>
 
         {/* System info */}
-        <div className="max-w-2xl mx-auto mt-3 flex items-center justify-between">
-          <p className="text-[10px] font-sans font-bold tracking-[0.1em] uppercase text-foreground/50">
-            Hexamind · ARIA Pipeline v1.0
+        <div className="max-w-2xl mx-auto mt-4 flex items-center justify-between">
+          <p className="text-[11px] font-sans font-black tracking-[0.2em] uppercase text-foreground/40">
+            Hexamind · ARIA 1.0
           </p>
-          <div className="flex items-center gap-3">
-            <p className="text-[10px] font-sans font-bold text-foreground/50">
-              Enter to send · Shift+Enter for new line · Ctrl/Cmd+K focus
+          <div className="flex items-center gap-4">
+            <p className="text-[11px] font-sans font-black text-foreground/40 border-r-4 border-border-dark/10 pr-4">
+              Enter to send · Shift+Enter new line
             </p>
-            <p className={`text-[10px] font-sans font-bold ${isNearLimit ? "text-[#ffb3b3]" : "text-foreground/50"}`}>
+            <p className={`text-[11px] font-sans font-black ${isNearLimit ? "text-rose-600" : "text-foreground/40"}`}>
               {remainingChars} chars
             </p>
           </div>

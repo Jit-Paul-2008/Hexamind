@@ -256,9 +256,14 @@ class InternetResearcher:
             candidates.extend(fallback_candidates)
         
         # Phase 2.5: FREE API Integration (DuckDuckGo + Wikipedia as primary sources)
-        # These are always included for maximum research diversity at zero cost
+        # These are always included for maximum research diversity at zero cost.
+        free_source_timeout = max(5.0, _env_float("HEXAMIND_FREE_SOURCE_TIMEOUT_SECONDS", 12.0))
         try:
-            ddg_sources = await search_duckduckgo(sanitized_query, max_results=3, timeout_seconds=5.0)
+            ddg_sources = await search_duckduckgo(
+                sanitized_query,
+                max_results=5,
+                timeout_seconds=free_source_timeout,
+            )
             for source in ddg_sources:
                 # Convert ResearchSource to candidate tuple (score, source)
                 candidates.append((0.7, source))
@@ -266,7 +271,11 @@ class InternetResearcher:
             pass  # Silent fallback if DuckDuckGo unavailable
         
         try:
-            wiki_sources = await search_wikipedia(sanitized_query, max_results=2, timeout_seconds=5.0)
+            wiki_sources = await search_wikipedia(
+                sanitized_query,
+                max_results=3,
+                timeout_seconds=free_source_timeout,
+            )
             for source in wiki_sources:
                 # Wikipedia has higher credibility, higher score
                 candidates.append((0.8, source))

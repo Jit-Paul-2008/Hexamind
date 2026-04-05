@@ -7,6 +7,40 @@
 
 ---
 
+## Cloud-First Fast Refinement (Current Priority)
+
+v1 is considered demo-ready only when it runs stably on cloud providers. We keep local tuning for speed, but every refinement step must preserve API compatibility for free-tier deployment.
+
+### Fast Loop (Cloud)
+
+1. Start v1 in cloud-demo profile:
+  - `scripts/start_v1_cloud_demo.sh`
+2. Run one refinement query at a time:
+  - `scripts/run_v1_refine_once.sh "<query>"`
+3. Capture metrics from quality output:
+  - overall score
+  - trust score
+  - citation count
+  - source count
+4. Update the run ledger after every run before starting the next run.
+
+### Local to API Parity Rules
+
+- Keep `HEXAMIND_FRAMEWORK_VERSION=v1` in both local and cloud.
+- Keep hard gates identical (`HEXAMIND_FINAL_MIN_LENGTH`, `HEXAMIND_FINAL_MIN_CITATIONS`, `HEXAMIND_FINAL_AUTO_RETRY`).
+- Keep single-agent execution deterministic (`HEXAMIND_PARALLEL_AGENTS=false`) during refinement.
+- Keep report length target unchanged (1,200-2,000 chars) so local improvements transfer to free-tier API runs.
+- Use non-strict provider mode in cloud (`HEXAMIND_STRICT_PROVIDER=false`) so free-tier quota exhaustion can fail over gracefully.
+
+### Free-Tier Readiness Exit Criteria
+
+- 3 consecutive cloud runs produce complete reports.
+- Each run has non-zero sources and meets citation gate.
+- No recovery-mode output in those 3 runs.
+- Median run latency remains acceptable for demo pacing.
+
+---
+
 ## Demo Budget
 
 ### Hard Budget Limits
@@ -46,9 +80,13 @@ This is the budget we must not cross during the demo prep phase:
 | 2 | South Korea population decline | local v1, true-local (70b), extended timeouts | 178 | 0 | 0/9 | Failed | Service Busy persisted |
 | 3 | South Korea population decline | local v1, true-local (70b), fail-safe enabled | 8,464 | 0 | 9/9 | Complete | Stable generation achieved; citations still zero because web research is off |
 | 4 | South Korea population decline | local v1, true-local (70b), web research on | Recovery mode output | 1 | Partial | Degraded | Retrieval timed out; provider fell back to deterministic recovery |
+| 5 | South Korea population decline | cloud v1, gemini primary, chain failover | Recovery mode output | 1 | Partial | Degraded | Gemini free-tier keys were rate-limited; chain dropped to deterministic fallback |
+| 6 | South Korea population decline | cloud v1, groq primary, chain failover | Recovery mode output | 1 | Partial | Degraded | Cloud request used local model alias from env layering; provider call failed and recovered |
+| 7 | South Korea population decline | cloud v1, groq primary, cloud model map fixed | 13.0 quality score output | 0 | Partial | Degraded | Groq final stage returned invalid result; fallback best-effort report generated |
+| 8 | South Korea population decline | cloud v1, groq tuned final model + longer timeouts | 28.0 quality score output | 7 | Partial | Degraded | Citation formatting improved, but live source retrieval still returned zero sources |
 
-**Budget consumed:** 4 / 30 runs  
-**Budget remaining:** 26 / 30 runs
+**Budget consumed:** 8 / 30 runs  
+**Budget remaining:** 22 / 30 runs
 
 ---
 
