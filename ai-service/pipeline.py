@@ -21,6 +21,12 @@ from model_provider import (
     create_pipeline_model_provider,
 )
 
+# Import new features
+from cost_aware_routing import route_query, estimate_query_cost
+from confidence_scoring import score_research_confidence
+from research_memory import store_session, query_research_memory, get_research_graph
+from collaboration import create_collaboration_session, create_context_handoff
+
 
 _PUBLIC_OVERLOAD_MESSAGE = (
     "## Service Busy\n"

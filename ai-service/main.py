@@ -28,6 +28,7 @@ from governance import resolve_tenant_resolution
 from pipeline import pipeline_service
 from sarvam_service import SarvamService, docx_supported
 from competitive_research import load_latest_competitive_batch_report
+from advanced_features import router as advanced_router
 from schemas import (
     Agent,
     SarvamTransformRequest,
@@ -85,6 +86,7 @@ app.include_router(projects_router)
 app.include_router(cases_router)
 app.include_router(runs_router)
 app.include_router(auth_router)
+app.include_router(advanced_router)
 
 
 @app.middleware("http")

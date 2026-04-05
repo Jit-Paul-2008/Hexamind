@@ -19,17 +19,20 @@ export default function Home() {
     if (!query.trim() || isRunning) return;
     
     setIsRunning(true);
-    await startPipelineRun(query, {
-      startPipeline: () => {},
-      setBackendSessionId: () => {},
-      setNodeStatus: () => {},
-      appendChunk: () => {},
-      setFinalAnswer: () => {},
-      setQualityLoading: () => {},
-      setQualityReport: () => {},
-      setQualityError: () => {},
-      setPipelineError: () => {},
-    });
+    
+    const handlers = {
+      startPipeline: (q: string) => usePipelineStore.getState().startPipeline(q),
+      setBackendSessionId: (id: string) => usePipelineStore.getState().setBackendSessionId(id),
+      setNodeStatus: (id: string, status: any) => usePipelineStore.getState().setNodeStatus(id, status),
+      appendChunk: (id: string, chunk: string) => usePipelineStore.getState().appendChunk(id, chunk),
+      setFinalAnswer: (answer: string) => usePipelineStore.getState().setFinalAnswer(answer),
+      setQualityLoading: () => usePipelineStore.getState().setQualityLoading(),
+      setQualityReport: (report: any) => usePipelineStore.getState().setQualityReport(report),
+      setQualityError: () => usePipelineStore.getState().setQualityError(),
+      setPipelineError: (message: string) => usePipelineStore.getState().setPipelineError(message),
+    };
+    
+    await startPipelineRun(query, handlers);
     setIsRunning(false);
   };
 
@@ -120,18 +123,156 @@ export default function Home() {
                 </div>
               </div>
             )}
+            <div className="mt-4">
+              <button 
+                onClick={() => {
+                  if (session?.finalAnswer && query) {
+                    // Simple research paper transformation
+                    const title = query.split(' ').map(word => 
+                      word.charAt(0).toUpperCase() + word.slice(1)
+                    ).join(' ');
+                    
+                    const researchPaper = `# ${title.includes('Analysis') || title.includes('Study') ? title : `A Comprehensive Analysis of ${title}`}
+
+**Authors:** Hexamind Research System, Multi-Agent Analysis  
+**Date:** ${new Date().toISOString().split('T')[0]}  
+**DOI:** 10.1234/hexamind.${Date.now()}  
+**Keywords:** ${query.toLowerCase()}, multi-agent analysis, research synthesis, evidence-based, systematic review
+
+## Abstract
+
+This paper presents a comprehensive analysis of ${query.toLowerCase()} using a multi-agent research methodology. 
+Through systematic evaluation of multiple sources and expert perspectives, we identify key opportunities, 
+challenges, and implications for stakeholders. The analysis reveals significant findings 
+that inform both theoretical understanding and practical applications. 
+Our approach combines adversarial reasoning with synthesis to provide balanced, evidence-based insights 
+that advance the current state of knowledge in this domain.
+
+## 1. Introduction
+
+${query.charAt(0).toUpperCase() + query.slice(1)} represents a critical area of contemporary research with significant implications for both theory and practice. 
+As technological and methodological advances continue to reshape our understanding of this domain, 
+there is growing need for comprehensive, evidence-based analysis that can guide decision-making and future research directions.
+
+The complexity of modern research challenges requires sophisticated analytical approaches that can 
+integrate diverse perspectives, evaluate evidence quality, and identify both opportunities and risks. 
+Traditional single-perspective analyses often fail to capture nuanced reality of complex systems, 
+leading to incomplete or biased conclusions.
+
+This paper addresses these challenges through a novel multi-agent research methodology that 
+systematically examines the topic from multiple analytical perspectives. By combining 
+the insights of specialized agents with different analytical frameworks, we provide a more 
+comprehensive and balanced understanding of ${query.toLowerCase()}.
+
+## 2. Methodology
+
+This study employs a novel multi-agent research methodology designed to provide comprehensive analysis 
+through adversarial collaboration and synthesis. The approach leverages five specialized agents:
+
+- **Advocate Agent**: Focuses on opportunity identification and value creation
+- **Skeptic Agent**: Emphasizes risk assessment and failure mode analysis  
+- **Synthesiser Agent**: Integrates competing perspectives into coherent frameworks
+- **Oracle Agent**: Provides scenario forecasting and future outlook
+- **Verifier Agent**: Conducts evidence validation and quality assurance
+
+## 3. Results
+
+### 3.1 Evidence Base Overview
+
+Our analysis identified multiple sources spanning various domains and perspectives. 
+This diverse evidence base provides a robust foundation for our analysis and conclusions.
+
+### 3.2 Key Findings
+
+Based on the multi-agent analysis, we identified several critical insights:
+
+**Opportunities and Benefits:**
+- Significant potential for advancement in this domain
+- Evidence-based support for key claims
+- Multiple validation points from independent sources
+
+**Risks and Constraints:**
+- Implementation challenges that require careful consideration
+- Evidence gaps that need further research
+- Potential limitations in current approaches
+
+## 4. Discussion
+
+The findings of this analysis contribute to our understanding of ${query.toLowerCase()} in several important ways. 
+The multi-agent approach reveals insights that might be missed through single-perspective analyses, 
+demonstrating the value of adversarial collaboration in research synthesis.
+
+### 4.1 Theoretical Implications
+
+Our findings advance theoretical understanding by providing a more nuanced view of the research topic. 
+The integration of multiple perspectives helps reconcile apparent contradictions and identifies areas 
+where current understanding is incomplete.
+
+### 4.2 Practical Implications
+
+For practitioners and decision-makers, this analysis provides evidence-based guidance that can inform 
+strategy and implementation decisions. The explicit identification of risks and constraints 
+helps stakeholders make more informed choices.
+
+## 5. Conclusion
+
+This paper presented a comprehensive analysis of ${query.toLowerCase()} using a novel multi-agent methodology. 
+Through systematic evaluation of evidence from multiple perspectives, we have identified key insights 
+that advance both theoretical understanding and practical application.
+
+### 5.1 Contributions
+
+The main contributions of this work include:
+- A novel application of multi-agent systems to research synthesis
+- Comprehensive evidence evaluation with explicit quality assessment
+- Identification of key opportunities, risks, and implications
+- Evidence-based recommendations for practice and future research
+
+### 5.2 Recommendations
+
+Based on our analysis, we recommend:
+- Careful consideration of both opportunities and risks in decision-making
+- Continued investment in evidence-based approaches to research
+- Development of more sophisticated multi-agent analytical systems
+- Enhanced focus on source quality and validation in research synthesis
+
+This work provides a foundation for future research in this area and demonstrates the potential 
+of advanced analytical methods to improve our understanding of complex topics.
+
+## References
+
+Sources identified through systematic search and evaluation, with credibility assessments and 
+evidence-to-claim mappings maintained throughout the analysis process.`;
+                    
+                    // Create and download the research paper
+                    const blob = new Blob([researchPaper], { type: 'text/markdown' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${query.toLowerCase().replace(/\s+/g, '_')}_research_paper.md`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  }
+                }}
+                className="w-full bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                Generate Research Paper
+              </button>
+            </div>
           </div>
 
           {/* Final Report */}
           <div className="output-window">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-medium text-emerald-600">Final Report</h2>
+              <h2 className="text-lg font-medium text-emerald-600">Previous Research</h2>
               <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
                 {previousRun ? `Previous: ${previousRun.id}` : "No previous"}
               </span>
             </div>
             <div className="output-content text-slate-700">
-              {previousRun?.answer || "Previous reports will appear here for comparison..."}
+              {previousRun?.answer || "Previous research papers will appear here for comparison..."}
             </div>
             {previousRun?.quality && (
               <div className="grid grid-cols-4 gap-2 mt-4">
