@@ -1,0 +1,7 @@
+{"timestamp":"00:00:00.609","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:00.609","source":"Server","level":"LOG","message":"  We detected TypeScript in your project and reconfigured your tsconfig.json file for you."}
+{"timestamp":"00:00:00.610","source":"Server","level":"LOG","message":"  The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:\n"}
+{"timestamp":"00:00:00.610","source":"Server","level":"LOG","message":"  \t- include was updated to add 'out/types/**/*.ts'"}
+{"timestamp":"00:00:00.610","source":"Server","level":"LOG","message":"  \t- include was updated to add 'out/dev/types/**/*.ts'"}
+{"timestamp":"00:00:00.610","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:00.735","source":"Server","level":"LOG","message":""}
