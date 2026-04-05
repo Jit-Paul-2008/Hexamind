@@ -57,6 +57,8 @@ before(async () => {
         ...process.env,
         PYTHONUNBUFFERED: '1',
         HEXAMIND_WEB_RESEARCH: '0',
+        HEXAMIND_MODEL_PROVIDER: 'deterministic',
+        HEXAMIND_DISABLE_FAILSAFE_FALLBACK: '0',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
