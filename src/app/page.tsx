@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AGENTS } from "@/lib/agents";
+import { V1_AGENTS, isV1Mode, getAgents } from "@/lib/v1Agents";
 import { usePipelineStore } from "@/lib/store";
 import { useRunStore } from "@/store/runStore";
 import { startPipelineRun } from "@/lib/pipelineClient";
@@ -13,6 +14,8 @@ export default function Home() {
   const statuses = usePipelineStore((s) => s.nodeStatuses);
   const { runs } = useRunStore();
   
+  // Use V1 agents if in V1 mode, otherwise empty (will be handled by backend)
+  const currentAgents = isV1Mode() ? V1_AGENTS : [];
   const previousRun = runs.find(run => run.answer && run.answer !== session?.finalAnswer);
 
   const handleRun = async () => {
@@ -77,17 +80,76 @@ export default function Home() {
         {/* Agent Status */}
         <div className="card mb-8">
           <h2 className="text-lg font-medium text-slate-800 mb-4">Agent Status</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {AGENTS.map((agent) => {
-              const status = statuses[agent.id] || "idle";
-              return (
-                <div key={agent.id} className={getAgentStatusClass(status)}>
-                  <div className="font-medium text-slate-800 mb-1">{agent.codename}</div>
-                  <div className="text-xs text-slate-600 uppercase">{status}</div>
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-4 mb-6">
+            {currentAgents.map((agent) => (
+              <div
+                key={agent.id}
+                className={getAgentStatusClass(statuses[agent.id] || "idle")}
+                style={{
+                  borderColor: agent.accentColor,
+                  backgroundColor: `${agent.glowColor}08`,
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-slate-800" style={{ color: agent.accentColor }}>
+                      {agent.codename}
+                    </div>
+                    <div className="text-xs text-slate-600 mt-1">
+                      {agent.role}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                      Combines: {agent.combines.join(", ")}
+                    </div>
+                  </div>
+                  <div className={`status-indicator ${statuses[agent.id] || "idle"}`}>
+                    {statuses[agent.id] || "idle"}
+                  </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
+            
+            {/* Output Status */}
+            <div
+              className={getAgentStatusClass(statuses.output || "idle")}
+              style={{
+                borderColor: "#10b981",
+                backgroundColor: "rgba(16, 185, 129, 0.08)",
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium text-emerald-600">Final Output</div>
+                  <div className="text-xs text-slate-600 mt-1">
+                    {isV1Mode() ? "V1 Optimized" : "Full System"}
+                  </div>
+                </div>
+                <div className={`status-indicator ${statuses.output || "idle"}`}>
+                  {statuses.output || "idle"}
+                </div>
+              </div>
+            </div>
           </div>
+          {session?.qualityReport && (
+            <div className="grid grid-cols-4 gap-2 mt-4">
+              <div className="metric">
+                <div className="font-medium text-slate-800">Score</div>
+                <div className="text-slate-600">{session.qualityReport.overallScore.toFixed(1)}</div>
+              </div>
+              <div className="metric">
+                <div className="font-medium text-slate-800">Sources</div>
+                <div className="text-slate-600">{session.qualityReport.metrics.sourceCount}</div>
+              </div>
+              <div className="metric">
+                <div className="font-medium text-slate-800">Trust</div>
+                <div className="text-slate-600">{session.qualityReport.trustScore?.toFixed(1) || "N/A"}</div>
+              </div>
+              <div className="metric">
+                <div className="font-medium text-slate-800">Issues</div>
+                <div className="text-slate-600">{session.qualityReport.metrics.contradictionCount}</div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Output Windows */}

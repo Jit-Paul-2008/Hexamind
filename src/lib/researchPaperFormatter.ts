@@ -313,7 +313,9 @@ of advanced analytical methods to improve our understanding of complex topics.`;
     paper += `${sections.results}\n\n`;
     paper += `${sections.discussion}\n\n`;
     paper += `${sections.conclusion}\n\n`;
-    paper += `${sections.references}`;
+
+    // References
+    paper += `${sections.references}\n`;
 
     return paper;
   }
