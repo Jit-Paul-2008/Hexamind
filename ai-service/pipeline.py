@@ -280,6 +280,7 @@ class PipelineService:
                     fallback_provider,
                     agent_sequence,
                 )
+                assembled = self._expand_single_pass_outputs(assembled, agent_sequence)
                 timings["agentSeconds"] = time.perf_counter() - agent_started
                 
                 # Stream pre-computed results to UI
@@ -411,6 +412,7 @@ class PipelineService:
                         "data": done_event.model_dump_json(),
                     }
                     await asyncio.sleep(step_delay / 1000)
+                assembled = self._expand_single_pass_outputs(assembled, agent_sequence)
 
             try:
                 final_started = time.perf_counter()
@@ -656,6 +658,19 @@ class PipelineService:
     def _agents_for_sequence(self, agent_ids: list[str]) -> list:
         by_id = {agent.id: agent for agent in AGENTS}
         return [by_id[agent_id] for agent_id in agent_ids if agent_id in by_id]
+
+    def _expand_single_pass_outputs(self, assembled: dict[str, str], agent_sequence: list[str]) -> dict[str, str]:
+        if len(agent_sequence) != 1 or agent_sequence[0] != "synthesiser":
+            return assembled
+
+        primary = (assembled.get("synthesiser") or "").strip()
+        if not primary:
+            return assembled
+
+        expanded = dict(assembled)
+        for role in ("advocate", "skeptic", "oracle", "verifier"):
+            expanded.setdefault(role, primary)
+        return expanded
 
     def _tenant_memory_note(self, tenant_id: str) -> str:
         history = self._tenant_memory.get(tenant_id, [])

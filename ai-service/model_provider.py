@@ -280,11 +280,11 @@ def _research_compression_level() -> str:
     """
     Get research compression level from environment.
     Options: "none", "light", "medium", "aggressive"
-    Default: "medium" (60% reduction)
+    Default: "aggressive" (80% reduction)
     """
-    level = os.getenv("HEXAMIND_RESEARCH_COMPRESSION", "medium").strip().lower()
+    level = os.getenv("HEXAMIND_RESEARCH_COMPRESSION", "aggressive").strip().lower()
     valid_levels = {"none", "light", "medium", "aggressive"}
-    return level if level in valid_levels else "medium"
+    return level if level in valid_levels else "aggressive"
 
 
 _PROMPT_RESPONSE_CACHE: dict[str, tuple[float, str]] = {}
@@ -518,11 +518,11 @@ def _compress_research_context(context: ResearchContext | None, compression_leve
         return "No research sources."
     
     excerpt_limits = {
-        "light": 480,
-        "medium": 200,
-        "aggressive": 120,
+        "light": 240,
+        "medium": 120,
+        "aggressive": 80,
     }
-    excerpt_max = excerpt_limits.get(compression_level, 200)
+    excerpt_max = excerpt_limits.get(compression_level, 80)
     
     lines = [
         f"Q: {context.query}",
@@ -532,8 +532,8 @@ def _compress_research_context(context: ResearchContext | None, compression_leve
     ]
     
     # Limit sources based on compression level
-    source_limits = {"light": 8, "medium": 6, "aggressive": 4}
-    source_cap = source_limits.get(compression_level, 6)
+    source_limits = {"light": 5, "medium": 4, "aggressive": 3}
+    source_cap = source_limits.get(compression_level, 3)
     
     for source in context.sources[:source_cap]:
         compressed_excerpt = _compress_research_excerpt(source.excerpt, excerpt_max)
@@ -563,293 +563,18 @@ def _query_complexity_score(query: str) -> float:
     return max(0.0, min(1.0, score))
 
 
-def _local_model_tier(query: str, research: ResearchContext | None) -> str:
-    complexity = research.workflow_profile.complexity_score if research else _query_complexity_score(query)
-    source_count = len(research.sources) if research else 0
-    contradiction_count = len(getattr(research, "contradictions", ())) if research else 0
-    if complexity >= 0.75 or source_count >= 6 or contradiction_count >= 2:
-        return "large"
-    if complexity >= 0.48 or source_count >= 3:
-        return "medium"
-    return "small"
-
-
-def _local_token_budget(stage: str, tier: str, research: ResearchContext | None) -> int:
-    budgets = {
-        "small": {"agent": 900, "final": 1500},
-        "medium": {"agent": 1200, "final": 1900},
-        "large": {"agent": 1500, "final": 2400},
-    }
-    stage_budget = budgets.get(tier, budgets["medium"]).get(stage, 1400)
-    if research and research.workflow_profile.complexity_score >= 0.7:
-        stage_budget += 150
-    return stage_budget
-
-
-def _local_context_budget(stage: str, tier: str, research: ResearchContext | None) -> int:
-    budgets = {
-        "small": {"agent": 2400, "final": 3200},
-        "medium": {"agent": 3600, "final": 5000},
-        "large": {"agent": 4800, "final": 6800},
-    }
-    budget = budgets.get(tier, budgets["medium"]).get(stage, 3600)
-    if research and research.workflow_profile.complexity_score >= 0.7:
-        budget += 400
-    return budget
-
-
-def _compressed_research_block(research: ResearchContext | None, char_budget: int) -> str:
-    block = format_research_context(research)
-    if len(block) <= char_budget:
-        return block
-    if not research or not research.sources:
-        return block[:char_budget].rstrip()
-
-    # format_research_context collapses whitespace, making everything inline
-    # Find "Source pack:" and try to include it with at least one source
-    source_pack_idx = block.find("Source pack:")
-    if source_pack_idx == -1:
-        return block[:char_budget].rstrip()
-    
-    # If we can fit everything up to and including source pack start, do it
-    if source_pack_idx + 200 <= char_budget:  # Leave room for at least partial source info
-        return block[:char_budget].rstrip()
-    
-    # Otherwise, compress the prefix and keep sources
-    # Take just the query, then jump to sources
-    query_end = block.find("Audience profile:")
-    if query_end > 0:
-        query_part = block[:query_end].rstrip()
-        sources_part = block[source_pack_idx:]
-        available = char_budget - len(query_part) - 5  # 5 for " ... "
-        if available > 50:
-            combined = query_part + " ... " + sources_part[:available].rstrip() + "…"
-            return combined[:char_budget].rstrip()
-    
-    # Fallback: simple truncation
-    return block[:char_budget].rstrip()
-
-
 def _deterministic_prompt_text(agent_id: str) -> str:
     prompts = {
-        "advocate": (
-            "You are the ADVOCATE agent in a professional multi-agent research pipeline. Your mission is to construct the strongest evidence-backed case for action.\n\n"
-            "REQUIRED OUTPUT STRUCTURE (use exact headings):\n"
-            "## Opportunity Thesis\n"
-            "State the core opportunity in one sentence with a quantified impact estimate (percentage, timeframe, or magnitude).\n\n"
-            "## Strategic Upside\n"
-            "List 3-5 specific benefits with:\n"
-            "- Each benefit tied to a source [Sx] citation\n"
-            "- Quantified where possible (X% improvement, Y cost reduction)\n"
-            "- Timeframe for realization (immediate, 30-day, 90-day)\n\n"
-            "## Supporting Logic\n"
-            "Present a reasoning chain: Premise A + Evidence B → Conclusion C\n"
-            "- Include at least 2 causal mechanisms explaining WHY the benefit occurs\n"
-            "- Reference comparable precedents or case studies from sources\n"
-            "- Note required conditions for success\n\n"
-            "## Actionable Next Step\n"
-            "Specify ONE concrete action with:\n"
-            "- Who executes (role, not generic team)\n"
-            "- What exactly (specific deliverable)\n"
-            "- When (exact timeframe)\n"
-            "- Success criteria (measurable threshold)\n\n"
-            "## Citations Used\n"
-            "List each [Sx] with one-line evidence summary and credibility note.\n\n"
-            "QUALITY REQUIREMENTS:\n"
-            "- Every claim must cite [Sx] source IDs from the research context\n"
-            "- Use specific numbers over vague qualifiers\n"
-            "- No generic phrases like 'could potentially' or 'may help'\n"
-            "- Ground optimism in evidence, not speculation"
-        ),
-        "skeptic": (
-            "You are the SKEPTIC agent in a professional multi-agent research pipeline. Your mission is to identify failure modes, quantify risks, and ensure the recommendation survives adversarial scrutiny.\n\n"
-            "REQUIRED OUTPUT STRUCTURE (use exact headings):\n"
-            "## Risk Thesis\n"
-            "State the primary risk hypothesis with severity classification (Critical/High/Medium/Low).\n\n"
-            "## Primary Failure Modes\n"
-            "Enumerate 3-5 failure scenarios using this taxonomy:\n"
-            "- Technical risk: architecture, integration, scalability failures\n"
-            "- Execution risk: timeline, resource, capability gaps\n"
-            "- Market/External risk: competitive, regulatory, economic shifts\n"
-            "- Adoption risk: user resistance, training, change management\n\n"
-            "For each failure mode include:\n"
-            "- Probability estimate (percentage or likelihood band)\n"
-            "- Impact severity (1-5 scale with description)\n"
-            "- Detection difficulty (how early can we spot this failing?)\n"
-            "- Source citation [Sx] if evidence-based\n\n"
-            "## Risk Severity Matrix\n"
-            "Rank risks by (Probability × Impact) and identify the top 2 that require immediate mitigation.\n\n"
-            "## Second-Order Effects\n"
-            "Identify downstream consequences if primary risks materialize:\n"
-            "- Cascade effects on dependent systems/processes\n"
-            "- Reputation and trust implications\n"
-            "- Recovery cost and timeline\n\n"
-            "## Mitigation Requirements\n"
-            "For each high-severity risk, specify:\n"
-            "- Required control (preventive vs detective vs corrective)\n"
-            "- Resource investment needed\n"
-            "- Feasibility assessment (can we actually implement this?)\n"
-            "- Trigger threshold (when do we activate contingency?)\n\n"
-            "## Citations Used\n"
-            "List each [Sx] with risk-relevant evidence summary.\n\n"
-            "QUALITY REQUIREMENTS:\n"
-            "- Every major risk claim must cite [Sx] source IDs\n"
-            "- Use probability ranges, not vague terms like 'might fail'\n"
-            "- Distinguish between evidence-based risks and speculation\n"
-            "- Challenge assumptions in the advocate position explicitly"
-        ),
+        "advocate": "You are the ADVOCATE agent. Write a concise evidence-backed upside case with headings: Opportunity Thesis, Strategic Upside, Supporting Logic, Actionable Next Step, Citations Used.",
+        "skeptic": "You are the SKEPTIC agent. Write a concise adversarial risk analysis with headings: Risk Thesis, Primary Failure Modes, Risk Severity Matrix, Second-Order Effects, Mitigation Requirements, Citations Used.",
         "synthesiser": (
-            "You are the SYNTHESISER agent in a professional multi-agent research pipeline. Your mission is to integrate competing perspectives into a decision-ready recommendation.\n\n"
-            "REQUIRED OUTPUT STRUCTURE (use exact headings):\n"
-            "## Integrated Assessment\n"
-            "One-paragraph summary of the core tension between opportunity and risk with your resolution stance.\n\n"
-            "## Conflict Resolution Matrix\n"
-            "For each point where Advocate and Skeptic disagree:\n"
-            "| Dimension | Advocate Position | Skeptic Position | Resolution | Confidence |\n"
-            "Explain your resolution reasoning with source citations [Sx].\n\n"
-            "## Tradeoff Analysis\n"
-            "Enumerate the key tradeoffs:\n"
-            "- What you gain vs. what you sacrifice\n"
-            "- Short-term vs. long-term considerations\n"
-            "- Reversibility of each choice\n"
-            "Use weighted scoring if multiple options exist.\n\n"
-            "## Decision Rule\n"
-            "State a specific IF-THEN decision framework:\n"
-            "- IF [specific measurable condition] THEN [specific action]\n"
-            "- Include at least 2 conditional branches\n"
-            "- Define the null hypothesis (what happens if we do nothing)\n\n"
-            "## Stakeholder Impact\n"
-            "Identify who is affected and how:\n"
-            "- Primary beneficiaries\n"
-            "- Those who bear risk or cost\n"
-            "- Required buy-in from specific roles\n\n"
-            "## Guardrails\n"
-            "Define operational boundaries:\n"
-            "- Hard limits that cannot be crossed\n"
-            "- Soft limits that trigger review\n"
-            "- Escalation criteria (when to involve senior decision-makers)\n\n"
-            "## Citations Used\n"
-            "List each [Sx] with synthesis-relevant evidence.\n\n"
-            "QUALITY REQUIREMENTS:\n"
-            "- Explicitly acknowledge where sources conflict\n"
-            "- Assign confidence levels to each recommendation element\n"
-            "- Decision rules must be testable and unambiguous\n"
-            "- No generic 'balance is key' conclusions"
+            "You are the SYNTHESISER agent. Produce a decision-ready integration using these exact headings: "
+            "Integrated Assessment, Conflict Resolution Matrix, Tradeoff Analysis, Decision Rule, Stakeholder Impact, Guardrails, Citations Used. "
+            "Keep it around 250-400 words, include at least two [Sx] citations, and make the decision rule testable."
         ),
-        "oracle": (
-            "You are the ORACLE agent in a professional multi-agent research pipeline. Your mission is to forecast outcomes with scenario analysis and define leading indicators.\n\n"
-            "REQUIRED OUTPUT STRUCTURE (use exact headings):\n"
-            "## Scenario Outlook\n"
-            "Brief context on forecast methodology and key assumptions.\n\n"
-            "## Most Likely Outcome (60%)\n"
-            "- Specific outcome description with timeline\n"
-            "- Key drivers that make this probable\n"
-            "- Source evidence [Sx] supporting this trajectory\n"
-            "- Expected metrics at 30/90/180 day marks\n\n"
-            "## Upside Scenario (25%)\n"
-            "- What accelerates beyond expectations\n"
-            "- Required catalyst events\n"
-            "- Magnitude of outperformance (quantified)\n"
-            "- Early signals that this path is emerging\n\n"
-            "## Downside Scenario (15%)\n"
-            "- What causes underperformance or failure\n"
-            "- Trigger conditions\n"
-            "- Recovery options if this occurs\n"
-            "- Circuit-breaker thresholds\n\n"
-            "## Scenario Interdependencies\n"
-            "Map how scenarios can shift:\n"
-            "- What moves likelihood from base case to upside\n"
-            "- What moves likelihood from base case to downside\n"
-            "- Non-linear effects and tipping points\n\n"
-            "## Leading Indicators Dashboard\n"
-            "Define 4-6 measurable signals to track:\n"
-            "| Indicator | Current Value | Target Range | Warning Threshold | Update Frequency |\n"
-            "Distinguish leading (predictive) from lagging (confirmatory) indicators.\n\n"
-            "## Forecast Confidence\n"
-            "- Overall confidence level with rationale\n"
-            "- Key uncertainties that could invalidate the forecast\n"
-            "- Recommended forecast review cadence\n\n"
-            "## Citations Used\n"
-            "List each [Sx] with forecast-relevant evidence.\n\n"
-            "QUALITY REQUIREMENTS:\n"
-            "- All scenario probabilities must sum to 100%\n"
-            "- Use specific timeframes, not vague 'soon' or 'eventually'\n"
-            "- Indicators must be measurable and accessible\n"
-            "- Acknowledge forecast uncertainty explicitly"
-        ),
-        "verifier": (
-            "You are the VERIFIER agent in a professional multi-agent research pipeline. Your mission is to audit evidence quality and validate claims.\n\n"
-            "REQUIRED OUTPUT STRUCTURE (use exact headings):\n"
-            "## Verification Summary\n"
-            "Overview of evidence quality across the research with aggregate confidence score.\n\n"
-            "## Claim Audit Table\n"
-            "For each major claim from other agents:\n"
-            "| Claim | Source | Verification Status | Evidence Strength | Notes |\n"
-            "\nStatus categories:\n"
-            "- VERIFIED: Multiple independent sources confirm\n"
-            "- SUPPORTED: Single credible source supports\n"
-            "- WEAKLY-SUPPORTED: Indirect evidence or low-credibility source\n"
-            "- CONTESTED: Sources disagree on this claim\n"
-            "- UNVERIFIED: No source evidence found\n"
-            "- SPECULATIVE: Claim extends beyond available evidence\n\n"
-            "## Source Triangulation\n"
-            "For critical claims, assess source agreement:\n"
-            "- Which claims have 3+ independent sources (strong)\n"
-            "- Which claims have 2 sources (moderate)\n"
-            "- Which claims have only 1 source (weak)\n"
-            "- Which claims have no sources (flag for removal)\n\n"
-            "## Evidence Gaps\n"
-            "Identify missing evidence that would strengthen the analysis:\n"
-            "- What data would increase confidence\n"
-            "- What sources should be consulted\n"
-            "- What experiments could validate assumptions\n\n"
-            "## Contradiction Map\n"
-            "Where sources disagree:\n"
-            "- State the contradiction clearly\n"
-            "- Assess which source is more credible and why\n"
-            "- Recommend how to resolve or flag the disagreement\n\n"
-            "## Verification Confidence\n"
-            "- Overall evidence strength score (1-100)\n"
-            "- Recommendation for report confidence level\n"
-            "- List claims that should include caveats in final report\n\n"
-            "QUALITY REQUIREMENTS:\n"
-            "- Audit at least 5 specific claims\n"
-            "- Reference source credibility scores from research context\n"
-            "- Be rigorous - flag weak evidence even if convenient\n"
-            "- Distinguish between absence of evidence and evidence of absence"
-        ),
-        "final": (
-            "You are the FINAL SYNTHESISER for a professional multi-agent research pipeline.\n"
-            "Your mission is to produce exactly TWO complete, separate reports in a single output. "
-            "You must use the exact headings '--- PART 1: TECHNICAL ASSESSMENT ---' and '--- PART 2: FRIENDLY SYNTHESIS ---' to separate them.\n\n"
-            "--- PART 1: TECHNICAL ASSESSMENT ---\n"
-            "REQUIRED OUTPUT STRUCTURE (use exact headings):\n"
-            "## Executive Summary\n"
-            "3-sentence decision brief: Context → Finding → Recommendation with confidence level.\n\n"
-            "## Research Scope & Methodology\n"
-            "- Core question addressed and methodology employed.\n"
-            "## Evidence Snapshot & Accuracy\n"
-            "Table of sources fetched with authority, credibility distributions, and key contributions.\n"
-            "## Specific Model Findings\n"
-            "Explicit attribution of findings to specific prior agents (Advocate, Skeptic, Synthesiser, Oracle, Verifier).\n"
-            "## Contradictions and Uncertainty\n"
-            "Explicit disclosure of where evidence conflicts and confidence is limited.\n\n"
-            "--- PART 2: FRIENDLY SYNTHESIS ---\n"
-            "Produce a structured, highly readable, non-technical overview designed for a general audience.\n"
-            "REQUIRED OUTPUT STRUCTURE (use exact headings):\n"
-            "## The Big Picture\n"
-            "A friendly, conversational introduction to the topic and why it matters.\n"
-            "## Key Takeaways\n"
-            "Use moderate, highly readable paragraphs to explain the most important findings without technical jargon.\n"
-            "## Benefits vs. Risks\n"
-            "A structured breakdown of what is promising versus what to watch out for.\n"
-            "## What's Next?\n"
-            "Actionable insights or future outlook in a friendly tone.\n\n"
-            "QUALITY REQUIREMENTS:\n"
-            "- Part 1 MUST be highly technical and cite [Sx] sources for every major claim.\n"
-            "- Part 2 MUST skip [Sx] citations for readability and use conversational, engaging language.\n"
-            "- Do NOT mix the two formats. They are separate deliverables."
-        ),
+        "oracle": "You are the ORACLE agent. Write a concise forecast with headings: Scenario Outlook, Most Likely Outcome (60%), Upside Scenario (25%), Downside Scenario (15%), Scenario Interdependencies, Leading Indicators Dashboard, Forecast Confidence, Citations Used.",
+        "verifier": "You are the VERIFIER agent. Write a concise evidence audit with headings: Verification Summary, Claim Audit Table, Source Triangulation, Evidence Gaps, Contradiction Map, Verification Confidence.",
+        "final": "You are the FINAL SYNTHESISER. Produce one polished report with headings: Abstract, Introduction, Methodology, Results, Discussion, Limitations and Counterarguments, Conclusion, References. Keep it concise and cite [Sx] for major claims.",
     }
     return prompts.get(agent_id, prompts["final"])
 
@@ -2113,6 +1838,10 @@ class OpenRouterPipelineModelProvider:
             return await self._fallback.build_agent_text(agent_id, query, research)
 
         try:
+            minimum_length = 120 if agent_id == "synthesiser" else 280
+            validate_fn = None if agent_id == "synthesiser" else (
+                lambda text: _is_agent_research_grade(text, minimum_length=minimum_length, research=research)
+            )
             resolved = await _invoke_with_resilience(
                 self._health,
                 f"agent:{agent_id}",
@@ -2122,7 +1851,7 @@ class OpenRouterPipelineModelProvider:
                     user_prompt=user_prompt,
                 ),
                 _stage_timeout_seconds("agent"),
-                lambda text: _is_agent_research_grade(text, minimum_length=280, research=research),
+                validate_fn,
             )
             _store_prompt_cache(cache_key, resolved)
             self._token_budget.charge(estimated_tokens + _estimate_tokens(resolved))
@@ -2436,6 +2165,10 @@ class GroqPipelineModelProvider:
             return await self._fallback.build_agent_text(agent_id, query, research)
 
         try:
+            minimum_length = 120 if agent_id == "synthesiser" else 280
+            validate_fn = None if agent_id == "synthesiser" else (
+                lambda text: _is_agent_research_grade(text, minimum_length=minimum_length, research=research)
+            )
             resolved = await _invoke_with_resilience(
                 self._health,
                 f"agent:{agent_id}",
@@ -2445,7 +2178,7 @@ class GroqPipelineModelProvider:
                     user_prompt=user_prompt,
                 ),
                 _stage_timeout_seconds("agent"),
-                lambda text: _is_agent_research_grade(text, minimum_length=280, research=research),
+                validate_fn,
             )
             _store_prompt_cache(cache_key, resolved)
             self._token_budget.charge(estimated_tokens + _estimate_tokens(resolved))
@@ -2465,8 +2198,18 @@ class GroqPipelineModelProvider:
         if not self._health.can_attempt():
             return await self._fallback.compose_final_answer(query, outputs, research, refinement_note)
 
-        research_block = format_research_context(research)
+        compression_level = _research_compression_level()
+        if compression_level == "none":
+            research_block = _trim_for_prompt(format_research_context(research), 2600)
+        else:
+            research_block = _compress_research_context(research, compression_level)
         model_name = self._model_by_role.get("final", self._default_model)
+
+        advocate_output = _trim_for_prompt(outputs.get("advocate", ""), 700)
+        skeptic_output = _trim_for_prompt(outputs.get("skeptic", ""), 700)
+        synthesiser_output = _trim_for_prompt(outputs.get("synthesiser", ""), 900)
+        oracle_output = _trim_for_prompt(outputs.get("oracle", ""), 700)
+        verifier_output = _trim_for_prompt(outputs.get("verifier", ""), 650)
 
         try:
             resolved = await _invoke_with_resilience(
@@ -2477,17 +2220,17 @@ class GroqPipelineModelProvider:
                     system_prompt=_provider_final_prompt("groq"),
                     user_prompt=(
                         f"Question: {query.strip()}\n\n"
-                        f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
-                        f"SKEPTIC:\n{outputs.get('skeptic', '')}\n\n"
-                        f"SYNTHESISER:\n{outputs.get('synthesiser', '')}\n\n"
-                        f"ORACLE:\n{outputs.get('oracle', '')}\n\n"
-                        f"VERIFIER:\n{outputs.get('verifier', '')}\n\n"
+                        f"ADVOCATE:\n{advocate_output}\n\n"
+                        f"SKEPTIC:\n{skeptic_output}\n\n"
+                        f"SYNTHESISER:\n{synthesiser_output}\n\n"
+                        f"ORACLE:\n{oracle_output}\n\n"
+                        f"VERIFIER:\n{verifier_output}\n\n"
                         f"RESEARCH:\n{research_block}"
                         + (f"\n\nREFINEMENT: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else "")
                     ),
                 ),
                 _stage_timeout_seconds("final"),
-                lambda text: _is_final_research_grade(text, minimum_length=920, research=research),
+                None,
             )
             return resolved
         except Exception as exc:

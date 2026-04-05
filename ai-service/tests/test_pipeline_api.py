@@ -18,9 +18,9 @@ os.environ["HEXAMIND_DISABLE_FAILSAFE_FALLBACK"] = "0"
 
 from fastapi.testclient import TestClient
 
-from agents import AGENTS
 from main import app
 import pipeline
+from governance import select_agent_sequence
 from pipeline import pipeline_service
 
 
@@ -76,9 +76,11 @@ class PipelineApiTests(unittest.TestCase):
 
     def test_pipeline_stream_emits_expected_sequence(self) -> None:
         with patch.object(pipeline.asyncio, "sleep", new=AsyncMock(return_value=None)):
+            query = "How should we ship the MVP?"
+            expected_sequence = select_agent_sequence(query, None)
             start_response = self.client.post(
                 "/api/pipeline/start",
-                json={"query": "How should we ship the MVP?"},
+                json={"query": query},
             )
 
             self.assertEqual(start_response.status_code, 200)
@@ -91,15 +93,15 @@ class PipelineApiTests(unittest.TestCase):
         event_types = [frame["event"] for frame in frames]
         self.assertEqual(event_types[0], "agent_start")
         self.assertEqual(event_types[-1], "pipeline_done")
-        self.assertEqual(event_types.count("agent_start"), len(AGENTS))
-        self.assertEqual(event_types.count("agent_done"), len(AGENTS))
+        self.assertEqual(event_types.count("agent_start"), len(expected_sequence))
+        self.assertEqual(event_types.count("agent_done"), len(expected_sequence))
 
         start_events = [json.loads(frame["data"]) for frame in frames if frame["event"] == "agent_start"]
         done_events = [json.loads(frame["data"]) for frame in frames if frame["event"] == "agent_done"]
         final_event = json.loads(frames[-1]["data"])
 
-        self.assertEqual([event["agentId"] for event in start_events], [agent.id for agent in AGENTS])
-        self.assertEqual([event["agentId"] for event in done_events], [agent.id for agent in AGENTS])
+        self.assertEqual([event["agentId"] for event in start_events], list(expected_sequence))
+        self.assertEqual([event["agentId"] for event in done_events], list(expected_sequence))
         self.assertEqual(final_event["agentId"], "output")
         self.assertIn("## Abstract", final_event["fullContent"])
 

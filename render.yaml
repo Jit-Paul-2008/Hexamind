@@ -28,6 +28,8 @@ services:
         value: "1"
       - key: HEXAMIND_DEPLOYMENT_ENV
         value: "production"
+      - key: HEXAMIND_FRAMEWORK_VERSION
+        value: v1
       - key: HEXAMIND_MODEL_PROVIDER
         value: groq
       - key: HEXAMIND_MODEL_NAME
