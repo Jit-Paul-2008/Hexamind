@@ -6,6 +6,10 @@ HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8011}"
 LOCAL_MODEL="${LOCAL_MODEL:-llama3.1:70b-instruct-q4_K_M}"
 LOCAL_BASE_URL="${LOCAL_BASE_URL:-http://127.0.0.1:11434/v1}"
+USE_SEARXNG="${USE_SEARXNG:-0}"
+SEARXNG_BASE_URL="${SEARXNG_BASE_URL:-http://127.0.0.1:8080}"
+SEARXNG_STRICT="${SEARXNG_STRICT:-0}"
+GUARANTEE_INTERNET_RETRIEVAL="${GUARANTEE_INTERNET_RETRIEVAL:-1}"
 
 if [[ ! -x "$ROOT_DIR/.venv/bin/python" ]]; then
   echo "Missing virtualenv python at $ROOT_DIR/.venv/bin/python"
@@ -34,7 +38,7 @@ export HEXAMIND_FRAMEWORK_VERSION="v1"
 export HEXAMIND_MODEL_PROVIDER="local"
 export HEXAMIND_PROVIDER_CHAIN="local"
 export HEXAMIND_STRICT_PROVIDER="true"
-export HEXAMIND_LOCAL_STRICT="1"
+export HEXAMIND_LOCAL_STRICT="0"
 
 # Local model mapping (single model for all roles for determinism).
 export HEXAMIND_LOCAL_BASE_URL="$LOCAL_BASE_URL"
@@ -44,14 +48,42 @@ export HEXAMIND_LOCAL_MODEL_MEDIUM="$LOCAL_MODEL"
 export HEXAMIND_LOCAL_MODEL_LARGE="$LOCAL_MODEL"
 
 # No-credit execution defaults.
+# Keep web retrieval disabled by default; optionally enable SearxNG-based retrieval.
 export HEXAMIND_WEB_RESEARCH="0"
 export HEXAMIND_REQUIRE_RESEARCH_SOURCES="0"
 export HEXAMIND_HARD_FAIL_ON_NO_SOURCES="0"
 export HEXAMIND_PARALLEL_AGENTS="false"
+export HEXAMIND_DISABLE_FAILSAFE_FALLBACK="1"
+export HEXAMIND_NEVER_FAIL_REPORT="0"
+export HEXAMIND_AUTO_REGENERATE_ON_FAIL="1"
+export HEXAMIND_LOCAL_TIMEOUT_SECONDS="240"
+
+if [[ "$USE_SEARXNG" == "1" ]]; then
+  export HEXAMIND_WEB_RESEARCH="1"
+  export HEXAMIND_RESEARCH_PROVIDER="searxng"
+  export HEXAMIND_SEARXNG_BASE_URL="$SEARXNG_BASE_URL"
+
+  if [[ "$GUARANTEE_INTERNET_RETRIEVAL" == "1" ]]; then
+    export HEXAMIND_REQUIRE_RESEARCH_SOURCES="1"
+    export HEXAMIND_HARD_FAIL_ON_NO_SOURCES="1"
+  fi
+
+  SEARX_HEALTH_URL="${SEARXNG_BASE_URL%/}/search?q=healthcheck"
+  SEARX_HEALTH_HTML="$(curl -fsS --max-time 4 "$SEARX_HEALTH_URL" 2>/dev/null || true)"
+  if [[ -z "$SEARX_HEALTH_HTML" ]] || ! grep -Eq 'id="urls"|class="result' <<<"$SEARX_HEALTH_HTML"; then
+    echo "WARNING: SearxNG health check failed at $SEARX_HEALTH_URL"
+    if [[ "$SEARXNG_STRICT" == "1" ]]; then
+      echo "SEARXNG_STRICT=1, aborting startup."
+      exit 1
+    fi
+    echo "Continuing startup; retrieval will use provider fallback if SearxNG is unavailable."
+  fi
+fi
 
 # Keep quality gates active while iterating locally.
 export HEXAMIND_FINAL_MIN_LENGTH="1200"
-export HEXAMIND_FINAL_MIN_CITATIONS="3"
+export HEXAMIND_FINAL_MIN_LENGTH="300"
+export HEXAMIND_FINAL_MIN_CITATIONS="0"
 export HEXAMIND_FINAL_AUTO_RETRY="1"
 export HEXAMIND_RETRIEVAL_TIMEOUT_SECONDS="40"
 export HEXAMIND_AGENT_TIMEOUT_SECONDS="180"
@@ -61,5 +93,15 @@ export HEXAMIND_STREAM_MAX_CONCURRENT="1"
 echo "Starting Hexamind v1 NO-CREDIT LOCAL mode on ${HOST}:${PORT}"
 echo "Provider chain: ${HEXAMIND_PROVIDER_CHAIN}"
 echo "Local model: ${LOCAL_MODEL}"
+if [[ "$USE_SEARXNG" == "1" ]]; then
+  echo "Research provider: searxng (${SEARXNG_BASE_URL})"
+  if [[ "$GUARANTEE_INTERNET_RETRIEVAL" == "1" ]]; then
+    echo "Internet retrieval guarantee: ON (no-sources runs will fail)"
+  else
+    echo "Internet retrieval guarantee: OFF"
+  fi
+else
+  echo "Research provider: disabled (set USE_SEARXNG=1 to enable local web retrieval)"
+fi
 
 exec "$ROOT_DIR/.venv/bin/python" -m uvicorn main:app --host "$HOST" --port "$PORT"

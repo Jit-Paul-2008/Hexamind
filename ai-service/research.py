@@ -109,6 +109,78 @@ class _DuckDuckGoResultParser(HTMLParser):
             self._current["snippet"] += data
 
 
+class _SearxngResultParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.results: list[SearchHit] = []
+        self._current: dict[str, str] | None = None
+        self._in_title = False
+        self._in_snippet = False
+        self._in_h3 = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attr_map = {key: value or "" for key, value in attrs}
+        classes = attr_map.get("class", "")
+        class_tokens = set(classes.split())
+
+        if tag == "article" and "result" in class_tokens:
+            self._current = {"title": "", "url": "", "snippet": ""}
+            self._in_title = False
+            self._in_snippet = False
+            self._in_h3 = False
+            return
+
+        if not self._current:
+            return
+
+        if tag == "h3":
+            self._in_h3 = True
+            return
+
+        if tag == "a" and self._in_h3:
+            href = _canonicalize_url(attr_map.get("href", ""))
+            if href:
+                self._current["url"] = href
+            self._in_title = True
+            return
+
+        if tag == "p" and "content" in class_tokens:
+            self._in_snippet = True
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "a" and self._in_title:
+            self._in_title = False
+            return
+
+        if tag == "h3":
+            self._in_h3 = False
+            return
+
+        if tag == "p" and self._in_snippet:
+            self._in_snippet = False
+            return
+
+        if tag == "article" and self._current:
+            title = _clean_text(self._current.get("title", ""))
+            url = _canonicalize_url(self._current.get("url", ""))
+            snippet = _clean_text(self._current.get("snippet", ""))
+            if title and url:
+                self.results.append(SearchHit(title=title, url=url, snippet=snippet))
+            self._current = None
+            self._in_title = False
+            self._in_snippet = False
+            self._in_h3 = False
+
+    def handle_data(self, data: str) -> None:
+        if not self._current:
+            return
+
+        if self._in_title:
+            self._current["title"] += data
+        elif self._in_snippet:
+            self._current["snippet"] += data
+
+
 class _VisibleTextExtractor(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -177,6 +249,7 @@ class InternetResearcher:
         self._tavily_api_key = os.getenv("TAVILY_API_KEY", "").strip()
         self._tavily_api_keys = self._parse_api_key_pool("TAVILY_API_KEY", "TAVILY_API_KEYS")
         self._tavily_key_index = 0
+        self._searxng_base_url = os.getenv("HEXAMIND_SEARXNG_BASE_URL", "http://127.0.0.1:8080").strip().rstrip("/")
         self._search_provider = _research_provider(self._tavily_api_keys[0] if self._tavily_api_keys else "")
         # Increased defaults for deeper research
         configured_max_sources = _env_int("HEXAMIND_RESEARCH_MAX_SOURCES", max(max_sources, 14))
@@ -294,7 +367,7 @@ class InternetResearcher:
             sources = self._enrich_with_evidence_density(sources, sanitized_query)
             sources = self._compute_cross_corroboration(sources)
         
-        contradictions = tuple(_detect_source_contradictions(sanitized_query, sources))
+        contradictions = tuple(_detect_source_contradictions(sanitized_query, tuple(sources)))
         evidence_graph = self._build_evidence_graph(sources, sanitized_query)
         corroboration_pairs = self._find_corroboration_pairs(sources)
         
@@ -431,6 +504,11 @@ class InternetResearcher:
         workflow_profile: ResearchWorkflowProfile,
         search_passes: Iterable[str],
     ) -> list[SearchHit]:
+        if self._search_provider == "searxng":
+            hits = await self._search_hits_searxng(query, search_terms, workflow_profile, search_passes)
+            if hits:
+                return hits
+            return await self._search_hits_duckduckgo(query, search_terms, workflow_profile, search_passes)
         if self._search_provider == "tavily":
             hits = await self._search_hits_tavily(query, search_terms, workflow_profile, search_passes)
             if hits:
@@ -439,6 +517,122 @@ class InternetResearcher:
             # continue retrieval with DuckDuckGo instead of aborting the whole pipeline.
             return await self._search_hits_duckduckgo(query, search_terms, workflow_profile, search_passes)
         return await self._search_hits_duckduckgo(query, search_terms, workflow_profile, search_passes)
+
+    async def _search_hits_searxng(
+        self,
+        query: str,
+        search_terms: Iterable[str],
+        workflow_profile: ResearchWorkflowProfile,
+        search_passes: Iterable[str],
+    ) -> list[SearchHit]:
+        results: list[SearchHit] = []
+        max_terms = max(self._max_terms, workflow_profile.max_terms)
+        max_hits = max(self._max_hits_per_term, workflow_profile.max_hits_per_term)
+        min_relevance_score = min(self._min_relevance_score, workflow_profile.min_relevance)
+        ordered_terms = list(search_terms)[:max_terms]
+        passes = list(search_passes) or ["evidence"]
+
+        async with httpx.AsyncClient(
+            timeout=self._timeout_seconds,
+            follow_redirects=True,
+            headers={"User-Agent": "HexamindResearch/1.0 (+https://example.com)"},
+        ) as client:
+            for pass_name in passes:
+                for term in ordered_terms:
+                    if not _term_matches_pass(term, pass_name):
+                        continue
+                    term_hits = await self._fetch_searx_term_hits(client, term)
+                    for hit in term_hits:
+                        score = _hit_relevance(query, term, hit.title, hit.snippet, hit.url)
+                        score *= _pass_weight(pass_name)
+                        if score < min_relevance_score:
+                            continue
+                        results.append(
+                            SearchHit(
+                                title=hit.title,
+                                url=hit.url,
+                                snippet=_trim_text(hit.snippet, 220),
+                                relevance_score=score,
+                                discovery_pass=pass_name,
+                            )
+                        )
+
+                    if len(results) >= max(self._max_sources, workflow_profile.max_sources) * 12:
+                        break
+
+                if len(results) >= max(self._max_sources, workflow_profile.max_sources) * 12:
+                    break
+
+        # Searx returns blended providers; trim to per-term budget before dedupe.
+        return _dedupe_hits(results[: max_hits * max(1, len(ordered_terms))])
+
+    async def _fetch_searx_term_hits(
+        self,
+        client: httpx.AsyncClient,
+        term: str,
+    ) -> list[SearchHit]:
+        json_hits = await self._fetch_searx_term_hits_json(client, term)
+        if json_hits:
+            return json_hits
+        return await self._fetch_searx_term_hits_html(client, term)
+
+    async def _fetch_searx_term_hits_json(
+        self,
+        client: httpx.AsyncClient,
+        term: str,
+    ) -> list[SearchHit]:
+        params = {
+            "q": term,
+            "format": "json",
+            "language": "en-US",
+            "safesearch": "0",
+        }
+        try:
+            response = await self._request_with_retries(
+                client,
+                "GET",
+                f"{self._searxng_base_url}/search",
+                params=params,
+            )
+            body = response.json()
+        except Exception:
+            return []
+
+        hits: list[SearchHit] = []
+        for item in body.get("results", []):
+            if not isinstance(item, dict):
+                continue
+            title = _clean_text(str(item.get("title", "")))
+            url = _canonicalize_url(str(item.get("url", "")))
+            snippet = _clean_text(str(item.get("content", "")))
+            if not title or not url:
+                continue
+            hits.append(SearchHit(title=title, url=url, snippet=snippet))
+        return hits
+
+    async def _fetch_searx_term_hits_html(
+        self,
+        client: httpx.AsyncClient,
+        term: str,
+    ) -> list[SearchHit]:
+        params = {
+            "q": term,
+            "language": "en-US",
+            "safesearch": "0",
+        }
+        try:
+            response = await self._request_with_retries(
+                client,
+                "GET",
+                f"{self._searxng_base_url}/search",
+                params=params,
+            )
+        except Exception:
+            return []
+
+        parser = _SearxngResultParser()
+        parser.feed(response.text)
+        return parser.results
 
     async def _search_hits_duckduckgo(
         self,
@@ -2139,6 +2333,6 @@ def _env_bool(name: str, default: bool) -> bool:
 
 def _research_provider(tavily_api_key: str) -> str:
     configured = os.getenv("HEXAMIND_RESEARCH_PROVIDER", "auto").strip().lower()
-    if configured in {"tavily", "duckduckgo"}:
+    if configured in {"tavily", "duckduckgo", "searxng"}:
         return configured
     return "tavily" if tavily_api_key else "duckduckgo"

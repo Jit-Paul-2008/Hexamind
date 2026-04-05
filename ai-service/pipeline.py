@@ -62,6 +62,11 @@ class PipelineService:
         self._parallel_agents = _env_bool("HEXAMIND_PARALLEL_AGENTS", True)  # 60% faster execution
         self._tenant_memory_path = self._storage_path.with_name("tenant-memory.json")
         self._tenant_memory: dict[str, list[str]] = self._load_tenant_memory()
+        self._retrieval_attempts = 0
+        self._retrieval_successes = 0
+        self._retrieval_timeouts = 0
+        self._retrieval_failures = 0
+        self._retrieval_quality_sum = 0.0
 
     def start(self, query: str, tenant_id: str = "default", report_length: str = "moderate") -> str:
         query = redact_pii(query.strip())
@@ -95,8 +100,17 @@ class PipelineService:
             return False
         return True
 
-    def health(self) -> dict[str, str | int | bool]:
+    def health(self) -> dict[str, str | int | bool | float]:
         diagnostics = self._model_provider.diagnostics()
+        retrieval_success_rate = (
+            self._retrieval_successes / self._retrieval_attempts if self._retrieval_attempts else 0.0
+        )
+        retrieval_timeout_rate = (
+            self._retrieval_timeouts / self._retrieval_attempts if self._retrieval_attempts else 0.0
+        )
+        average_retrieval_quality = (
+            self._retrieval_quality_sum / self._retrieval_successes if self._retrieval_successes else 0.0
+        )
         return {
             "status": "ok",
             "sessions": len(self._sessions),
@@ -111,6 +125,13 @@ class PipelineService:
             "retrievalTimeoutSeconds": int(self._retrieval_timeout_seconds),
             "agentTimeoutSeconds": int(self._agent_timeout_seconds),
             "finalTimeoutSeconds": int(self._final_timeout_seconds),
+            "retrievalAttempts": self._retrieval_attempts,
+            "retrievalSuccesses": self._retrieval_successes,
+            "retrievalTimeouts": self._retrieval_timeouts,
+            "retrievalFailures": self._retrieval_failures,
+            "retrievalSuccessRate": round(retrieval_success_rate, 3),
+            "retrievalTimeoutRate": round(retrieval_timeout_rate, 3),
+            "averageSourceQualityScore": round(average_retrieval_quality, 3),
             **diagnostics,
         }
 
@@ -123,7 +144,7 @@ class PipelineService:
             report.pop("passing", None)
             report["status"] = "ready"
             report["sessionId"] = session_id
-            notes = list(report.get("notes", []))
+            notes = _string_list(report.get("notes", []))
             if notes:
                 report["notes"] = [
                     note.replace("Quality gate failed. ", "").replace("even though quality gates initially failed", "in best-effort mode")
@@ -228,6 +249,9 @@ class PipelineService:
         assembled: dict[str, str] = {}
         started_at = time.perf_counter()
         disable_failsafe = os.getenv("HEXAMIND_DISABLE_FAILSAFE_FALLBACK", "0").strip().lower() in {"1", "true", "yes", "on"}
+        strict_local = os.getenv("HEXAMIND_LOCAL_STRICT", "0").strip().lower() in {"1", "true", "yes", "on"}
+        if strict_local:
+            disable_failsafe = True
         fallback_provider = None if disable_failsafe else DeterministicPipelineModelProvider(
             configured_provider="failsafe",
             model_name="deterministic",
@@ -259,14 +283,22 @@ class PipelineService:
             
             # Wait for research first
             if research_task is not None:
+                self._retrieval_attempts += 1
                 try:
                     retrieval_started = time.perf_counter()
                     research_context = await asyncio.wait_for(research_task, timeout=self._retrieval_timeout_seconds)
                     timings["retrievalSeconds"] += time.perf_counter() - retrieval_started
+                    if research_context and research_context.sources:
+                        self._retrieval_successes += 1
+                        self._retrieval_quality_sum += self._retrieval_source_quality_score(research_context)
                 except Exception as exc:
                     retrieval_error = f"{type(exc).__name__}: {exc}".strip()
                     research_context = None
                     research_task = None
+                    if isinstance(exc, asyncio.TimeoutError):
+                        self._retrieval_timeouts += 1
+                    else:
+                        self._retrieval_failures += 1
 
             if self._require_research_sources and (research_context is None or not research_context.sources):
                 retrieval_warning = retrieval_error or "No research sources were retrieved. Check Tavily settings and query scope."
@@ -453,8 +485,17 @@ class PipelineService:
                 research=research_context,
                 workflow_profile=research_context.workflow_profile if research_context else None,
             )
+            retrieval_gate = self._evaluate_retrieval_gate(research_context, quality_report)
+            quality_report["retrievalQualityGate"] = retrieval_gate
+            if not bool(retrieval_gate.get("passed", True)):
+                quality_report["passing"] = False
+                notes = _string_list(quality_report.get("notes", []))
+                notes.append(
+                    "Retrieval quality gate failed: " + ", ".join(_string_list(retrieval_gate.get("issues", [])))
+                )
+                quality_report["notes"] = notes
             if retrieval_warning:
-                notes = list(quality_report.get("notes", []))
+                notes = _string_list(quality_report.get("notes", []))
                 notes.append(
                     "Research retrieval returned no live sources; report completed in degraded mode with explicit uncertainty."
                 )
@@ -508,8 +549,8 @@ class PipelineService:
                         workflow_profile=research_context.workflow_profile if research_context else None,
                     )
                     quality_report["recoveredFromFailure"] = True
-                    quality_report["overallScore"] = max(float(quality_report.get("overallScore", 0.0)), 70.0)
-                    notes = list(quality_report.get("notes", []))
+                    quality_report["overallScore"] = max(_to_float(quality_report.get("overallScore", 0.0)), 70.0)
+                    notes = _string_list(quality_report.get("notes", []))
                     notes.append("Auto-recovery mode delivered a report even though quality gates initially failed.")
                     quality_report["notes"] = notes
 
@@ -555,7 +596,8 @@ class PipelineService:
                 research=research_context,
                 workflow_profile=research_context.workflow_profile if research_context else None,
             )
-            notes = list(quality_report.get("notes", []))
+            quality_report["retrievalQualityGate"] = self._evaluate_retrieval_gate(research_context, quality_report)
+            notes = _string_list(quality_report.get("notes", []))
             notes.append("Pipeline stopped before synthesis because research-source requirement was enabled.")
             quality_report["notes"] = notes
             quality_report["runMetadata"] = self._build_run_metadata(
@@ -601,6 +643,7 @@ class PipelineService:
         stage_timings["totalSeconds"] = round(time.perf_counter() - started_at, 3)
         source_count = len(research.sources) if research else 0
         trace_coverage = all(value >= 0.0 for value in timings.values()) and bool(final_answer.strip())
+        source_quality_score = self._retrieval_source_quality_score(research) if research else 0.0
 
         return {
             "sessionId": session.id,
@@ -610,11 +653,67 @@ class PipelineService:
             "queryHash": query_hash,
             "queryLength": len(session.query),
             "sourceCount": source_count,
+            "sourceQualityScore": round(source_quality_score, 3),
             "traceCoverage": trace_coverage,
             "providerDiagnostics": provider_state,
             "stageTimings": stage_timings,
             "reportDigest": hashlib.sha256(final_answer.strip().encode("utf-8")).hexdigest()[:16],
             "agentOutputCount": len([text for text in assembled.values() if text.strip()]),
+        }
+
+    def _retrieval_source_quality_score(self, research: ResearchContext | None) -> float:
+        if not research or not research.sources:
+            return 0.0
+        source_count = len(research.sources)
+        unique_domains = len({source.domain for source in research.sources})
+        average_credibility = sum(source.credibility_score for source in research.sources) / source_count
+        diversity_score = unique_domains / max(1, source_count)
+        coverage_score = float(getattr(research, "topic_coverage_score", 0.0) or 0.0)
+        depth_score = float(getattr(research, "research_depth_score", 0.0) or 0.0)
+        score = (
+            (average_credibility * 0.4)
+            + (diversity_score * 0.2)
+            + (coverage_score * 0.2)
+            + (depth_score * 0.2)
+        )
+        return max(0.0, min(1.0, score))
+
+    def _evaluate_retrieval_gate(
+        self,
+        research: ResearchContext | None,
+        quality_report: dict[str, object],
+    ) -> dict[str, object]:
+        if not research or not research.sources:
+            return {
+                "passed": False,
+                "minUniqueDomains": _env_int("HEXAMIND_GATE_MIN_UNIQUE_DOMAINS", 2),
+                "minClaimVerificationRate": _env_float("HEXAMIND_GATE_MIN_VERIFICATION_RATE", 0.45),
+                "issues": ["No live retrieval sources available"],
+            }
+
+        raw_metrics = quality_report.get("metrics", {})
+        metrics: dict[str, object] = raw_metrics if isinstance(raw_metrics, dict) else {}
+        unique_domains = _to_int(metrics.get("uniqueDomains", 0), 0)
+        claim_verification_rate = _to_float(metrics.get("claimVerificationRate", 0.0))
+
+        min_unique_domains = max(1, _env_int("HEXAMIND_GATE_MIN_UNIQUE_DOMAINS", 2))
+        min_verification_rate = max(0.0, min(1.0, _env_float("HEXAMIND_GATE_MIN_VERIFICATION_RATE", 0.45)))
+
+        issues: list[str] = []
+        if unique_domains < min_unique_domains:
+            issues.append(
+                f"uniqueDomains={unique_domains} below required {min_unique_domains}"
+            )
+        if claim_verification_rate < min_verification_rate:
+            issues.append(
+                f"claimVerificationRate={claim_verification_rate:.2f} below required {min_verification_rate:.2f}"
+            )
+
+        return {
+            "passed": len(issues) == 0,
+            "minUniqueDomains": min_unique_domains,
+            "minClaimVerificationRate": min_verification_rate,
+            "issues": issues,
         }
 
     def _get_session(self, session_id: str, tenant_id: str | None = None) -> PipelineSession:
@@ -704,9 +803,42 @@ class PipelineService:
             return assembled
 
         expanded = dict(assembled)
-        for role in ("advocate", "skeptic", "oracle", "verifier"):
+        for role in ("advocate", "skeptic", "oracle"):
             expanded.setdefault(role, primary)
+        expanded.setdefault("verifier", self._derive_verifier_from_synthesiser(primary))
         return expanded
+
+    def _derive_verifier_from_synthesiser(self, synthesiser_text: str) -> str:
+        """Create a structured verifier artifact from a v1 single-pass synthesis output."""
+        text = " ".join((synthesiser_text or "").split())
+        if not text:
+            return ""
+
+        snippets = [segment.strip() for segment in text.split(".") if segment.strip()]
+        claim_rows: list[str] = []
+        for idx, snippet in enumerate(snippets[:5], start=1):
+            citation = "[S1]" if "[S" not in snippet else ""
+            status = "verified" if "[S" in snippet else "weak"
+            trimmed = snippet[:110] + ("..." if len(snippet) > 110 else "")
+            claim_rows.append(f"- C{idx}: {status} | {trimmed} {citation}".strip())
+
+        if not claim_rows:
+            claim_rows.append("- C1: unverified | No claim extracted from synthesiser output [S1]")
+
+        return (
+            "## Verification Summary\n"
+            "Single-pass v1 verifier view generated from synthesiser output.\n\n"
+            "## Claim Audit Table\n"
+            + "\n".join(claim_rows)
+            + "\n\n## Source Triangulation\n"
+            "- Cross-source triangulation is limited in v1 single-pass mode; treat weak claims as provisional.\n\n"
+            "## Evidence Gaps\n"
+            "- Add direct source grounding for claims marked weak or unverified.\n\n"
+            "## Contradiction Map\n"
+            "- No explicit contradiction mapping extracted in this single-pass verifier artifact.\n\n"
+            "## Verification Confidence\n"
+            "- Confidence: medium-low unless claims are directly supported by [Sx] citations."
+        )
 
     def _tenant_memory_note(self, tenant_id: str) -> str:
         history = self._tenant_memory.get(tenant_id, [])
@@ -835,6 +967,26 @@ def _env_bool(name: str, default: bool) -> bool:
     if normalized in {"0", "false", "no", "off"}:
         return False
     return default
+
+
+def _string_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return []
+
+
+def _to_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_int(value: object, default: int = 0) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
 
 
 pipeline_service = PipelineService()

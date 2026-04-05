@@ -5,6 +5,13 @@ Evolve ARIA from the current system into a staged, high-quality, cost-aware API 
 
 ## Target Architecture (Staged Multiagent)
 
+### Operating Principle
+- One research fetch.
+- Three specialist processors consuming distilled evidence.
+- One final synthesizer compiling the processed outputs into a user-facing report.
+- Never re-send the full raw fetch to every stage if a compressed or role-filtered view is sufficient.
+- Keep the final agent focused on synthesis, not retrieval cleanup.
+
 ### Stage 1: Deep Research API (Bulk Evidence Collection)
 Purpose:
 - Collect broad, relevant evidence once.
@@ -31,6 +38,9 @@ Purpose:
 - Process evidence into focused perspectives.
 - Keep these APIs fast and cost-efficient.
 
+Operating rule:
+- Each specialist should receive a compressed evidence bundle or a role-filtered slice, not the full raw fetch unless required.
+
 Sub-roles:
 - Positive/Opportunity chunking
 - Negative/Risk chunking
@@ -47,6 +57,7 @@ Required output contract per chunk:
 Notes:
 - Use lightweight models here.
 - Keep strict schema validation and reject malformed outputs.
+- The specialist outputs should be independently useful and small enough to keep token growth bounded.
 
 ### Stage 3: Strong Synthesis API (Final Intelligence Report)
 Purpose:
@@ -64,6 +75,7 @@ Required final report requirements:
 Notes:
 - Use strongest model budget here only.
 - This stage is quality-critical and should receive structured, cleaned inputs only.
+- Final synthesis should combine only the three processed specialist outputs plus the minimal evidence references needed for citation grounding.
 
 ## Why This Should Outperform the First Multiagent System
 
@@ -76,6 +88,7 @@ Expected efficiency gains:
 - Retrieval done once, not duplicated per agent.
 - Lightweight models handle routing/classification tasks.
 - Premium model used only for final synthesis.
+- Token growth stays controlled if the three specialists consume compressed/segmented evidence instead of raw duplication.
 
 Expected reliability gains:
 - Stage-level schema validation prevents cascading garbage outputs.
@@ -90,6 +103,10 @@ Control:
 Risk: Over-segmentation loses nuance.
 Control:
 - Add overlap allowance and cross-bucket reconciliation step.
+
+Risk: Repeating full raw evidence across all specialist agents inflates token cost.
+Control:
+- Share one compressed evidence bundle and role-filtered slices, not duplicated full fetches.
 
 Risk: Final synthesis invents links.
 Control:
