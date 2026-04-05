@@ -5,17 +5,19 @@
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  --background: #0f1116;
-  --foreground: #d3d7e0;
-  --surface-1: rgba(255, 255, 255, 0.04);
-  --surface-2: rgba(0, 0, 0, 0.35);
+  --background: #6a5a7b; /* Retro muted purple background */
+  --foreground: #2d2335; /* Dark foreground for high contrast with pastel */
+  --surface-1: #fdf5b1; /* Pale yellow */
+  --surface-2: #facd9d; /* Soft peach */
+  --border-color: #3b2c44; /* Dark thick borders */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-indigo-charcoal: #383e4e;
-  --color-lavender-gray: #b6bac5;
+  --color-pastel-yellow: var(--surface-1);
+  --color-pastel-peach: var(--surface-2);
+  --color-border-dark: var(--border-color);
   --font-sans: var(--font-space-grotesk);
   --font-serif: var(--font-playfair);
 }
@@ -29,21 +31,62 @@ body {
   min-height: 100vh;
 }
 
-.aurora-bg {
-  background:
-    radial-gradient(circle at 12% 20%, rgba(255, 154, 86, 0.18), transparent 34%),
-    radial-gradient(circle at 80% 28%, rgba(109, 133, 200, 0.14), transparent 38%),
-    radial-gradient(circle at 46% 80%, rgba(255, 184, 77, 0.14), transparent 38%);
-  filter: blur(22px);
-  opacity: 0.92;
+/* Retro styling classes */
+.retro-card {
+  background-color: var(--surface-1);
+  border: 3px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0px 0px var(--border-color);
+  color: var(--foreground);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.hex-grid-overlay {
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 42px 42px;
-  mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.9) 18%, transparent 80%);
+.retro-card-peach {
+  background-color: var(--surface-2);
+  border: 3px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 4px 4px 0px 0px var(--border-color);
+  color: var(--foreground);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.retro-card:hover, .retro-card-peach:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px 0px var(--border-color);
+}
+
+.retro-button {
+  background-color: var(--surface-2);
+  border: 3px solid var(--border-color);
+  border-radius: 9999px;
+  box-shadow: 3px 3px 0px 0px var(--border-color);
+  color: var(--foreground);
+  font-weight: 600;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.retro-button:active:not(:disabled) {
+  transform: translate(3px, 3px);
+  box-shadow: 0px 0px 0px 0px var(--border-color);
+}
+
+.retro-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: translate(3px, 3px);
+  box-shadow: 0px 0px 0px 0px var(--border-color);
+}
+
+.retro-input {
+  background-color: white;
+  border: 3px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--foreground);
+}
+
+.retro-input:focus {
+  outline: none;
+  box-shadow: 3px 3px 0px 0px var(--border-color);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────── */

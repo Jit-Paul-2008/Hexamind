@@ -114,47 +114,47 @@ export default function StatusIndicator() {
       transition={{ duration: 0.6, delay: 0.2 }}
       className="fixed top-5 right-6 z-50 flex max-w-[calc(100vw-2rem)] flex-wrap justify-end items-center gap-2"
     >
-      <div className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/8 backdrop-blur-xl flex items-center gap-2">
+      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
         <div
-          className={`w-1.5 h-1.5 rounded-full transition-colors duration-500 ${
+          className={`w-2 h-2 rounded-full border border-border-dark transition-colors duration-500 ${
             pipelineStatus === "running" ? "animate-pulse" : ""
           }`}
-          style={{ backgroundColor: dotColor, boxShadow: `0 0 6px ${dotColor}` }}
+          style={{ backgroundColor: dotColor }}
         />
-        <span className="font-sans text-[10px] tracking-[0.25em] uppercase text-white/40">
+        <span className="font-sans text-[10px] tracking-[0.1em] font-extrabold uppercase text-foreground">
           {statusText}
         </span>
       </div>
-      <div className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/8 backdrop-blur-xl flex items-center gap-2">
+      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
         <div
-          className="w-1.5 h-1.5 rounded-full transition-colors duration-500"
-          style={{ backgroundColor: backendColor, boxShadow: `0 0 6px ${backendColor}` }}
+          className="w-2 h-2 rounded-full border border-border-dark transition-colors duration-500"
+          style={{ backgroundColor: backendColor }}
         />
-        <span className="font-sans text-[10px] tracking-[0.25em] uppercase text-white/40">
+        <span className="font-sans text-[10px] tracking-[0.1em] font-extrabold uppercase text-foreground">
           API {backendText}
         </span>
       </div>
-      <div className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/8 backdrop-blur-xl flex items-center gap-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-cyan-300/80 shadow-[0_0_6px_rgba(103,232,249,0.8)]" />
-        <span className="font-sans text-[10px] tracking-[0.12em] uppercase text-white/45">
+      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
+        <div className="w-2 h-2 rounded-full border border-border-dark bg-[#93c5fd]" />
+        <span className="font-sans text-[10px] tracking-[0.05em] font-extrabold uppercase text-foreground/80">
           {modelLabel}
         </span>
       </div>
-      <div className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/8 backdrop-blur-xl flex items-center gap-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-amber-300/80 shadow-[0_0_6px_rgba(252,211,77,0.8)]" />
-        <span className="font-sans text-[10px] tracking-[0.12em] uppercase text-white/45">
+      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
+        <div className="w-2 h-2 rounded-full border border-border-dark bg-[#fcd34d]" />
+        <span className="font-sans text-[10px] tracking-[0.05em] font-extrabold uppercase text-foreground/80">
           {circuitLabel}
         </span>
       </div>
-      <div className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/8 backdrop-blur-xl flex items-center gap-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-violet-300/80 shadow-[0_0_6px_rgba(196,181,253,0.8)]" />
-        <span className="font-sans text-[10px] tracking-[0.12em] uppercase text-white/45">
+      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
+        <div className="w-2 h-2 rounded-full border border-border-dark bg-[#c4b5fd]" />
+        <span className="font-sans text-[10px] tracking-[0.05em] font-extrabold uppercase text-foreground/80">
           Uptime {elapsedLabel}
         </span>
       </div>
-      <div className="px-3.5 py-1.5 rounded-full bg-white/5 border border-white/8 backdrop-blur-xl flex items-center gap-2">
-        <div className="w-1.5 h-1.5 rounded-full bg-sky-300/80 shadow-[0_0_6px_rgba(125,211,252,0.8)]" />
-        <span className="font-sans text-[10px] tracking-[0.12em] uppercase text-white/45">
+      <div className="px-3.5 py-1.5 rounded-full border-3 border-border-dark bg-white shadow-[2px_2px_0px_0px_var(--border-color)] flex items-center gap-2">
+        <div className="w-2 h-2 rounded-full border border-border-dark bg-[#7dd3fc]" />
+        <span className="font-sans text-[10px] tracking-[0.05em] font-extrabold uppercase text-foreground/80">
           {clockLabel}
         </span>
       </div>

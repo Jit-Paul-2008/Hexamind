@@ -42,10 +42,13 @@ This is the budget we must not cross during the demo prep phase:
 
 | Run # | Query | Mode | Final chars | Citations | Sections | Status | Notes |
 |------:|-------|------|------------:|----------:|---------:|--------|-------|
-| 1 | South Korea population decline | local v1, no web research | 8,503 | 0 | 9/9 | Complete | Structure strong; citations missing because retrieval was disabled |
+| 1 | South Korea population decline | local v1, true-local (70b) | 178 | 0 | 0/9 | Failed | Service Busy fallback (timeout/overload path) |
+| 2 | South Korea population decline | local v1, true-local (70b), extended timeouts | 178 | 0 | 0/9 | Failed | Service Busy persisted |
+| 3 | South Korea population decline | local v1, true-local (70b), fail-safe enabled | 8,464 | 0 | 9/9 | Complete | Stable generation achieved; citations still zero because web research is off |
+| 4 | South Korea population decline | local v1, true-local (70b), web research on | Recovery mode output | 1 | Partial | Degraded | Retrieval timed out; provider fell back to deterministic recovery |
 
-**Budget consumed:** 1 / 30 runs  
-**Budget remaining:** 29 / 30 runs
+**Budget consumed:** 4 / 30 runs  
+**Budget remaining:** 26 / 30 runs
 
 ---
 

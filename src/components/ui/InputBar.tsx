@@ -87,12 +87,9 @@ export default function InputBar() {
       transition={{ duration: 0.8, delay: 0.3 }}
       className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none"
     >
-      {/* Gradient fade above the bar */}
-      <div className="h-12 bg-gradient-to-t from-[#0a0b0f] to-transparent" />
-
-      <div className="bg-[#0a0b0f]/90 backdrop-blur-2xl border-t border-white/5 px-4 pb-4 pt-3 pointer-events-auto">
+      <div className="bg-background px-4 pb-4 pt-3 pointer-events-auto border-t-4 border-border-dark">
         {pipelineStatus === "error" && pipelineError ? (
-          <div className="max-w-2xl mx-auto mb-3 rounded-xl border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-[11px] text-rose-100">
+          <div className="max-w-2xl mx-auto mb-3 retro-input bg-[#ffb3b3] px-3 py-2 text-[11px] text-foreground font-bold">
             Pipeline error: {pipelineError}
           </div>
         ) : null}
@@ -104,7 +101,7 @@ export default function InputBar() {
               type="button"
               disabled={isRunning}
               onClick={() => setPrompt(prompt)}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[10px] tracking-[0.12em] uppercase text-white/45 hover:text-white/80 hover:bg-white/[0.09] hover:border-white/20 disabled:opacity-30 disabled:cursor-not-allowed transition"
+              className="retro-button px-3 py-1 text-[10px] tracking-[0.1em] uppercase font-bold bg-pastel-yellow hover:bg-pastel-peach transition disabled:opacity-40"
             >
               {prompt.split(" ").slice(0, 4).join(" ")}
             </button>
@@ -126,12 +123,9 @@ export default function InputBar() {
               rows={1}
               maxLength={MAX_CHARS}
               aria-label="Pipeline prompt input"
-              className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 
-                         font-sans text-sm text-white/90 placeholder:text-white/20
-                         focus:outline-none focus:border-white/25 focus:bg-white/[0.07]
-                         disabled:opacity-40 disabled:cursor-not-allowed
-                         transition-all duration-300"
-              style={{ minHeight: 44, maxHeight: 120 }}
+              className="w-full resize-none retro-input px-4 py-3 font-sans text-sm text-foreground placeholder:text-foreground/40 font-medium
+                         focus:outline-none transition-all duration-200"
+              style={{ minHeight: 48, maxHeight: 120 }}
             />
           </div>
 
@@ -141,15 +135,12 @@ export default function InputBar() {
             disabled={!query.trim() || isRunning}
             id="send-query-btn"
             aria-label="Run pipeline"
-            className="flex-shrink-0 rounded-xl border border-white/10 bg-white/5 px-4 py-3
-                       text-white/50 hover:text-white hover:bg-white/10 hover:border-white/20
-                       disabled:opacity-25 disabled:cursor-not-allowed
-                       transition-all duration-300 group"
+            className="flex-shrink-0 retro-button px-4 py-3 bg-pastel-yellow hover:bg-pastel-peach text-foreground transition-all duration-200 group"
           >
             {isRunning ? (
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 border-2 border-white/30 border-t-white/80 rounded-full animate-spin" />
-                <span className="text-xs font-sans tracking-wider uppercase">Processing</span>
+                <div className="w-3 h-3 border-2 border-border-dark border-t-foreground/40 rounded-full animate-spin" />
+                <span className="text-xs font-sans font-bold uppercase tracking-wide">Processing</span>
               </div>
             ) : (
               <div className="flex items-center gap-2">
@@ -163,12 +154,12 @@ export default function InputBar() {
                   <path
                     d="M1 7h12M13 7L8 2M13 7L8 12"
                     stroke="currentColor"
-                    strokeWidth="1.5"
+                    strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
                 </svg>
-                <span className="text-xs font-sans tracking-wider uppercase">Run</span>
+                <span className="text-xs font-sans font-bold uppercase tracking-wide">Run</span>
               </div>
             )}
           </button>
@@ -178,22 +169,22 @@ export default function InputBar() {
             disabled={!query || isRunning}
             onClick={() => setQuery("")}
             aria-label="Clear query"
-            className="flex-shrink-0 rounded-xl border border-white/10 bg-transparent px-3 py-3 text-[10px] uppercase tracking-[0.2em] text-white/40 hover:text-white/75 hover:border-white/20 disabled:opacity-25 disabled:cursor-not-allowed transition"
+            className="flex-shrink-0 retro-button bg-white px-3 py-3 text-[10px] uppercase font-bold tracking-[0.1em] text-foreground hover:bg-pastel-yellow transition"
           >
             Clear
           </button>
         </form>
 
         {/* System info */}
-        <div className="max-w-2xl mx-auto mt-2 flex items-center justify-between">
-          <p className="text-[9px] font-sans tracking-[0.3em] uppercase text-white/15">
+        <div className="max-w-2xl mx-auto mt-3 flex items-center justify-between">
+          <p className="text-[10px] font-sans font-bold tracking-[0.1em] uppercase text-foreground/50">
             Hexamind · ARIA Pipeline v1.0
           </p>
           <div className="flex items-center gap-3">
-            <p className="text-[9px] font-sans text-white/15">
+            <p className="text-[10px] font-sans font-bold text-foreground/50">
               Enter to send · Shift+Enter for new line · Ctrl/Cmd+K focus
             </p>
-            <p className={`text-[9px] font-sans ${isNearLimit ? "text-amber-200/60" : "text-white/15"}`}>
+            <p className={`text-[10px] font-sans font-bold ${isNearLimit ? "text-[#ffb3b3]" : "text-foreground/50"}`}>
               {remainingChars} chars
             </p>
           </div>
