@@ -1,38 +1,16 @@
 services:
-  postgres:
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
   backend:
+    network_mode: host
     environment:
       DATABASE_URL: sqlite:///./aria.db
-      JWT_SECRET_KEY: ${JWT_SECRET}
-      # Default to hosted LLM API; use HEXAMIND_MODEL_PROVIDER=local for Ollama/LM Studio.
-      HEXAMIND_MODEL_PROVIDER: ${HEXAMIND_MODEL_PROVIDER:-openrouter}
-      HEXAMIND_MODEL_NAME: ${HEXAMIND_MODEL_NAME:-google/gemma-3-12b-it:free}
-      HEXAMIND_STRICT_PROVIDER: ${HEXAMIND_STRICT_PROVIDER:-false}
-      HEXAMIND_DISABLE_FAILSAFE_FALLBACK: ${HEXAMIND_DISABLE_FAILSAFE_FALLBACK:-false}
-      HEXAMIND_LOCAL_BASE_URL: ${HEXAMIND_LOCAL_BASE_URL:-http://host.docker.internal:11434/v1}
-      HEXAMIND_WEB_RESEARCH: ${HEXAMIND_WEB_RESEARCH:-1}
-      TAVILY_API_KEY: ${TAVILY_API_KEY}
-      HUGGINGFACE_API_KEY: ${HUGGINGFACE_API_KEY}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      GROQ_API_KEY: ${GROQ_API_KEY}
-      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-      HEXAMIND_ENABLE_HF_FALLBACK: ${HEXAMIND_ENABLE_HF_FALLBACK:-true}
-      HEXAMIND_ENABLE_OPENROUTER_FALLBACK: ${HEXAMIND_ENABLE_OPENROUTER_FALLBACK:-true}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    ports:
-      - "8000:8000"
+      JWT_SECRET: ${JWT_SECRET}
+      HEXAMIND_MODEL_PROVIDER: ${HEXAMIND_MODEL_PROVIDER:-local}
+      HEXAMIND_LOCAL_MODEL_SMALL: ${HEXAMIND_LOCAL_MODEL_SMALL:-llama3.1:8b}
+      HEXAMIND_LOCAL_MODEL_MEDIUM: ${HEXAMIND_LOCAL_MODEL_MEDIUM:-llama3.1:8b}
+      HEXAMIND_LOCAL_MODEL_LARGE: ${HEXAMIND_LOCAL_MODEL_LARGE:-llama3.1:8b}
 
   frontend:
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+      NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
       - "3000:3000"
-
-volumes:
-  postgres_data:

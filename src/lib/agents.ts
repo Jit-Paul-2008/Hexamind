@@ -1,7 +1,7 @@
 // Agent metadata mirrors backend defaults from ai-service/agents.py.
 // Keeping a local copy ensures the graph layout can render immediately.
 
-export type AgentShape = "tetrahedron" | "icosahedron" | "dodecahedron" | "box";
+export type AgentShape = "tetrahedron" | "icosahedron" | "dodecahedron" | "box" | "sphere";
 
 export interface Agent {
   id: string;           // matches backend agent UUID
@@ -14,14 +14,13 @@ export interface Agent {
   processingOrder: number; // 1-indexed pipeline position
 }
 
-// Processing order: Advocate → Skeptic → Synthesiser → Oracle
+// Processing order: Advocate → Skeptic → Synthesiser → Oracle → Verifier
 export const AGENTS: Agent[] = [
   {
     id: "advocate",
     codename: "Advocate",
-    role: "Constructive Reasoning",
-    purpose:
-      "Builds the strongest possible case for each hypothesis, surfacing supporting evidence and expanding the solution space.",
+    role: "Opportunity Thesis and Value Realization",
+    purpose: "Builds the strongest evidence-based upside case and execution path.",
     accentColor: "#818cf8",
     glowColor: "rgba(99, 102, 241, 0.28)",
     shape: "tetrahedron",
@@ -30,9 +29,8 @@ export const AGENTS: Agent[] = [
   {
     id: "skeptic",
     codename: "Skeptic",
-    role: "Adversarial Stress-Testing",
-    purpose:
-      "Systematically challenges every assumption and exposes logical blind spots before they compound into costly errors.",
+    role: "Risk Decomposition and Failure Analysis",
+    purpose: "Challenges assumptions, identifies failure modes, and quantifies downside exposure.",
     accentColor: "#f87171",
     glowColor: "rgba(239, 68, 68, 0.28)",
     shape: "icosahedron",
@@ -41,9 +39,8 @@ export const AGENTS: Agent[] = [
   {
     id: "synthesiser",
     codename: "Synthesiser",
-    role: "Perspective Integration",
-    purpose:
-      "Fuses competing viewpoints into a coherent, nuanced answer — resolving contradictions without losing critical signal.",
+    role: "Tradeoff Integration and Decision Framing",
+    purpose: "Integrates competing perspectives into a decision-ready recommendation.",
     accentColor: "#34d399",
     glowColor: "rgba(16, 185, 129, 0.28)",
     shape: "dodecahedron",
@@ -52,12 +49,21 @@ export const AGENTS: Agent[] = [
   {
     id: "oracle",
     codename: "Oracle",
-    role: "Predictive Inference",
-    purpose:
-      "Projects synthesised findings into probable futures, quantifying second-order effects and strategic implications.",
+    role: "Scenario Forecasting and Operating Outlook",
+    purpose: "Forecasts near-term outcomes with scenario ranges, triggers, and confidence levels.",
     accentColor: "#fbbf24",
     glowColor: "rgba(245, 158, 11, 0.28)",
     shape: "box",
     processingOrder: 4,
+  },
+  {
+    id: "verifier",
+    codename: "Verifier",
+    role: "Claim Validation and Evidence Audit",
+    purpose: "Checks whether major claims are verified, weakly-supported, contested, or unverified.",
+    accentColor: "#60a5fa",
+    glowColor: "rgba(59, 130, 246, 0.28)",
+    shape: "sphere",
+    processingOrder: 5,
   },
 ];

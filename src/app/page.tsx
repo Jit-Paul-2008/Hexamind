@@ -1,116 +1,166 @@
 "use client";
 
-import { motion } from "framer-motion";
-import InputBar from "@/components/ui/InputBar";
-import StatusIndicator from "@/components/ui/StatusIndicator";
+import { useState } from "react";
 import { AGENTS } from "@/lib/agents";
 import { usePipelineStore } from "@/lib/store";
-
-function statusClass(status: string) {
-  if (status === "done") return "bg-[#b8e8c6] border-border-dark text-foreground border-4 font-bold shadow-[2px_2px_0px_0px_var(--border-color)]";
-  if (status === "active") return "bg-pastel-yellow border-border-dark text-foreground border-4 font-bold shadow-[2px_2px_0px_0px_var(--border-color)]";
-  if (status === "error") return "bg-[#ffb3b3] border-border-dark text-foreground border-4 font-bold shadow-[2px_2px_0px_0px_var(--border-color)]";
-  return "bg-white border-border-dark text-foreground border-4 font-bold shadow-[2px_2px_0px_0px_var(--border-color)]";
-}
+import { useRunStore } from "@/store/runStore";
+import { startPipelineRun } from "@/lib/pipelineClient";
 
 export default function Home() {
+  const [query, setQuery] = useState("");
+  const [isRunning, setIsRunning] = useState(false);
   const session = usePipelineStore((s) => s.session);
   const statuses = usePipelineStore((s) => s.nodeStatuses);
+  const { runs } = useRunStore();
+  
+  const previousRun = runs.find(run => run.answer && run.answer !== session?.finalAnswer);
+
+  const handleRun = async () => {
+    if (!query.trim() || isRunning) return;
+    
+    setIsRunning(true);
+    await startPipelineRun(query, {
+      startPipeline: () => {},
+      setBackendSessionId: () => {},
+      setNodeStatus: () => {},
+      appendChunk: () => {},
+      setFinalAnswer: () => {},
+      setQualityLoading: () => {},
+      setQualityReport: () => {},
+      setQualityError: () => {},
+      setPipelineError: () => {},
+    });
+    setIsRunning(false);
+  };
+
+  const getAgentStatusClass = (status: string) => {
+    switch (status) {
+      case "active": return "agent-card active";
+      case "done": return "agent-card done";
+      default: return "agent-card";
+    }
+  };
 
   return (
-    <main className="relative min-h-screen w-full bg-background pb-48">
-      <a
-        href="#query-input"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 z-[120] rounded-md border-4 border-border-dark bg-white px-3 py-2 text-xs text-foreground shadow-[4px_4px_0px_0px_var(--border-color)] font-bold uppercase tracking-wider"
-      >
-        Skip to prompt input
-      </a>
-      <StatusIndicator />
+    <div className="min-h-screen bg-slate-50">
+      <div className="container">
+        {/* Header */}
+        <header className="text-center mb-8">
+          <h1 className="text-3xl font-light text-slate-800 mb-2">Hexamind</h1>
+          <p className="text-slate-600">Research Pipeline with Multi-Agent Analysis</p>
+        </header>
 
-      <section className="relative z-10 mx-auto max-w-6xl px-4 pt-24 md:px-6">
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-5"
-        >
-          <p className="text-[12px] uppercase tracking-[0.3em] text-foreground/80 font-black">ARIA Workspace</p>
-          <h1 className="mt-1 text-4xl font-black text-foreground tracking-tight uppercase">Practical Research Console</h1>
-          <p className="mt-2 max-w-2xl text-base text-foreground font-bold italic">
-            Write a prompt, run the pipeline, and read each agent output with quality signals in one place.
-          </p>
-        </motion.div>
-
-        <div className="grid gap-8 lg:grid-cols-3">
-          <article className="retro-card p-6 lg:col-span-1">
-            <p className="text-[13px] uppercase tracking-[0.2em] text-foreground/70 font-black border-b-4 border-border-dark/10 pb-2 mb-4">Current Prompt</p>
-            <p className="whitespace-pre-wrap text-sm leading-7 text-foreground font-bold">
-              {session?.query || "No query yet. Use the prompt box below to start."}
-            </p>
-            {session?.status === "error" && session.errorMessage ? (
-              <div className="mt-6 retro-input bg-[#ffb3b3] p-4 text-xs text-foreground font-black uppercase">
-                {session.errorMessage}
-              </div>
-            ) : null}
-          </article>
-
-          <article className="retro-card p-6 lg:col-span-2">
-            <div className="flex items-center justify-between gap-2 border-b-4 border-border-dark/10 pb-2 mb-4">
-              <p className="text-[13px] uppercase tracking-[0.2em] text-foreground/70 font-black">Agent Progress</p>
-              <span className="text-xs text-foreground/70 font-black uppercase tracking-widest">{session?.status || "ready"}</span>
-            </div>
-            <div className="grid gap-6 md:grid-cols-2">
-              {AGENTS.map((agent) => {
-                const status = statuses[agent.id] || "idle";
-                const content = session?.outputs?.[agent.id]?.content || "";
-                return (
-                  <div
-                    key={agent.id}
-                    className={`rounded-2xl px-5 py-4 border-4 shadow-[4px_4px_0px_0px_var(--border-color)] transition-all ${statusClass(status)}`}
-                  >
-                    <div className="mb-3 flex items-center justify-between gap-2 border-b-4 border-border-dark/10 pb-2">
-                      <p className="text-sm font-black uppercase tracking-tight">{agent.codename}</p>
-                      <span className="text-[10px] uppercase font-black tracking-widest">{status}</span>
-                    </div>
-                    <p className="line-clamp-4 text-xs leading-6 text-foreground font-bold italic">
-                      {content || "Waiting for output..."}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </article>
+        {/* Query Input */}
+        <div className="card mb-8">
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Research Query
+          </label>
+          <textarea
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="What would you like to research today?"
+            className="input mb-4 resize-none"
+            rows={4}
+          />
+          <button
+            onClick={handleRun}
+            disabled={!query.trim() || isRunning}
+            className="button"
+          >
+            {isRunning ? "Processing..." : "Start Research"}
+          </button>
         </div>
 
-        <article className="mt-8 retro-card-peach p-6">
-          <div className="flex items-center justify-between gap-2 border-b-4 border-border-dark/10 pb-2 mb-4">
-            <p className="text-[13px] uppercase tracking-[0.2em] text-foreground/70 font-black">Final Report</p>
-            <span className={`rounded-full px-4 py-1.5 text-[10px] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_var(--border-color)] ${statusClass(statuses.output || "idle")}`}>
-              {statuses.output || "idle"}
-            </span>
+        {/* Agent Status */}
+        <div className="card mb-8">
+          <h2 className="text-lg font-medium text-slate-800 mb-4">Agent Status</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {AGENTS.map((agent) => {
+              const status = statuses[agent.id] || "idle";
+              return (
+                <div key={agent.id} className={getAgentStatusClass(status)}>
+                  <div className="font-medium text-slate-800 mb-1">{agent.codename}</div>
+                  <div className="text-xs text-slate-600 uppercase">{status}</div>
+                </div>
+              );
+            })}
           </div>
-          <div className="mt-4 max-h-[45vh] overflow-auto retro-input p-6">
-            <p className="whitespace-pre-wrap text-base leading-8 text-foreground font-bold">
-              {session?.finalAnswer || "Final answer will appear here after pipeline completion."}
-            </p>
-          </div>
-          {session?.qualityReport ? (
-            <div className="mt-6 grid gap-4 text-xs text-foreground md:grid-cols-3">
-              <div className="retro-input p-4 font-black text-center uppercase tracking-wider">
-                Score: {session.qualityReport.overallScore.toFixed(1)}
-              </div>
-              <div className="retro-input p-4 font-black text-center uppercase tracking-wider">
-                Sources: {session.qualityReport.metrics.sourceCount}
-              </div>
-              <div className="retro-input p-4 font-black text-center uppercase tracking-wider">
-                Contradictions: {session.qualityReport.metrics.contradictionCount}
-              </div>
-            </div>
-          ) : null}
-        </article>
-      </section>
+        </div>
 
-      <InputBar />
-    </main>
+        {/* Output Windows */}
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Technical Output */}
+          <div className="output-window">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-blue-600">Technical Output</h2>
+              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                {statuses.output || "idle"}
+              </span>
+            </div>
+            <div className="output-content text-slate-700">
+              {session?.finalAnswer || "Technical analysis will appear here..."}
+            </div>
+            {session?.qualityReport && (
+              <div className="grid grid-cols-4 gap-2 mt-4">
+                <div className="metric">
+                  <div className="font-medium text-slate-800">Score</div>
+                  <div className="text-slate-600">{session.qualityReport.overallScore.toFixed(1)}</div>
+                </div>
+                <div className="metric">
+                  <div className="font-medium text-slate-800">Sources</div>
+                  <div className="text-slate-600">{session.qualityReport.metrics.sourceCount}</div>
+                </div>
+                <div className="metric">
+                  <div className="font-medium text-slate-800">Trust</div>
+                  <div className="text-slate-600">{session.qualityReport.trustScore?.toFixed(1) || "N/A"}</div>
+                </div>
+                <div className="metric">
+                  <div className="font-medium text-slate-800">Issues</div>
+                  <div className="text-slate-600">{session.qualityReport.metrics.contradictionCount}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Final Report */}
+          <div className="output-window">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium text-emerald-600">Final Report</h2>
+              <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
+                {previousRun ? `Previous: ${previousRun.id}` : "No previous"}
+              </span>
+            </div>
+            <div className="output-content text-slate-700">
+              {previousRun?.answer || "Previous reports will appear here for comparison..."}
+            </div>
+            {previousRun?.quality && (
+              <div className="grid grid-cols-4 gap-2 mt-4">
+                <div className="metric">
+                  <div className="font-medium text-slate-800">Score</div>
+                  <div className="text-slate-600">{previousRun.quality.overallScore}</div>
+                </div>
+                <div className="metric">
+                  <div className="font-medium text-slate-800">Sources</div>
+                  <div className="text-slate-600">{previousRun.quality.sourceCount}</div>
+                </div>
+                <div className="metric">
+                  <div className="font-medium text-slate-800">Trust</div>
+                  <div className="text-slate-600">{previousRun.quality.trustScore || "N/A"}</div>
+                </div>
+                <div className="metric">
+                  <div className="font-medium text-slate-800">Issues</div>
+                  <div className="text-slate-600">{previousRun.quality.contradictionCount}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <footer className="text-center mt-12 text-sm text-slate-500">
+          <p>Powered by Local AI Models • Multi-Agent Reasoning</p>
+        </footer>
+      </div>
+    </div>
   );
 }
