@@ -171,12 +171,10 @@ def metrics() -> Response:
 
 @app.get("/api/models/status")
 async def model_status() -> dict[str, object]:
-    return await _local_model_status()
-
-
-@app.get("/api/benchmark/local")
-async def benchmark_local_models() -> dict[str, object]:
-    return await _benchmark_local_models()
+    payload = pipeline_service.health()
+    payload["cloudOnlyMode"] = True
+    payload["providerDiagnostics"] = payload.copy()
+    return payload
 
 
 @app.get("/api/benchmark/competitive")

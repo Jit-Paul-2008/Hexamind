@@ -3170,8 +3170,6 @@ def _default_model_for_provider(provider_name: str) -> str:
         return "google/gemma-3-12b-it:free"
     if provider_name in {"groq"}:
         return "llama-3.1-8b-instant"
-    if provider_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
-        return os.getenv("HEXAMIND_LOCAL_MODEL", "llama3.1:8b")
     return "deterministic"
 
 
@@ -3252,15 +3250,7 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
     for name in reversed(chain_names):
         current_chain = instantiate_provider(name, current_chain)
         
-    # Handle the "Local" case specially (Local is usually the explicit target or not used)
     if primary_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
-        m_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(primary_name))
-        try:
-            # Local falls back to the cloud chain we just built
-            return LocalPipelineModelProvider(m_name) 
-        except Exception:
-            if _local_strict_mode() or strict_mode:
-                raise
-            return current_chain
+        raise RuntimeError("Local model providers are disabled in cloud-only deployment mode.")
 
     return current_chain
