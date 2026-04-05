@@ -404,19 +404,9 @@ _AGENT_DELTAS_SIMPLE = {
 
 def _build_agent_prompt(agent_id: str, complexity_score: float = 0.5) -> str:
     """
-    Build agent prompt using deduplication (30-40% token savings).
-    For simple queries (complexity < 0.3), uses minimal prompts (additional 15-25% savings).
+    Build agent prompt using full cognitive instructions for maximum analytical depth.
     """
-    agent_name = agent_id.upper()
-    base = _BASE_PROMPT.format(agent=agent_name)
-    
-    # Dynamic pruning: use simple prompts for simple queries
-    if complexity_score < 0.3:
-        delta = _AGENT_DELTAS_SIMPLE.get(agent_id, _AGENT_DELTAS_SIMPLE["oracle"])
-    else:
-        delta = _AGENT_DELTAS.get(agent_id, _AGENT_DELTAS["oracle"])
-    
-    return f"{base}\n{delta}"
+    return _deterministic_prompt_text(agent_id)
 
 
 def _compress_research_excerpt(excerpt: str, max_chars: int = 200) -> str:
@@ -2078,21 +2068,7 @@ class OpenRouterPipelineModelProvider:
                 "final",
                 lambda: self._chat(
                     model=model_name,
-                    system_prompt=(
-                        "You are ARIA final synthesiser producing academic-grade research reports in IMRaD structure.\n"
-                        "REQUIRED SECTIONS: '## Abstract' (structured: Background, Methods, Results, Conclusion), "
-                        "'## 1. Introduction' (domain context, research question, significance, primary sources), "
-                        "'## 2. Methodology' (data sources, analytical framework, quality controls), "
-                        "'## 3. Results' (narrative prose with subsections: Evidence Base, Supportive Findings, Risk Factors, Integrated Interpretation, Forward Outlook, Evidence Quality Assessment), "
-                        "'## 4. Discussion' (strength of evidence, implications for practice, contribution framing), "
-                        "'## 5. Limitations and Counterarguments' (source limitations, counterarguments, invalidation criteria), "
-                        "'## 6. Conclusion' (integrated finding, key contribution, why it matters, next steps), "
-                        "'## References' (complete source inventory).\n\n"
-                        "QUALITY GATES: Write in narrative prose (not bullets). Every major claim cites [Sx]. "
-                        "Distinguish primary from secondary sources. Acknowledge limitations explicitly. "
-                        "Frame contribution ('why it matters', 'what it changes'). Use academic register. "
-                        "NO business templates, 90-day plans, or pilot rollout language."
-                    ),
+                    system_prompt=_provider_final_prompt(self.provider_name),
                     user_prompt=(
                         f"Question: {query.strip()}\n\n"
                         f"ADVOCATE:\n{advocate_output}\n\n"
@@ -2359,13 +2335,7 @@ class GroqPipelineModelProvider:
                 "final",
                 lambda: self._chat(
                     model=model_name,
-                    system_prompt=(
-                        "ARIA final synthesiser producing IMRaD-structure research reports.\n"
-                        "SECTIONS: '## Abstract', '## 1. Introduction', '## 2. Methodology', "
-                        "'## 3. Results', '## 4. Discussion', '## 5. Limitations and Counterarguments', "
-                        "'## 6. Conclusion', '## References'.\n"
-                        "Write in narrative prose. Frame contribution. Acknowledge limitations."
-                    ),
+                    system_prompt=_provider_final_prompt(self.provider_name),
                     user_prompt=(
                         f"Question: {query.strip()}\n\n"
                         f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
@@ -2680,13 +2650,7 @@ class LocalPipelineModelProvider:
                     "final",
                     lambda: self._chat(
                         model=model_name,
-                        system_prompt=(
-                            "Final synthesiser (local) producing IMRaD research reports.\n"
-                            "SECTIONS: '## Abstract', '## 1. Introduction', '## 2. Methodology', "
-                            "'## 3. Results', '## 4. Discussion', '## 5. Limitations and Counterarguments', "
-                            "'## 6. Conclusion', '## References'.\n"
-                            "Narrative prose. Frame contribution. Acknowledge limitations."
-                        ),
+                        system_prompt=_provider_final_prompt(self.provider_name),
                         user_prompt=(
                             f"Question: {query.strip()}\n\n"
                             f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
