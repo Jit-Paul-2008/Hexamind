@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import time
 import uuid
 from dataclasses import dataclass
@@ -12,7 +13,7 @@ from pathlib import Path
 from agents import AGENTS
 from governance import redact_pii, select_agent_sequence
 from quality import analyze_pipeline_quality
-from research import ResearchContext
+from research import ResearchContext, source_inventory_markdown
 from schemas import PipelineEvent, PipelineEventType
 from model_provider import (
     DeterministicPipelineModelProvider,
@@ -80,11 +81,7 @@ class PipelineService:
             tenant_id=tenant_id,
             report_length=report_length,
         )
-        history = self._tenant_memory.setdefault(tenant_id, [])
-        history.append(query)
-        self._tenant_memory[tenant_id] = history[-12:]
         self._save_sessions()
-        self._save_tenant_memory()
         return session_id
 
     def has_session(self, session_id: str, tenant_id: str | None = None) -> bool:
@@ -275,10 +272,11 @@ class PipelineService:
             "finalSeconds": 0.0,
             "qualitySeconds": 0.0,
         }
+        retrieval_query = session.query
         effective_query = self._build_contextual_query(session)
 
         try:
-            research_task = asyncio.create_task(self._model_provider.build_research_context(effective_query))
+            research_task = asyncio.create_task(self._model_provider.build_research_context(retrieval_query))
             retrieval_error = ""
             
             # Wait for research first
@@ -477,6 +475,14 @@ class PipelineService:
                 )
                 timings["finalSeconds"] += time.perf_counter() - final_started
 
+            final_answer = self._compose_dual_report_output(
+                session=session,
+                raw_report=final_answer,
+                research=research_context,
+                assembled=assembled,
+                timings=timings,
+            )
+
             quality_started = time.perf_counter()
             quality_report = analyze_pipeline_quality(
                 query=session.query,
@@ -661,6 +667,122 @@ class PipelineService:
             "agentOutputCount": len([text for text in assembled.values() if text.strip()]),
         }
 
+    def _compose_dual_report_output(
+        self,
+        *,
+        session: PipelineSession,
+        raw_report: str,
+        research: ResearchContext | None,
+        assembled: dict[str, str],
+        timings: dict[str, float],
+    ) -> str:
+        topic = session.query.strip().rstrip("?") or "Untitled topic"
+        cleaned_report = self._strip_report_noise(raw_report)
+        abstract = self._extract_section(cleaned_report, "## Abstract", "## Keywords")
+        methods = self._extract_section(cleaned_report, "## Methods", "## Results")
+        results = self._extract_section(cleaned_report, "## Results", "## Discussion/Conclusion")
+        discussion = self._extract_section(cleaned_report, "## Discussion/Conclusion", "## References")
+        references = self._extract_section(cleaned_report, "## References", None)
+        synthesis = results or discussion or abstract
+
+        source_count = len(research.sources) if research and research.sources else 0
+        unique_domains = len({source.domain for source in research.sources}) if research and research.sources else 0
+        topic_coverage = getattr(research, "topic_coverage_score", 0.0) if research else 0.0
+        research_depth = getattr(research, "research_depth_score", 0.0) if research else 0.0
+        estimated_tokens = self._estimate_token_usage(session.query, assembled, raw_report)
+        executive_summary = abstract or discussion or "The evidence converges on a source-backed answer to the question."
+        key_findings = self._sentence_bullets(synthesis, 4)
+        evidence_snapshot = self._topic_source_points(research, 5)
+
+        technical_report = (
+            "## Technical report\n"
+            f"### Topic\n{topic}\n\n"
+            f"### Executive summary\n{executive_summary}\n\n"
+            f"### Methods\n{methods or 'Multi-agent retrieval and synthesis with local execution and source-grounded analysis.'}\n\n"
+            f"### Key findings\n{key_findings}\n\n"
+            f"### Discussion\n{discussion or 'Discussion is summarized in the accompanying report on the topic.'}\n\n"
+            f"### Research Quality\n"
+            f"- Sources retrieved: {source_count}\n"
+            f"- Unique domains: {unique_domains}\n"
+            f"- Topic coverage: {topic_coverage:.2f}\n"
+            f"- Research depth: {research_depth:.2f}\n"
+            f"- Estimated token usage: {estimated_tokens}\n"
+            f"- Retrieval time: {timings.get('retrievalSeconds', 0.0):.2f}s\n"
+            f"- Analysis time: {timings.get('agentSeconds', 0.0):.2f}s\n"
+            f"- Final synthesis time: {timings.get('finalSeconds', 0.0):.2f}s"
+        )
+        if references:
+            technical_report += f"\n\n### References\n{references}"
+        elif research and research.sources:
+            technical_report += f"\n\n### References\n{source_inventory_markdown(research)}"
+
+        technical_report += f"\n\n### Evidence Snapshot\n{evidence_snapshot}"
+
+        topic_report = self._build_topic_report(topic, executive_summary, key_findings, evidence_snapshot, research)
+        return f"{technical_report}\n\n{topic_report}"
+
+    @staticmethod
+    def _strip_report_noise(text: str) -> str:
+        cleaned = text or ""
+        cleaned = re.sub(r"(?is)\n### Limitations\n.*?(?=\n### |\Z)", "", cleaned)
+        cleaned = re.sub(r"(?is)\n\*\*Recommended Next Steps:\*\*\n.*?(?=\n## |\Z)", "", cleaned)
+        cleaned = re.sub(r"(?im)^Session continuity:.*(?:\n(?:Recent queries:.*)?)*", "", cleaned)
+        cleaned = re.sub(r"(?im)^Recent queries:.*$", "", cleaned)
+        cleaned = re.sub(r"^## Title\n.*?\n\n", "", cleaned, flags=re.S)
+        cleaned = re.sub(r"^## Author\n.*?\n\n", "", cleaned, flags=re.S)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+        return cleaned
+
+    @staticmethod
+    def _extract_section(text: str, start_marker: str, end_marker: str | None) -> str:
+        if not text or start_marker not in text:
+            return ""
+        start = text.index(start_marker) + len(start_marker)
+        remainder = text[start:]
+        if end_marker and end_marker in remainder:
+            remainder = remainder[: remainder.index(end_marker)]
+        return remainder.strip()
+
+    @staticmethod
+    def _estimate_token_usage(query: str, assembled: dict[str, str], report: str) -> int:
+        text = " ".join([query, report, *assembled.values()])
+        return max(1, len(text) // 4)
+
+    def _build_topic_report(
+        self,
+        topic: str,
+        executive_summary: str,
+        key_findings: str,
+        evidence_snapshot: str,
+        research: ResearchContext | None,
+    ) -> str:
+        source_notes = source_inventory_markdown(research)
+        bottom_line = executive_summary or "The evidence points to a coherent topic-level answer grounded in the retrieved sources."
+
+        return (
+            f"## Report on {topic}\n"
+            f"### Bottom Line\n{bottom_line}\n\n"
+            f"### Key Findings\n{key_findings or '- Evidence has been consolidated into a concise topic summary.'}\n\n"
+            f"### Evidence Snapshot\n{evidence_snapshot}\n\n"
+            f"### Source Notes\n{source_notes}"
+        )
+
+    @staticmethod
+    def _sentence_bullets(text: str, limit: int) -> str:
+        sentences = [segment.strip() for segment in re.split(r"(?<=[.!?])\s+", text or "") if segment.strip()]
+        if not sentences:
+            return "- Evidence has been consolidated into a concise topic summary."
+        return "\n".join(f"- {sentence}" for sentence in sentences[:limit])
+
+    @staticmethod
+    def _topic_source_points(research: ResearchContext | None, limit: int) -> str:
+        if not research or not research.sources:
+            return "- No live sources were available for this run."
+        lines = []
+        for source in research.sources[:limit]:
+            lines.append(f"- [{source.id}] {source.title} ({source.domain})")
+        return "\n".join(lines)
+
     def _retrieval_source_quality_score(self, research: ResearchContext | None) -> float:
         if not research or not research.sources:
             return 0.0
@@ -727,10 +849,7 @@ class PipelineService:
 
     def _build_contextual_query(self, session: PipelineSession) -> str:
         narrative_instruction = self._report_length_instruction(session.report_length)
-        memory_note = self._tenant_memory_note(session.tenant_id)
-        if not memory_note:
-            return f"{session.query}\n\n{narrative_instruction}"
-        return f"{session.query}\n\nSession continuity:\n{memory_note}\n\n{narrative_instruction}"
+        return f"{session.query}\n\n{narrative_instruction}"
 
     def _report_length_instruction(self, report_length: str) -> str:
         normalized = self._normalize_report_length(report_length)

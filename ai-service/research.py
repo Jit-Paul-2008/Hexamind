@@ -950,6 +950,8 @@ class InternetResearcher:
             workflow_profile.evidence_excerpt_limit,
         )
         if not excerpt:
+            excerpt = _trim_text(page_text or hit.snippet, workflow_profile.evidence_excerpt_limit)
+        if not excerpt:
             return None
 
         source = ResearchSource(
@@ -1695,8 +1697,43 @@ def _rank_and_dedupe_candidates(
         seen_urls.add(canonical_url)
         signatures.append(signature)
 
-    selected.sort(key=lambda row: row[0], reverse=True)
-    return selected
+    if not selected:
+        return []
+
+    # Proven retrieval heuristic (MMR) to balance relevance and diversity
+    # without additional external retrieval cost.
+    mmr_lambda = min(0.95, max(0.55, _env_float("HEXAMIND_RETRIEVAL_MMR_LAMBDA", 0.72)))
+    raw_scores = [score for score, _ in selected]
+    min_score = min(raw_scores)
+    max_score = max(raw_scores)
+    score_span = max(1e-9, max_score - min_score)
+
+    pool: list[tuple[float, ResearchSource, set[str]]] = []
+    for score, source in selected:
+        normalized = (score - min_score) / score_span
+        pool.append((normalized, source, _text_signature(source.title, source.excerpt)))
+
+    mmr_ranked: list[tuple[float, ResearchSource]] = []
+    while pool:
+        if not mmr_ranked:
+            best_idx = max(range(len(pool)), key=lambda idx: pool[idx][0])
+            rel, src, _ = pool.pop(best_idx)
+            mmr_ranked.append((rel, src))
+            continue
+
+        chosen_signatures = [_text_signature(src.title, src.excerpt) for _, src in mmr_ranked]
+        best_idx = 0
+        best_score = -1e9
+        for idx, (rel, src, sig) in enumerate(pool):
+            max_sim = max((_signature_overlap(sig, chosen) for chosen in chosen_signatures), default=0.0)
+            mmr_score = (mmr_lambda * rel) - ((1.0 - mmr_lambda) * max_sim)
+            if mmr_score > best_score:
+                best_score = mmr_score
+                best_idx = idx
+        rel, src, _ = pool.pop(best_idx)
+        mmr_ranked.append((rel, src))
+
+    return mmr_ranked
 
 
 def _authority_bonus(authority: str, requires_primary_sources: bool, audience: str) -> float:

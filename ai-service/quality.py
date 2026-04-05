@@ -5,7 +5,6 @@ import time
 from dataclasses import dataclass
 from itertools import combinations
 from urllib.parse import urlparse
-
 import httpx
 
 from research import ResearchContext
@@ -80,7 +79,6 @@ def analyze_pipeline_quality(
     unique_domains = len({source.domain for source in research.sources}) if research else 0
     average_credibility = _average_credibility(research)
     has_claim_map = "claim-to-citation map" in final_answer.lower() or "claim graph" in final_answer.lower()
-    has_uncertainty = any(marker in final_answer.lower() for marker in ("uncertainty", "open questions", "limitations", "confidence", "caveats"))
     has_contradiction_section = any(marker in final_answer.lower() for marker in ("contradiction", "conflicting", "disputed", "contested"))
     has_report_plan = "report plan" in final_answer.lower()
     generic_template_hits = _generic_template_hit_count(final_answer)
@@ -91,7 +89,6 @@ def analyze_pipeline_quality(
     if workflow_profile and workflow_profile.query_type in {"exploratory", "forecast"}:
         adaptive_domain_target = max(2, adaptive_domain_target - 1)
 
-    # Beast workflow: Enhanced claim verification with confidence levels
     claim_verifications = _verify_claims_v2(final_answer, research)
     verified_count = sum(1 for item in claim_verifications if item.status == "verified")
     weakly_supported_count = sum(1 for item in claim_verifications if item.status == "weakly-supported")
@@ -102,20 +99,18 @@ def analyze_pipeline_quality(
         ((verified_count + weakly_supported_count * 0.5) / len(claim_verifications)) if claim_verifications else 0.0
     )
 
-    # Beast workflow: Enhanced contradiction detection with types
     contradictions = _detect_contradictions_v2(query, research)
     contradiction_count = len(contradictions)
     high_severity_contradictions = sum(1 for c in contradictions if c.severity == "high")
     contradiction_covered = contradiction_count == 0 or has_contradiction_section
 
-    # Beast workflow: Multi-tier quality gates
     gate_results = _run_quality_gates(
         citation_count=citation_count,
         source_count=source_count,
         unique_domains=unique_domains,
         average_credibility=average_credibility,
         has_claim_map=has_claim_map,
-        has_uncertainty=has_uncertainty,
+        has_uncertainty=False,
         has_contradiction_section=has_contradiction_section,
         generic_template_hits=generic_template_hits,
         claim_verification_rate=claim_verification_rate,
@@ -125,22 +120,17 @@ def analyze_pipeline_quality(
         research=research,
     )
 
-    # Calculate component scores
-    citation_score = min(1.0, citation_count / 6.0) * 25.0  # Raised bar: 6 citations for full score
+    citation_score = min(1.0, citation_count / 6.0) * 25.0
     source_score = min(1.0, source_count / 8.0) * 15.0
-    diversity_score = 0.0
-    if source_count:
-        diversity_score = min(1.0, unique_domains / max(1, source_count)) * 12.0
+    diversity_score = min(1.0, unique_domains / max(1, source_count)) * 12.0 if source_count else 0.0
     credibility_score = average_credibility * 15.0
     structure_score = 8.0 if has_claim_map else 0.0
-    structure_score += 5.0 if has_uncertainty else 0.0
-    transparency_score = 10.0 if contradiction_covered and has_uncertainty else 5.0 if contradiction_covered else 0.0
+    transparency_score = 10.0 if contradiction_covered else 5.0 if contradiction_covered else 0.0
     verification_component = claim_verification_rate * 15.0
-    template_penalty = min(10.0, generic_template_hits * 2.0)  # Harsher penalty
+    template_penalty = min(10.0, generic_template_hits * 2.0)
     integrity_score = _average_citation_integrity(citation_integrity_findings)
     freshness_score = _average_source_freshness(research)
-    
-    # Beast workflow: Trust Score v2 Framework
+
     trust_breakdown = _calculate_trust_score_v2(
         claim_verification_rate=claim_verification_rate,
         integrity_score=integrity_score,
@@ -148,7 +138,7 @@ def analyze_pipeline_quality(
         source_count=source_count,
         unique_domains=unique_domains,
         has_claim_map=has_claim_map,
-        has_uncertainty=has_uncertainty,
+        has_uncertainty=False,
         contradiction_covered=contradiction_covered,
         contested_count=contested_count,
         unverified_count=unverified_count,
@@ -169,19 +159,18 @@ def analyze_pipeline_quality(
     )
     overall_score = round(max(0.0, overall_score - template_penalty), 2)
 
-    # Beast workflow: Stricter passing criteria
     all_gates_passed = all(gate.passed for gate in gate_results)
     passing = (
-        overall_score >= 72  # Raised threshold
+        overall_score >= 72
         and citation_count >= (adaptive_citation_target if source_count > 0 else 0)
         and (source_count == 0 or unique_domains >= min(adaptive_domain_target, source_count))
         and contradiction_covered
         and (not claim_verifications or claim_verification_rate >= adaptive_verification_target)
-        and trust_score >= 55  # Trust score gate
-        and high_severity_contradictions == 0  # No high-severity unaddressed contradictions
+        and trust_score >= 55
+        and high_severity_contradictions == 0
         and generic_template_hits == 0
     )
-    if has_report_plan and generic_template_hits >= 5:  # Stricter
+    if has_report_plan and generic_template_hits >= 5:
         passing = False
     if trust_score < 50.0 and source_count > 0:
         passing = False
@@ -209,7 +198,7 @@ def analyze_pipeline_quality(
             "contradictionCount": contradiction_count,
             "highSeverityContradictions": high_severity_contradictions,
             "hasClaimToCitationMap": has_claim_map,
-            "hasUncertaintyDisclosure": has_uncertainty,
+            "hasUncertaintyDisclosure": False,
             "hasContradictionSection": has_contradiction_section,
             "hasReportPlan": has_report_plan,
             "genericTemplateHitCount": generic_template_hits,
@@ -537,23 +526,6 @@ def _quality_notes(
         notes.append("Improve citation integrity, freshness, and corroboration to raise trust score.")
 
     return notes
-
-
-def _generic_template_hit_count(text: str) -> int:
-    phrases = (
-        "in conclusion",
-        "overall,",
-        "the best approach",
-        "it is important to note",
-        "in summary",
-        "next steps",
-        "consider the following",
-        "confidence: moderate",
-    )
-    normalized = text.lower()
-    return sum(1 for phrase in phrases if phrase in normalized)
-
-
 def _audit_citations(final_answer: str, research: ResearchContext | None) -> list[CitationIntegrityFinding]:
     if not research or not research.sources:
         return []
@@ -895,12 +867,6 @@ def _run_quality_gates(
     else:
         structural_issues.append("Missing claim-to-citation map")
         structural_recs.append("Add a claim-to-citation map section showing which sources support each claim")
-    
-    if has_uncertainty:
-        structural_score += 8.0
-    else:
-        structural_issues.append("Missing uncertainty/limitations disclosure")
-        structural_recs.append("Add section discussing limitations, caveats, and open questions")
     
     if generic_template_hits == 0:
         structural_score += 7.0

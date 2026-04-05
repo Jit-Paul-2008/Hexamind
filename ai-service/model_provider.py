@@ -662,10 +662,12 @@ def _deterministic_prompt_text(agent_id: str) -> str:
             "Claim Audit Table must include at least 5 claims with status: verified/weak/unverified."
         ),
         "final": (
-            "You are the FINAL SYNTHESISER. Produce one polished report with EXACT headings in this order: "
-            "Title, Author, Abstract, Keywords, Introduction, Methods, Results, Discussion/Conclusion, "
-            "Claim-to-Citation Map, Verification & Confidence, References. "
-            "Do not add extra top-level sections. Keep major claims grounded with [Sx] citations and include explicit uncertainty disclosures."
+            "You are the FINAL SYNTHESIZER. Produce TWO reports in this exact order and only with these top-level headings: "
+            "## Technical report and then ## Report on {Topic}. "
+            "The Technical report must contain a concise executive summary, methods, evidence-backed findings, research quality, citations, and source inventory. "
+            "The Report on {Topic} must be polished, human-readable, structured with clear subheadings and bullet points, and focused on the user's topic. "
+            "Use concrete claims, specific evidence, and direct language. Do not include session continuity, recent query history, limitations, caveats, next steps, or recovery notes. "
+            "Do not add extra top-level sections. Keep claims grounded with [Sx] citations and make the topic report useful to present directly."
         ),
     }
     return prompts.get(agent_id, prompts["final"])
@@ -764,40 +766,51 @@ class DeterministicPipelineModelProvider:
         title = self._build_title(q)
         author = "ARIA Research Pipeline (Hexamind)"
         keywords = self._build_keywords(q, report_mode, research)
-        
-        # Build academic-style sections
+
         abstract = self._build_abstract(q, outputs, research, report_mode)
         introduction = self._build_introduction(q, research, report_mode, refinement_note)
         methodology = self._build_methodology(research)
-        results = self._build_results(outputs, research, report_mode)
-        discussion = self._build_discussion(outputs, research, report_mode)
-        limitations = self._build_limitations(research, report_mode)
-        conclusion = self._build_conclusion(outputs, research, report_mode)
-        
-        return (
-            "## Title\n"
+        synthesis = self._extract_section_summary(outputs.get("synthesiser", ""), "## Integrated Assessment", "## Decision Rule")
+        verification = self._extract_section_summary(outputs.get("verifier", ""), "## Verification Summary", "## Claim Verification")
+        evidence_snapshot = self._evidence_snapshot_markdown(research)
+        topic_label = q if q else "the topic"
+
+        technical_report = (
+            "## Technical report\n"
+            "### Title\n"
             f"{title}\n\n"
-            "## Author\n"
+            "### Author\n"
             f"{author}\n\n"
-            "## Abstract\n"
+            "### Abstract\n"
             f"{abstract}\n\n"
-            "## Keywords\n"
+            "### Keywords\n"
             f"{keywords}\n\n"
-            "## Introduction\n"
+            "### Introduction\n"
             f"{introduction}\n\n"
-            "## Methods\n"
+            "### Methods\n"
             f"{methodology}\n\n"
-            "## Results\n"
-            f"{results}\n\n"
-            "## Discussion/Conclusion\n"
-            f"{discussion}\n\n"
-            "### Limitations\n"
-            f"{limitations}\n\n"
-            "### Closing Synthesis\n"
-            f"{conclusion}\n\n"
-            "## References\n"
+            "### Integrated synthesis\n"
+            f"{synthesis}\n\n"
+            "### Verification summary\n"
+            f"{verification}\n\n"
+            "### Source inventory\n"
             f"{source_inventory}"
         )
+
+        topic_report = (
+            f"## Report on {topic_label}\n"
+            f"This report presents the analysis of {topic_label} as a concise, readable synthesis.\n\n"
+            "### What the analysis shows\n"
+            f"{synthesis}\n\n"
+            "### Evidence base\n"
+            f"{evidence_snapshot}\n\n"
+            "### Verification\n"
+            f"{verification}\n\n"
+            "### Summary\n"
+            f"{abstract}"
+        )
+
+        return f"{technical_report}\n\n{topic_report}"
 
     def _build_title(self, query: str) -> str:
         base = " ".join(query.replace("?", "").split())
@@ -2691,10 +2704,11 @@ class LocalPipelineModelProvider:
             f"Question: {query.strip()}\n\n"
             "OUTPUT CONTRACT:\n"
             "- Deep reasoning over mechanisms, not generic statements.\n"
-            "- Explicitly surface tradeoffs and uncertainties.\n"
+            "- Lead with the direct answer and the strongest evidence first.\n"
             "- Include a Claim-to-Citation Map section with claim IDs (C1..Cn) mapped to [Sx].\n"
             "- Include Verification & Confidence with verified/weak/unverified claim counts.\n"
-            "- Keep all major claims source-grounded when sources are available.\n\n"
+            "- Keep all major claims source-grounded when sources are available.\n"
+            "- Prefer specific findings, concrete examples, and measurable outcomes over broad caveats.\n\n"
             f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
             f"SKEPTIC:\n{outputs.get('skeptic', '')}\n\n"
             f"SYNTHESISER:\n{outputs.get('synthesiser', '')}\n\n"
