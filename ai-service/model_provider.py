@@ -382,7 +382,7 @@ def _cost_aware_agent_model(provider_name: str, agent_id: str, default_model: st
             "advocate": "llama-3.1-8b-instant",
             "skeptic": "llama-3.1-8b-instant",
             "synthesiser": default_model,
-            "oracle": "mixtral-8x7b-32768",
+            "oracle": "llama-3.1-8b-instant",
             "verifier": "llama-3.1-8b-instant",
             "final": default_model,
         },
@@ -3173,6 +3173,46 @@ def _default_model_for_provider(provider_name: str) -> str:
     return "deterministic"
 
 
+def _normalize_provider_name(name: str) -> str:
+    normalized = (name or "").strip().lower()
+    aliases = {
+        "google": "gemini",
+        "google-genai": "gemini",
+        "router": "openrouter",
+    }
+    return aliases.get(normalized, normalized)
+
+
+def _provider_priority(primary_name: str) -> list[str]:
+    """
+    Build provider order from HEXAMIND_PROVIDER_CHAIN with a Groq-first default.
+    Ensures the configured primary provider is always first if it is cloud-capable.
+    """
+    supported = {"groq", "openrouter", "gemini"}
+    raw_chain = os.getenv("HEXAMIND_PROVIDER_CHAIN", "groq,openrouter,gemini")
+    parsed = [_normalize_provider_name(part) for part in raw_chain.split(",") if part.strip()]
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+
+    primary = _normalize_provider_name(primary_name)
+    if primary in supported:
+        ordered.append(primary)
+        seen.add(primary)
+
+    for name in parsed:
+        if name in supported and name not in seen:
+            ordered.append(name)
+            seen.add(name)
+
+    for fallback_name in ("groq", "openrouter", "gemini"):
+        if fallback_name not in seen:
+            ordered.append(fallback_name)
+            seen.add(fallback_name)
+
+    return ordered
+
+
 def _create_researcher() -> ResearcherProtocol:
     from research import InternetResearcher
 
@@ -3187,7 +3227,7 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
     2. Identify all other available cloud providers (Gemini, Groq, OpenRouter).
     3. Build a linked chain: Primary -> Fallback 1 -> Fallback 2 -> Deterministic.
     """
-    primary_name = os.getenv("HEXAMIND_MODEL_PROVIDER", "openrouter").strip().lower()
+    primary_name = _normalize_provider_name(os.getenv("HEXAMIND_MODEL_PROVIDER", "groq"))
     strict_mode = _strict_provider_mode()
     
     # helper to check if a provider is "available" (has keys)
@@ -3204,11 +3244,11 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
         return False
 
     # List of cloud providers to potentially chain
-    all_cloud_providers = ["openrouter", "gemini", "groq"]
+    all_cloud_providers = _provider_priority(primary_name)
     
     # 1. Build the sequence of names to try
     # Start with the primary. If primary is not in the list (like 'local'), handle it separately.
-    chain_names = []
+    chain_names: list[str] = []
     if primary_name in all_cloud_providers:
         chain_names.append(primary_name)
     
@@ -3234,7 +3274,9 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
 
     # Functional mapping to create providers
     def instantiate_provider(name: str, fb: PipelineModelProvider) -> PipelineModelProvider:
-        m_name = os.getenv("HEXAMIND_MODEL_NAME", _default_model_for_provider(name))
+        provider_model_name = os.getenv(f"HEXAMIND_MODEL_NAME_{name.upper()}", "").strip()
+        global_model_name = os.getenv("HEXAMIND_MODEL_NAME", "").strip()
+        m_name = provider_model_name or global_model_name or _default_model_for_provider(name)
         try:
             if name in {"gemini", "google", "google-genai"}:
                 return GeminiPipelineModelProvider(m_name, fallback=fb)

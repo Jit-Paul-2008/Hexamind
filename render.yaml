@@ -29,9 +29,11 @@ services:
       - key: HEXAMIND_DEPLOYMENT_ENV
         value: "production"
       - key: HEXAMIND_MODEL_PROVIDER
-        value: openrouter
+        value: groq
       - key: HEXAMIND_MODEL_NAME
-        value: google/gemma-3-12b-it:free
+        value: llama-3.1-8b-instant
+      - key: HEXAMIND_PROVIDER_CHAIN
+        value: groq,openrouter,gemini
       - key: HEXAMIND_STRICT_PROVIDER
         value: "1"
       - key: HEXAMIND_DISABLE_FAILSAFE_FALLBACK

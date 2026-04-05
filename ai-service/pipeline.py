@@ -458,7 +458,7 @@ class PipelineService:
             timings["qualitySeconds"] += time.perf_counter() - quality_started
 
             regenerated = False
-            if _env_bool("HEXAMIND_AUTO_REGENERATE_ON_FAIL", True) and not bool(quality_report.get("passing", False)):
+            if _env_bool("HEXAMIND_AUTO_REGENERATE_ON_FAIL", False) and not bool(quality_report.get("passing", False)):
                 regenerated = True
                 refinement_note = (
                     "Regenerate with stronger grounding. Requirements: include a claim-to-citation map, "

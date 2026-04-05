@@ -55,25 +55,27 @@ def select_agent_sequence(
     query_type = profile.query_type if profile else _query_type_from_text(normalized)
     complexity = profile.complexity_score if profile else _query_complexity_score(normalized)
 
+    # Single efficient framework: trim one non-critical agent in common paths,
+    # while preserving full coverage for comparison/high-complexity prompts.
     if query_type == "comparison" or any(token in normalized for token in ("compare", "versus", " vs ")):
         return ("advocate", "skeptic", "oracle", "verifier", "synthesiser")
 
     if query_type == "technical":
-        return ("verifier", "skeptic", "oracle", "synthesiser")
+        return ("skeptic", "oracle", "verifier", "synthesiser")
 
     if query_type == "decision":
-        return ("advocate", "skeptic", "synthesiser", "oracle", "verifier")
+        return ("advocate", "skeptic", "oracle", "synthesiser")
 
     if query_type == "forecast":
-        return ("oracle", "verifier", "synthesiser")
+        return ("oracle", "skeptic", "synthesiser")
 
     if complexity < 0.35:
-        return ("advocate", "skeptic", "synthesiser", "oracle", "verifier")
+        return ("advocate", "skeptic", "synthesiser", "oracle")
 
     if complexity >= 0.75:
         return ("advocate", "skeptic", "oracle", "verifier", "synthesiser")
 
-    return ("advocate", "skeptic", "synthesiser", "oracle", "verifier")
+    return ("advocate", "skeptic", "oracle", "synthesiser")
 
 
 def _resolve_tenant_id(headers: Mapping[str, str] | None = None) -> str:
