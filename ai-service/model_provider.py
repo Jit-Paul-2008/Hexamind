@@ -3242,6 +3242,8 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
                 return OpenRouterPipelineModelProvider(m_name, fallback=fb)
             if name in {"groq"}:
                 return GroqPipelineModelProvider(m_name, fallback=fb)
+            if name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
+                return LocalPipelineModelProvider(m_name)
         except Exception:
             return fb # Skip failed inits
         return fb
@@ -3249,8 +3251,15 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
     # Build the chain backwards
     for name in reversed(chain_names):
         current_chain = instantiate_provider(name, current_chain)
-        
+    
+    # If primary is local, instantiate it directly (not in chain)
     if primary_name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
-        raise RuntimeError("Local model providers are disabled in cloud-only deployment mode.")
+        try:
+            provider_model_name = os.getenv(f"HEXAMIND_MODEL_NAME_{primary_name.upper()}", "").strip()
+            global_model_name = os.getenv("HEXAMIND_MODEL_NAME", "").strip()
+            m_name = provider_model_name or global_model_name or _default_model_for_provider(primary_name)
+            return LocalPipelineModelProvider(m_name)
+        except Exception:
+            return current_chain  # Fall back if local init fails
 
     return current_chain
