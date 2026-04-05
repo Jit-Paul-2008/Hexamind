@@ -7,22 +7,30 @@
 
 ---
 
-## Cloud-First Fast Refinement (Current Priority)
+## No-Credit Local Refinement (Current Priority)
 
-v1 is considered demo-ready only when it runs stably on cloud providers. We keep local tuning for speed, but every refinement step must preserve API compatibility for free-tier deployment.
+Current operating mode is strict no-credit local refinement. Cloud providers are disabled during this phase to avoid API usage while improving v1 quality and latency behavior.
 
-### Fast Loop (Cloud)
+### Fast Loop (No-Credit Local)
 
-1. Start v1 in cloud-demo profile:
-  - `scripts/start_v1_cloud_demo.sh`
+1. Start v1 in no-credit local profile:
+  - `scripts/start_v1_nocredit_local.sh`
 2. Run one refinement query at a time:
-  - `scripts/run_v1_refine_once.sh "<query>"`
+  - `REQUIRE_PROVIDER=local scripts/run_v1_refine_once.sh "<query>"`
 3. Capture metrics from quality output:
   - overall score
   - trust score
   - citation count
   - source count
 4. Update the run ledger after every run before starting the next run.
+
+### No-Credit Guardrails
+
+- `HEXAMIND_MODEL_PROVIDER=local`
+- `HEXAMIND_PROVIDER_CHAIN=local`
+- `HEXAMIND_STRICT_PROVIDER=true`
+- `GOOGLE_API_KEY`, `GROQ_API_KEY`, and `OPENROUTER_API_KEY` are blanked in launcher
+- `REQUIRE_PROVIDER=local` gate is required for refinement runs
 
 ### Local to API Parity Rules
 

@@ -4,10 +4,21 @@ set -euo pipefail
 API_BASE="${API_BASE:-http://127.0.0.1:8011}"
 QUERY="${1:-Why is the population of South Korea declining so rapidly?}"
 REPORT_LENGTH="${REPORT_LENGTH:-moderate}"
+REQUIRE_PROVIDER="${REQUIRE_PROVIDER:-}"
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "jq is required. Install it and retry."
   exit 1
+fi
+
+if [[ -n "$REQUIRE_PROVIDER" ]]; then
+  health_resp="$(curl -sS --max-time 10 "$API_BASE/health")"
+  active_provider="$(printf '%s' "$health_resp" | jq -r '.activeProvider // empty')"
+  configured_provider="$(printf '%s' "$health_resp" | jq -r '.configuredProvider // empty')"
+  if [[ "$active_provider" != "$REQUIRE_PROVIDER" && "$configured_provider" != "$REQUIRE_PROVIDER" ]]; then
+    echo "Provider guard failed: expected '$REQUIRE_PROVIDER' but got configured='$configured_provider', active='$active_provider'"
+    exit 1
+  fi
 fi
 
 start_payload="$(jq -n --arg q "$QUERY" --arg rl "$REPORT_LENGTH" '{query:$q, reportLength:$rl}')"
