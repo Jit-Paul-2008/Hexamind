@@ -34,6 +34,7 @@ class PipelineSession:
     query: str
     created_at: float
     tenant_id: str = "default"
+    report_length: str = "moderate"
 
 
 class PipelineService:
@@ -62,15 +63,17 @@ class PipelineService:
         self._tenant_memory_path = self._storage_path.with_name("tenant-memory.json")
         self._tenant_memory: dict[str, list[str]] = self._load_tenant_memory()
 
-    def start(self, query: str, tenant_id: str = "default") -> str:
+    def start(self, query: str, tenant_id: str = "default", report_length: str = "moderate") -> str:
         query = redact_pii(query.strip())
         tenant_id = tenant_id.strip() or "default"
+        report_length = self._normalize_report_length(report_length)
         session_id = f"session_{uuid.uuid4().hex[:10]}"
         self._sessions[session_id] = PipelineSession(
             id=session_id,
             query=query,
             created_at=time.time(),
             tenant_id=tenant_id,
+            report_length=report_length,
         )
         history = self._tenant_memory.setdefault(tenant_id, [])
         history.append(query)
@@ -602,6 +605,7 @@ class PipelineService:
         return {
             "sessionId": session.id,
             "tenantId": session.tenant_id,
+            "reportLength": session.report_length,
             "createdAt": session.created_at,
             "queryHash": query_hash,
             "queryLength": len(session.query),
@@ -623,10 +627,42 @@ class PipelineService:
         return session
 
     def _build_contextual_query(self, session: PipelineSession) -> str:
+        narrative_instruction = self._report_length_instruction(session.report_length)
         memory_note = self._tenant_memory_note(session.tenant_id)
         if not memory_note:
-            return session.query
-        return f"{session.query}\n\nSession continuity:\n{memory_note}"
+            return f"{session.query}\n\n{narrative_instruction}"
+        return f"{session.query}\n\nSession continuity:\n{memory_note}\n\n{narrative_instruction}"
+
+    def _report_length_instruction(self, report_length: str) -> str:
+        normalized = self._normalize_report_length(report_length)
+        depth_contract = (
+            "Depth contract: perform deep evidence synthesis with mechanisms, counter-evidence, "
+            "historical context, uncertainty boundaries, and explicit claim-to-source grounding. "
+            "If sources are available, cite at least 5 distinct source IDs when feasible."
+        )
+        if normalized == "brief":
+            return (
+                "Report length mode: brief. Keep the narrative concise and highly structured, "
+                "but do not omit relevant evidence, key findings, caveats, or source-grounded facts. "
+                + depth_contract
+            )
+        if normalized == "huge":
+            return (
+                "Report length mode: huge. Provide an expansive narrative with deeper explanations, "
+                "comparisons, and context while preserving all core evidence and uncertainty disclosures. "
+                + depth_contract
+            )
+        return (
+            "Report length mode: moderate. Provide balanced depth and readability while preserving all "
+            "key evidence, caveats, and source-grounded facts. "
+            + depth_contract
+        )
+
+    def _normalize_report_length(self, report_length: str | None) -> str:
+        value = (report_length or "moderate").strip().lower()
+        if value in {"brief", "moderate", "huge"}:
+            return value
+        return "moderate"
 
     def _build_agent_query(self, base_query: str, agent_id: str, assembled: dict[str, str]) -> str:
         if agent_id not in {"synthesiser", "verifier"}:
@@ -704,6 +740,7 @@ class PipelineService:
                     query=item["query"],
                     created_at=float(item["created_at"]),
                     tenant_id=str(item.get("tenant_id", "default")),
+                    report_length=self._normalize_report_length(str(item.get("report_length", "moderate"))),
                 )
             except (KeyError, TypeError, ValueError):
                 continue
@@ -718,6 +755,7 @@ class PipelineService:
                 "query": session.query,
                 "created_at": session.created_at,
                 "tenant_id": session.tenant_id,
+                "report_length": session.report_length,
             }
             for session_id, session in self._sessions.items()
         }

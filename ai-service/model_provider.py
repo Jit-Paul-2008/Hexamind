@@ -280,11 +280,11 @@ def _research_compression_level() -> str:
     """
     Get research compression level from environment.
     Options: "none", "light", "medium", "aggressive"
-    Default: "aggressive" (80% reduction)
+    Default: "medium" (balanced depth and cost)
     """
-    level = os.getenv("HEXAMIND_RESEARCH_COMPRESSION", "aggressive").strip().lower()
+    level = os.getenv("HEXAMIND_RESEARCH_COMPRESSION", "medium").strip().lower()
     valid_levels = {"none", "light", "medium", "aggressive"}
-    return level if level in valid_levels else "aggressive"
+    return level if level in valid_levels else "medium"
 
 
 _PROMPT_RESPONSE_CACHE: dict[str, tuple[float, str]] = {}
@@ -518,9 +518,9 @@ def _compress_research_context(context: ResearchContext | None, compression_leve
         return "No research sources."
     
     excerpt_limits = {
-        "light": 240,
-        "medium": 120,
-        "aggressive": 80,
+        "light": 420,
+        "medium": 260,
+        "aggressive": 170,
     }
     excerpt_max = excerpt_limits.get(compression_level, 80)
     
@@ -532,8 +532,8 @@ def _compress_research_context(context: ResearchContext | None, compression_leve
     ]
     
     # Limit sources based on compression level
-    source_limits = {"light": 5, "medium": 4, "aggressive": 3}
-    source_cap = source_limits.get(compression_level, 3)
+    source_limits = {"light": 8, "medium": 6, "aggressive": 5}
+    source_cap = source_limits.get(compression_level, 5)
     
     for source in context.sources[:source_cap]:
         compressed_excerpt = _compress_research_excerpt(source.excerpt, excerpt_max)
@@ -548,6 +548,19 @@ def _compress_research_context(context: ResearchContext | None, compression_leve
         lines.extend(["Conflicts:"])
         for src_a, src_b, reason in context.contradictions[:2]:
             lines.append(f"- {src_a} vs {src_b}: {reason[:60]}")
+
+    if context.corroboration_pairs:
+        lines.extend(["Corroboration:"])
+        for src_a, src_b, claim in context.corroboration_pairs[:3]:
+            lines.append(f"- {src_a} + {src_b}: {claim[:80]}")
+
+    lines.extend(
+        [
+            "",
+            f"DepthScore: {context.research_depth_score:.2f}",
+            f"CoverageScore: {context.topic_coverage_score:.2f}",
+        ]
+    )
     
     return '\n'.join(lines)
 
@@ -574,7 +587,11 @@ def _deterministic_prompt_text(agent_id: str) -> str:
         ),
         "oracle": "You are the ORACLE agent. Write a concise forecast with headings: Scenario Outlook, Most Likely Outcome (60%), Upside Scenario (25%), Downside Scenario (15%), Scenario Interdependencies, Leading Indicators Dashboard, Forecast Confidence, Citations Used.",
         "verifier": "You are the VERIFIER agent. Write a concise evidence audit with headings: Verification Summary, Claim Audit Table, Source Triangulation, Evidence Gaps, Contradiction Map, Verification Confidence.",
-        "final": "You are the FINAL SYNTHESISER. Produce one polished report with headings: Abstract, Introduction, Methodology, Results, Discussion, Limitations and Counterarguments, Conclusion, References. Keep it concise and cite [Sx] for major claims.",
+        "final": (
+            "You are the FINAL SYNTHESISER. Produce one polished report with EXACT headings in this order: "
+            "Title, Author, Abstract, Keywords, Introduction, Methods, Results, Discussion/Conclusion, References. "
+            "Do not add extra top-level sections. Keep major claims grounded with [Sx] citations."
+        ),
     }
     return prompts.get(agent_id, prompts["final"])
 
@@ -599,7 +616,9 @@ async def _invoke_with_resilience(
     operation: Callable[[], Awaitable[T]],
     timeout_seconds: float,
     validate: Callable[[T], bool] | None = None,
+    operation_with_retry: Callable[[], Awaitable[T]] | None = None,
 ) -> T:
+    """Invoke operation with resilience, health tracking, and optional retry with different strategy."""
     last_error: Exception | None = None
     attempts = health.retry_budget + 1
 
@@ -608,7 +627,9 @@ async def _invoke_with_resilience(
             raise RuntimeError(f"{health.provider_name} circuit breaker is open")
 
         try:
-            result = await asyncio.wait_for(operation(), timeout=timeout_seconds)
+            # Use retry operation on second attempt if provided
+            current_operation = operation if attempt == 0 else (operation_with_retry or operation)
+            result = await asyncio.wait_for(current_operation(), timeout=timeout_seconds)
             if validate is not None and not validate(result):
                 raise RuntimeError(f"{health.provider_name} stage {stage} returned an invalid result")
             health.record_success()
@@ -665,7 +686,9 @@ class DeterministicPipelineModelProvider:
         q = query.strip()
         report_mode = self._report_mode(q, research)
         source_inventory = source_inventory_markdown(research)
-        executive_summary = self._build_executive_summary(q, outputs, research)
+        title = self._build_title(q)
+        author = "ARIA Research Pipeline (Hexamind)"
+        keywords = self._build_keywords(q, report_mode, research)
         
         # Build academic-style sections
         abstract = self._build_abstract(q, outputs, research, report_mode)
@@ -677,25 +700,66 @@ class DeterministicPipelineModelProvider:
         conclusion = self._build_conclusion(outputs, research, report_mode)
         
         return (
-            "## Executive Summary\n"
-            f"{executive_summary}\n\n"
+            "## Title\n"
+            f"{title}\n\n"
+            "## Author\n"
+            f"{author}\n\n"
             "## Abstract\n"
             f"{abstract}\n\n"
-            "## 1. Introduction\n"
+            "## Keywords\n"
+            f"{keywords}\n\n"
+            "## Introduction\n"
             f"{introduction}\n\n"
-            "## 2. Methodology\n"
+            "## Methods\n"
             f"{methodology}\n\n"
-            "## 3. Results\n"
+            "## Results\n"
             f"{results}\n\n"
-            "## 4. Discussion\n"
+            "## Discussion/Conclusion\n"
             f"{discussion}\n\n"
-            "## 5. Limitations and Counterarguments\n"
+            "### Limitations\n"
             f"{limitations}\n\n"
-            "## 6. Conclusion\n"
+            "### Closing Synthesis\n"
             f"{conclusion}\n\n"
             "## References\n"
             f"{source_inventory}"
         )
+
+    def _build_title(self, query: str) -> str:
+        base = " ".join(query.replace("?", "").split())
+        if not base:
+            return "Research Synthesis Report"
+        if len(base) > 120:
+            base = base[:117].rstrip() + "..."
+        return f"Research Synthesis: {base}"
+
+    def _build_keywords(self, query: str, report_mode: str, research: ResearchContext | None) -> str:
+        words = [token.lower() for token in re.findall(r"[a-zA-Z0-9]{4,}", query)]
+        seen: set[str] = set()
+        picked: list[str] = []
+        for token in words:
+            if token in seen:
+                continue
+            seen.add(token)
+            picked.append(token)
+            if len(picked) >= 5:
+                break
+
+        if research and research.search_terms:
+            for term in research.search_terms:
+                normalized = term.strip().lower()
+                if not normalized or normalized in seen:
+                    continue
+                seen.add(normalized)
+                picked.append(normalized)
+                if len(picked) >= 7:
+                    break
+
+        if report_mode not in seen:
+            picked.append(report_mode)
+        if "evidence synthesis" not in seen:
+            picked.append("evidence synthesis")
+
+        return ", ".join(picked[:8])
 
     def _build_executive_summary(
         self,
@@ -1583,60 +1647,32 @@ class GeminiPipelineModelProvider:
 
         research_block = format_research_context(research)
         final_prompt = (
-            "You are the FINAL SYNTHESISER for a professional multi-agent research pipeline. Your output must follow academic research paper conventions (IMRaD structure).\n\n"
-            "REQUIRED OUTPUT STRUCTURE (use exact headings):\n\n"
+            "You are the FINAL SYNTHESISER for a professional multi-agent research pipeline.\n"
+            "Your output must follow the exact paper structure requested by the user.\n\n"
+            "REQUIRED OUTPUT STRUCTURE (use these exact top-level headings in this exact order):\n"
+            "## Title\n"
+            "## Author\n"
             "## Abstract\n"
-            "Structured abstract with: **Background:** (context), **Methods:** (analytical approach), **Results:** (key finding), **Conclusion:** (confidence and contribution).\n\n"
-            "## 1. Introduction\n"
-            "Academic-style introduction establishing:\n"
-            "- Domain context and significance\n"
-            "- Research question (explicit statement)\n"
-            "- Why this inquiry matters\n"
-            "- Primary sources consulted (if available)\n\n"
-            "## 2. Methodology\n"
-            "Document your analytical framework:\n"
-            "- **Data Sources:** Number of sources, domains, primary vs secondary classification, mean credibility\n"
-            "- **Analytical Framework:** Five-agent adversarial pipeline (Advocate → Skeptic → Synthesiser → Oracle → Verifier)\n"
-            "- **Quality Controls:** Citation requirements, contradiction handling, confidence calibration\n\n"
-            "## 3. Results\n"
-            "Present findings in narrative prose (no bullet lists):\n"
-            "### 3.1 Evidence Base\n"
-            "Describe source composition with key excerpts embedded naturally.\n"
-            "### 3.2 Supportive Findings\n"
-            "Synthesize benefits identified by Advocate analysis.\n"
-            "### 3.3 Risk Factors and Constraints\n"
-            "Integrate concerns from Skeptic analysis.\n"
-            "### 3.4 Integrated Interpretation\n"
-            "Reconcile competing perspectives from Synthesiser.\n"
-            "### 3.5 Forward Outlook\n"
-            "Scenario analysis from Oracle projections.\n"
-            "### 3.6 Evidence Quality Assessment\n"
-            "Verifier findings on source reliability.\n\n"
-            "## 4. Discussion\n"
-            "Interpret findings with:\n"
-            "- Strength of Evidence assessment\n"
-            "- **Implications for Practice:** What this means for decision-makers\n"
-            "- **What This Changes:** Explicit contribution framing (why it matters, what insights are novel)\n"
-            "- Contextualize findings: where benefits are strongest, where risks are highest\n\n"
-            "## 5. Limitations and Counterarguments\n"
-            "Critical self-assessment:\n"
-            "- **Source Limitations:** Coverage, authority balance, temporal constraints\n"
-            "- **Potential Counterarguments:** Alternative interpretations, validity challenges\n"
-            "- **What Would Invalidate These Findings:** Specific evidence that would overturn conclusions\n\n"
-            "## 6. Conclusion\n"
-            "Synthesize with:\n"
-            "- Restate integrated finding\n"
-            "- **Key Contribution:** What makes this analysis valuable beyond summary\n"
-            "- **Why This Matters:** Practical significance\n"
-            "- **Recommended Next Steps:** Specific, evidence-grounded actions\n\n"
-            "## References\n"
-            "Complete source inventory with credibility scores and authority classification.\n\n"
+            "## Keywords\n"
+            "## Introduction\n"
+            "## Methods\n"
+            "## Results\n"
+            "## Discussion/Conclusion\n"
+            "## References\n\n"
+            "SECTION EXPECTATIONS:\n"
+            "- Abstract: brief Background, Methods, Results, and Conclusion in scholarly prose.\n"
+            "- Introduction: context, positioning, and explicit research question.\n"
+            "- Methods: data sources and analytical process (including adversarial agent workflow).\n"
+            "- Results: findings and evidence synthesis.\n"
+            "- Discussion/Conclusion: significance, limitations, and final takeaways in one section.\n"
+            "- References: source inventory with [Sx] IDs and URLs when available.\n\n"
             "QUALITY REQUIREMENTS:\n"
-            "- Write in narrative prose, not bullet lists (except References)\n"
+            "- Do not add extra top-level sections.\n"
+            "- Write in narrative prose, not bullet lists (except References).\n"
             "- Every major claim cites [Sx] source ID\n"
             "- Distinguish primary (peer-reviewed, official) from secondary sources\n"
             "- Acknowledge limitations explicitly\n"
-            "- Frame contribution: 'why it matters' and 'what it changes'\n"
+            "- Keep all evidence in scope; adjust narrative depth without dropping key facts\n"
             "- Use academic register (precise terminology, measured tone)\n"
             "- Distinguish correlation from causation\n"
             "- NO business templates, 90-day plans, or pilot rollout language\n\n"
@@ -1656,7 +1692,14 @@ class GeminiPipelineModelProvider:
                 lambda: self._ainvoke(final_prompt),
                 _stage_timeout_seconds("final"),
                 lambda text: _is_final_research_grade(text, minimum_length=900, research=research),
+                operation_with_retry=(
+                    lambda: self._ainvoke(
+                        final_prompt + "\n\nCRITICAL: Every claim MUST cite [S1], [S2], [S3] etc. References MUST include all sources."
+                    ) if _final_auto_retry_enabled() else None
+                ),
             )
+            if _final_auto_retry_enabled() and research and len(research.sources) > 0:
+                resolved = _inject_missing_citations(resolved, research)
             return resolved
         except Exception as exc:
             self._register_fallback(exc)
@@ -1891,6 +1934,17 @@ class OpenRouterPipelineModelProvider:
         oracle_output = _trim_for_prompt(outputs.get("oracle", ""), 1200)
         verifier_output = _trim_for_prompt(outputs.get("verifier", ""), 1000)
 
+        base_user_prompt = (
+            f"Question: {query.strip()}\n\n"
+            f"ADVOCATE:\n{advocate_output}\n\n"
+            f"SKEPTIC:\n{skeptic_output}\n\n"
+            f"SYNTHESISER:\n{synthesiser_output}\n\n"
+            f"ORACLE:\n{oracle_output}\n\n"
+            f"VERIFIER:\n{verifier_output}\n\n"
+            f"RESEARCH CONTEXT:\n{research_block}"
+            + (f"\n\nREFINEMENT FOCUS: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else "")
+        )
+
         try:
             resolved = await _invoke_with_resilience(
                 self._health,
@@ -1898,20 +1952,23 @@ class OpenRouterPipelineModelProvider:
                 lambda: self._chat(
                     model=model_name,
                     system_prompt=_provider_final_prompt("openrouter"),
-                    user_prompt=(
-                        f"Question: {query.strip()}\n\n"
-                        f"ADVOCATE:\n{advocate_output}\n\n"
-                        f"SKEPTIC:\n{skeptic_output}\n\n"
-                        f"SYNTHESISER:\n{synthesiser_output}\n\n"
-                        f"ORACLE:\n{oracle_output}\n\n"
-                        f"VERIFIER:\n{verifier_output}\n\n"
-                        f"RESEARCH CONTEXT:\n{research_block}"
-                        + (f"\n\nREFINEMENT FOCUS: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else "")
-                    ),
+                    user_prompt=base_user_prompt,
                 ),
                 _stage_timeout_seconds("final"),
                 lambda text: _is_final_research_grade(text, minimum_length=920, research=research),
+                operation_with_retry=(
+                    lambda: self._chat(
+                        model=model_name,
+                        system_prompt=(
+                            _provider_final_prompt("openrouter")
+                            + "\n\nCRITICAL: Every claim MUST cite [S1], [S2], [S3] etc. References MUST include all sources."
+                        ),
+                        user_prompt=base_user_prompt,
+                    ) if _final_auto_retry_enabled() else None
+                ),
             )
+            if _final_auto_retry_enabled() and research and len(research.sources) > 0:
+                resolved = _inject_missing_citations(resolved, research)
             return resolved
         except Exception as exc:
             self._register_fallback(exc)
@@ -2211,6 +2268,17 @@ class GroqPipelineModelProvider:
         oracle_output = _trim_for_prompt(outputs.get("oracle", ""), 700)
         verifier_output = _trim_for_prompt(outputs.get("verifier", ""), 650)
 
+        base_user_prompt = (
+            f"Question: {query.strip()}\n\n"
+            f"ADVOCATE:\n{advocate_output}\n\n"
+            f"SKEPTIC:\n{skeptic_output}\n\n"
+            f"SYNTHESISER:\n{synthesiser_output}\n\n"
+            f"ORACLE:\n{oracle_output}\n\n"
+            f"VERIFIER:\n{verifier_output}\n\n"
+            f"RESEARCH:\n{research_block}"
+            + (f"\n\nREFINEMENT: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else "")
+        )
+
         try:
             resolved = await _invoke_with_resilience(
                 self._health,
@@ -2218,20 +2286,23 @@ class GroqPipelineModelProvider:
                 lambda: self._chat(
                     model=model_name,
                     system_prompt=_provider_final_prompt("groq"),
-                    user_prompt=(
-                        f"Question: {query.strip()}\n\n"
-                        f"ADVOCATE:\n{advocate_output}\n\n"
-                        f"SKEPTIC:\n{skeptic_output}\n\n"
-                        f"SYNTHESISER:\n{synthesiser_output}\n\n"
-                        f"ORACLE:\n{oracle_output}\n\n"
-                        f"VERIFIER:\n{verifier_output}\n\n"
-                        f"RESEARCH:\n{research_block}"
-                        + (f"\n\nREFINEMENT: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else "")
-                    ),
+                    user_prompt=base_user_prompt,
                 ),
                 _stage_timeout_seconds("final"),
-                None,
+                lambda text: _is_final_research_grade(text, minimum_length=920, research=research),
+                operation_with_retry=(
+                    lambda: self._chat(
+                        model=model_name,
+                        system_prompt=(
+                            _provider_final_prompt("groq")
+                            + "\n\nCRITICAL: Every claim MUST cite [S1], [S2], [S3] etc. References MUST include all sources."
+                        ),
+                        user_prompt=base_user_prompt,
+                    ) if _final_auto_retry_enabled() else None
+                ),
             )
+            if _final_auto_retry_enabled() and research and len(research.sources) > 0:
+                resolved = _inject_missing_citations(resolved, research)
             return resolved
         except Exception as exc:
             self._register_fallback(exc)
@@ -2556,6 +2627,17 @@ class LocalPipelineModelProvider:
         model_name = self._resolve_local_model("final", tier)
         token_budget = _local_token_budget("final", tier, research)
 
+        base_user_prompt = (
+            f"Question: {query.strip()}\n\n"
+            f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
+            f"SKEPTIC:\n{outputs.get('skeptic', '')}\n\n"
+            f"SYNTHESISER:\n{outputs.get('synthesiser', '')}\n\n"
+            f"ORACLE:\n{outputs.get('oracle', '')}\n\n"
+            f"VERIFIER:\n{outputs.get('verifier', '')}\n\n"
+            f"RESEARCH:\n{research_block}"
+            + (f"\n\nREFINEMENT: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else "")
+        )
+
         if self._local_available:
             try:
                 resolved = await _invoke_with_resilience(
@@ -2564,16 +2646,7 @@ class LocalPipelineModelProvider:
                     lambda: self._chat(
                         model=model_name,
                         system_prompt=_provider_final_prompt("local"),
-                        user_prompt=(
-                            f"Question: {query.strip()}\n\n"
-                            f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
-                            f"SKEPTIC:\n{outputs.get('skeptic', '')}\n\n"
-                            f"SYNTHESISER:\n{outputs.get('synthesiser', '')}\n\n"
-                            f"ORACLE:\n{outputs.get('oracle', '')}\n\n"
-                            f"VERIFIER:\n{outputs.get('verifier', '')}\n\n"
-                            f"RESEARCH:\n{research_block}"
-                            + (f"\n\nREFINEMENT: {refinement_note.strip()}" if refinement_note and refinement_note.strip() else "")
-                        ),
+                        user_prompt=base_user_prompt,
                         max_tokens=token_budget,
                     ),
                     _stage_timeout_seconds("final"),
@@ -2582,7 +2655,20 @@ class LocalPipelineModelProvider:
                         minimum_length=min_length_by_tier.get(tier, 760),
                         research=research,
                     ),
+                    operation_with_retry=(
+                        lambda: self._chat(
+                            model=model_name,
+                            system_prompt=(
+                                _provider_final_prompt("local")
+                                + "\n\nCRITICAL: Every claim MUST cite [S1], [S2], [S3] etc. References MUST include all sources."
+                            ),
+                            user_prompt=base_user_prompt,
+                            max_tokens=token_budget,
+                        ) if _final_auto_retry_enabled() else None
+                    ),
                 )
+                if _final_auto_retry_enabled() and research and len(research.sources) > 0:
+                    resolved = _inject_missing_citations(resolved, research)
                 return resolved
             except Exception as exc:
                 self._register_fallback(exc)
@@ -2686,7 +2772,7 @@ class LocalPipelineModelProvider:
             research_block = _compressed_research_block(research, 3200)
             prompt = (
                 "Produce a structured final research report with sections: "
-                "Executive Summary, Abstract, 1. Introduction, 2. Methodology, 3. Results, 4. Discussion, 5. Limitations and Counterarguments, 6. Conclusion, References.\n\n"
+                "Title, Author, Abstract, Keywords, Introduction, Methods, Results, Discussion/Conclusion, References.\n\n"
                 f"Question: {query.strip()}\n\n"
                 f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
                 f"SKEPTIC:\n{outputs.get('skeptic', '')}\n\n"
@@ -2751,7 +2837,7 @@ class LocalPipelineModelProvider:
             research_block = _compressed_research_block(research, 2800)
             prompt = (
                 "Produce a structured final research report with sections: "
-                "Executive Summary, Abstract, 1. Introduction, 2. Methodology, 3. Results, 4. Discussion, 5. Limitations and Counterarguments, 6. Conclusion, References.\n\n"
+                "Title, Author, Abstract, Keywords, Introduction, Methods, Results, Discussion/Conclusion, References.\n\n"
                 f"Question: {query.strip()}\n\n"
                 f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
                 f"SKEPTIC:\n{outputs.get('skeptic', '')}\n\n"
@@ -2824,7 +2910,114 @@ class LocalPipelineModelProvider:
 
 
 def _citation_count(text: str) -> int:
+    """Count unique source citations in text."""
     return len(set(re.findall(r"\[S\d+\]", text)))
+
+
+def _inject_missing_citations(
+    final_answer: str,
+    research: ResearchContext | None,
+) -> str:
+    """
+    Deterministic post-processor that injects missing claim-to-citation mappings.
+    Scans answer for claims and maps them to source IDs based on source content matching.
+    Ensures References section includes all cited sources.
+    """
+    if not research or not research.sources:
+        return final_answer
+    
+    answer = final_answer.strip()
+    sources = research.sources
+    
+    # Extract sections
+    title_match = re.search(r"## Title\n(.+?)\n\n", answer)
+    refs_section_match = re.search(r"(## References?\n.*)", answer, re.DOTALL)
+    
+    if not refs_section_match:
+        # No references section, we need to add one
+        refs_section = "\n\n## References\n"
+        for source in sources[:6]:  # Limit to top sources
+            refs_section += f"- [{source.id}] {source.title} ({source.domain}) - {source.url}\n"
+        answer += refs_section
+    else:
+        # Update existing references section
+        old_refs = refs_section_match.group(1)
+        new_refs = "## References\n"
+        cited_ids = set(re.findall(r"\[S\d+\]", answer))
+        
+        # Add citations for all cited sources
+        for source_id in sorted(cited_ids):
+            matching_source = next((s for s in sources if s.id == source_id), None)
+            if matching_source and f"[{source_id}]" not in old_refs:
+                new_refs += f"- [{source_id}] {matching_source.title} ({matching_source.domain}) - {matching_source.url}\n"
+        
+        # Preserve any manually added references
+        if "[" in old_refs:
+            existing_refs = re.findall(r"- \[(?:S\d+|\d+)\].*", old_refs)
+            for ref in existing_refs:
+                if ref not in new_refs:
+                    new_refs += ref + "\n"
+        
+        answer = answer[:refs_section_match.start()] + new_refs.rstrip()
+    
+    # Inject missing citations into claims paragraphs
+    # Look for paragraphs in Results and Discussion sections
+    paragraphs = re.split(r"\n\n+", answer)
+    processed_paragraphs = []
+    
+    for paragraph in paragraphs:
+        # Skip section headers and already-cited content
+        if paragraph.startswith("##") or "[S" in paragraph:
+            processed_paragraphs.append(paragraph)
+            continue
+        
+        # For substantive claims in Results/Discussion, try to add citations
+        if any(keyword in answer[max(0, answer.find(paragraph)-500):answer.find(paragraph)+len(paragraph)+500].lower() 
+               for keyword in ["## results", "## discussion"]):
+            
+            # Find sentences/claims in paragraph
+            sentences = re.split(r"(?<=[.!?])\s+", paragraph)
+            injected_sentences = []
+            
+            for sentence in sentences:
+                if len(sentence.strip()) < 20 or "[S" in sentence:
+                    injected_sentences.append(sentence)
+                    continue
+                
+                # Score sentences against source content for semantic matching
+                best_source = None
+                best_score = 0.3  # Minimum threshold
+                
+                for source in sources:
+                    # Simple keyword matching
+                    sentence_lower = sentence.lower()
+                    source_text = (source.excerpt + " " + source.snippet).lower()
+                    
+                    # Count matching words
+                    sentence_words = set(re.findall(r"\b\w{3,}\b", sentence_lower))
+                    source_words = set(re.findall(r"\b\w{3,}\b", source_text))
+                    
+                    if sentence_words and source_words:
+                        overlap = len(sentence_words & source_words) / len(sentence_words | source_words)
+                        if overlap > best_score:
+                            best_score = overlap
+                            best_source = source
+                
+                # Inject citation if we found a good match
+                if best_source and f"[{best_source.id}]" not in sentence:
+                    # Add citation at end of sentence
+                    if sentence.rstrip().endswith((".", "!", "?")):
+                        sentence = sentence.rstrip()[:-1] + f" [{best_source.id}]."
+                    else:
+                        sentence = sentence.rstrip() + f" [{best_source.id}]"
+                
+                injected_sentences.append(sentence)
+            
+            processed_paragraphs.append(" ".join(injected_sentences))
+        else:
+            processed_paragraphs.append(paragraph)
+    
+    return "\n\n".join(processed_paragraphs)
 
 
 def _trim_for_prompt(text: str, limit: int) -> str:
@@ -2872,28 +3065,50 @@ def _is_agent_research_grade(
     return True
 
 
+def _final_min_length() -> int:
+    """Get hard minimum final answer length from environment."""
+    return max(620, _env_int("HEXAMIND_FINAL_MIN_LENGTH", 1200))
+
+
+def _final_min_citations() -> int:
+    """Get hard minimum citation count from environment."""
+    return max(2, _env_int("HEXAMIND_FINAL_MIN_CITATIONS", 3))
+
+
+def _final_auto_retry_enabled() -> bool:
+    """Check if auto-retry with post-processing is enabled."""
+    return os.getenv("HEXAMIND_FINAL_AUTO_RETRY", "1").strip().lower() in {"1", "true", "yes"}
+
+
 def _is_final_research_grade(
     text: str,
     minimum_length: int,
     research: ResearchContext | None,
 ) -> bool:
+    """Validate final answer meets research-grade standards with hard minimum gates."""
     required_sections = (
+        "## Title",
+        "## Author",
         "## Abstract",
-        "## 1. Introduction",
+        "## Keywords",
+        "## Introduction",
+        "## Methods",
+        "## Results",
+        "## Discussion/Conclusion",
         "## References",
     )
-    if len(text) < minimum_length:
+    # Hard gate 1: minimum length
+    hard_minimum = _final_min_length()
+    if len(text) < hard_minimum:
         return False
+    # Hard gate 2: required sections
     if not all(section in text for section in required_sections):
         return False
-    # Check for methodology/results/discussion (flexible numbering)
-    has_methodology = "## 2. Methodology" in text or "Methodology" in text
-    has_results = "## 3. Results" in text or "Results" in text
-    has_discussion = "## 4. Discussion" in text or "Discussion" in text
-    if not (has_methodology and has_results and has_discussion):
-        return False
+    # Hard gate 3: citation count when sources exist
     if research and research.sources:
-        return _citation_count(text) >= 2 or "[S" in text
+        citation_count = _citation_count(text)
+        min_citations = _final_min_citations()
+        return citation_count >= min_citations
     return True
 
 def _web_research_enabled() -> bool:

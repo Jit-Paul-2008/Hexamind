@@ -16,7 +16,7 @@ from workflow import build_workflow_profile
 
 
 class SynthesisQualityMilestoneTests(unittest.TestCase):
-    def test_final_answer_uses_imrad_structure(self) -> None:
+    def test_final_answer_uses_requested_paper_structure(self) -> None:
         provider = DeterministicPipelineModelProvider()
         research = self._build_research_context(
             "How should we change the policy for model deployment?",
@@ -26,13 +26,16 @@ class SynthesisQualityMilestoneTests(unittest.TestCase):
 
         report = asyncio.run(provider.compose_final_answer("How should we change the policy for model deployment?", outputs, research))
 
+        self.assertIn("## Title", report)
+        self.assertIn("## Author", report)
         self.assertIn("## Abstract", report)
-        self.assertIn("## 1. Introduction", report)
-        self.assertIn("## 2. Methodology", report)
-        self.assertIn("## 3. Results", report)
-        self.assertIn("## 4. Discussion", report)
+        self.assertIn("## Keywords", report)
+        self.assertIn("## Introduction", report)
+        self.assertIn("## Methods", report)
+        self.assertIn("## Results", report)
+        self.assertIn("## Discussion/Conclusion", report)
 
-    def test_final_answer_includes_limitations_and_conclusion(self) -> None:
+    def test_final_answer_includes_references_and_domain_content(self) -> None:
         provider = DeterministicPipelineModelProvider()
         research = self._build_research_context(
             "How do we reduce latency in the backend architecture?",
@@ -42,8 +45,6 @@ class SynthesisQualityMilestoneTests(unittest.TestCase):
 
         report = asyncio.run(provider.compose_final_answer("How do we reduce latency in the backend architecture?", outputs, research))
 
-        self.assertIn("## 5. Limitations", report)
-        self.assertIn("## 6. Conclusion", report)
         self.assertIn("## References", report)
         self.assertIn("architecture", report.lower())
 

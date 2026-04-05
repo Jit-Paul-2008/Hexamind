@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { NodeStatus, PipelineQualityReport } from "@/types/pipeline";
 import { runPipelineStream } from "@/lib/api/pipeline";
+import type { ReportLength } from "@/lib/pipelineClient";
 
 type PipelineState = {
   isRunning: boolean;
@@ -36,7 +37,7 @@ export function usePipeline() {
   }, []);
 
   const run = useCallback(
-    async (query: string) => {
+    async (query: string, reportLength: ReportLength = "moderate") => {
       cleanup();
       setState({ ...initialState, isRunning: true });
 
@@ -83,7 +84,7 @@ export function usePipeline() {
             error: message || "Pipeline failed.",
           }));
         },
-      });
+      }, reportLength);
 
       if (!source) {
         setState((prev) => ({

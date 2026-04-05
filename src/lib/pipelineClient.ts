@@ -23,6 +23,8 @@ export interface PipelineClientOptions {
   eventSourceImpl?: new (url: string) => EventSource;
 }
 
+export type ReportLength = "brief" | "moderate" | "huge";
+
 export interface SarvamTransformPayload {
   targetLanguageCode: string;
   instruction?: string;
@@ -41,11 +43,12 @@ export interface SarvamTransformResponse {
 export async function startPipelineRun(
   query: string,
   handlers: PipelineRunHandlers,
-  options: PipelineClientOptions = {}
+  options: PipelineClientOptions & { reportLength?: ReportLength } = {}
 ): Promise<EventSource | null> {
   const apiBaseUrl = options.apiBaseUrl ?? publicApiBaseUrl;
   const fetchImpl = options.fetchImpl ?? fetch;
   const eventSourceImpl = options.eventSourceImpl ?? EventSource;
+  const reportLength = options.reportLength ?? "moderate";
 
   handlers.startPipeline(query);
 
@@ -53,7 +56,7 @@ export async function startPipelineRun(
     const startResponse = await fetchImpl(`${apiBaseUrl}/api/pipeline/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, reportLength }),
     });
 
     if (!startResponse.ok) {

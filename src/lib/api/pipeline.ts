@@ -1,5 +1,6 @@
 import { startPipelineRun } from "@/lib/pipelineClient";
 import type { NodeStatus, PipelineQualityReport } from "@/types/pipeline";
+import type { ReportLength } from "@/lib/pipelineClient";
 
 export type PipelineStreamHandlers = {
   onStart: (query: string) => void;
@@ -15,7 +16,8 @@ export type PipelineStreamHandlers = {
 
 export async function runPipelineStream(
   query: string,
-  handlers: PipelineStreamHandlers
+  handlers: PipelineStreamHandlers,
+  reportLength: ReportLength = "moderate"
 ): Promise<EventSource | null> {
   return startPipelineRun(query, {
     startPipeline: handlers.onStart,
@@ -27,5 +29,5 @@ export async function runPipelineStream(
     setQualityReport: handlers.onQualityReady,
     setQualityError: handlers.onQualityError,
     setPipelineError: handlers.onError ?? (() => undefined),
-  });
+  }, { reportLength });
 }

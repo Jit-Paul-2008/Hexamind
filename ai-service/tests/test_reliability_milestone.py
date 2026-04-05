@@ -100,8 +100,15 @@ class ReliabilityMilestoneTests(unittest.TestCase):
         self.assertEqual(frames[-1]["event"], "pipeline_done")
 
         report_text = service.get_final_report(session_id)
+        self.assertIn("## Title", report_text)
+        self.assertIn("## Author", report_text)
         self.assertIn("## Abstract", report_text)
-        self.assertIn("## 1. Introduction", report_text)
+        self.assertIn("## Keywords", report_text)
+        self.assertIn("## Introduction", report_text)
+        self.assertIn("## Methods", report_text)
+        self.assertIn("## Results", report_text)
+        self.assertIn("## Discussion/Conclusion", report_text)
+        self.assertIn("## References", report_text)
 
         health = service.health()
         self.assertIn("maxConcurrentStreams", health)

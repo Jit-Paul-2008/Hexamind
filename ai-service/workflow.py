@@ -229,10 +229,10 @@ def _token_context_settings(depth_label: str, token_mode: str) -> tuple[int, int
 
 
 def _token_mode() -> str:
-    value = os.getenv("HEXAMIND_TOKEN_MODE", "lean").strip().lower()
+    value = os.getenv("HEXAMIND_TOKEN_MODE", "smart").strip().lower()
     if value in {"lean", "smart", "max-quality"}:
         return value
-    return "lean"
+    return "smart"
 
 
 def _build_search_intents(query: str, analysis: TopicAnalysis, audience: str) -> list[str]:

@@ -289,8 +289,9 @@ class InternetResearcher:
         evidence_graph = self._build_evidence_graph(sources, sanitized_query)
         corroboration_pairs = self._find_corroboration_pairs(sources)
         
-        # Phase 4: Wikipedia fallback for minimum source diversity
-        if len(sources) < 3:
+        # Phase 4: fallback for minimum source diversity in deep-research mode
+        min_sources_target = max(3, _env_int("HEXAMIND_MIN_SOURCES_TARGET", 6))
+        if len(sources) < min_sources_target:
             fallback = await self._wikipedia_fallback_sources(query, workflow_profile)
             merged = list(sources)
             seen_urls = {item.url for item in merged}

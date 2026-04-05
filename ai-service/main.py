@@ -202,7 +202,11 @@ def get_agents() -> list[Agent]:
 @app.post("/api/pipeline/start", response_model=StartPipelineResponse)
 def start_pipeline(payload: StartPipelineRequest, request: Request) -> StartPipelineResponse:
     tenant_id = getattr(request.state, "tenant_id", "default")
-    session_id = pipeline_service.start(payload.query.strip(), tenant_id=tenant_id)
+    session_id = pipeline_service.start(
+        payload.query.strip(),
+        tenant_id=tenant_id,
+        report_length=payload.reportLength,
+    )
     return StartPipelineResponse(sessionId=session_id)
 
 

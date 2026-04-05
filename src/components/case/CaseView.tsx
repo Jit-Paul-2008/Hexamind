@@ -7,6 +7,7 @@ import { useRunStore } from "@/store/runStore";
 import { modeLabels } from "@/lib/mock-data";
 import { usePipeline } from "@/hooks/usePipeline";
 import { exportDocx } from "@/lib/api/export";
+import type { ReportLength } from "@/lib/pipelineClient";
 import ModeSelector from "@/components/case/ModeSelector";
 import RunHistory from "@/components/case/RunHistory";
 
@@ -16,6 +17,7 @@ type Props = {
 
 export default function CaseView({ caseId }: Props) {
   const [prompt, setPrompt] = useState("");
+  const [reportLength, setReportLength] = useState<ReportLength>("moderate");
   const { cases } = useCaseStore();
   const {
     selectedRunId,
@@ -97,12 +99,32 @@ export default function CaseView({ caseId }: Props) {
             className="w-full rounded-md border border-white/20 bg-[#0d1119] px-2 py-2 text-sm"
             placeholder="Ask ARIA to run a focused analysis..."
           />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] uppercase tracking-[0.12em] text-white/50">Report length</span>
+            {(["brief", "moderate", "huge"] as ReportLength[]).map((lengthMode) => {
+              const active = reportLength === lengthMode;
+              return (
+                <button
+                  key={lengthMode}
+                  type="button"
+                  onClick={() => setReportLength(lengthMode)}
+                  className={`rounded-md border px-2.5 py-1 text-[11px] uppercase tracking-[0.08em] transition ${
+                    active
+                      ? "border-cyan-300/60 bg-cyan-300/20 text-cyan-100"
+                      : "border-white/20 bg-white/5 text-white/70 hover:bg-white/10"
+                  }`}
+                >
+                  {lengthMode}
+                </button>
+              );
+            })}
+          </div>
           <button
             type="button"
             onClick={async () => {
               const activePrompt = prompt || currentCase?.question || "Untitled";
               try {
-                await run(activePrompt);
+                await run(activePrompt, reportLength);
               } catch {
                 createMockRun(caseId, activePrompt);
               }
