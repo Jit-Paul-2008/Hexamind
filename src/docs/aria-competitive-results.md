@@ -60,16 +60,18 @@ Note: when running local-architecture mode, the table headers `ARIA`, `Gemini`, 
 
 | 5 | 2026-04-04 | ARIA Local Architecture Competitive Batch (1 topics) | 70.0 | 70.0 | 70.0 | ARIA | Columns mapped as ARIA=Local-Balanced, Gemini=Local-Throughput, GPT=Local-Quality. Generated consolidated competitive report and updated the ledger. | Local critic review pending. |
 
+| 6 | 2026-04-05 | ARIA Competitive Research Batch (1 topics) | 70.0 | 70.0 | 70.0 | ARIA | Columns mapped as ARIA=ARIA, Gemini=Gemini, GPT=GPT. Generated consolidated competitive report and updated the ledger. | Local critic review pending. |
+
 ## Line Graph
 
 ```mermaid
 xychart-beta
     title "Research Quality: ARIA vs Gemini vs GPT"
-    x-axis "Run" [0, 1, 2, 3, 4, 5]
+    x-axis "Run" [0, 1, 2, 3, 4, 5, 6]
     y-axis "Quality Score" 0 --> 100
-    line "ARIA" [0.0, 70.0, 70.0, 70.0, 70.0, 70.0]
-    line "Gemini" [0.0, 70.0, 70.0, 70.0, 70.0, 70.0]
-    line "GPT" [0.0, 70.0, 70.0, 70.0, 70.0, 70.0]
+    line "ARIA" [0.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0]
+    line "Gemini" [0.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0]
+    line "GPT" [0.0, 70.0, 70.0, 70.0, 70.0, 70.0, 70.0]
 ```
 
 ## Local Critic Loop

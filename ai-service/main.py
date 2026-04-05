@@ -37,6 +37,19 @@ from schemas import (
 )
 
 
+def _cors_allowed_origins() -> list[str]:
+    """Resolve allowed CORS origins from env for public deployments.
+
+    HEXAMIND_CORS_ORIGINS supports comma-separated values.
+    """
+    raw = os.getenv("HEXAMIND_CORS_ORIGINS", "").strip()
+    if not raw:
+        return ["*"]
+
+    origins = [item.strip() for item in raw.split(",") if item.strip()]
+    return origins or ["*"]
+
+
 app = FastAPI(title="Hexamind AI Service", version="1.0.0")
 sarvam_service = SarvamService()
 _REQUEST_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
@@ -54,7 +67,7 @@ _REQUEST_DURATION_SECONDS = Histogram(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_allowed_origins(),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

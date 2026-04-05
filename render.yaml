@@ -26,10 +26,33 @@ services:
           property: connectionString
       - key: HEXAMIND_ENABLE_DATABASE_PERSISTENCE
         value: "1"
+      - key: HEXAMIND_DEPLOYMENT_ENV
+        value: "production"
       - key: HEXAMIND_MODEL_PROVIDER
         value: openrouter
       - key: HEXAMIND_MODEL_NAME
         value: google/gemma-3-12b-it:free
+      - key: HEXAMIND_STRICT_PROVIDER
+        value: "1"
+      - key: HEXAMIND_DISABLE_FAILSAFE_FALLBACK
+        value: "1"
+      - key: HEXAMIND_WEB_RESEARCH
+        value: "1"
+      - key: HEXAMIND_RESEARCH_PROVIDER
+        value: tavily
+      - key: HEXAMIND_REQUIRE_RESEARCH_SOURCES
+        value: "1"
+      - key: HEXAMIND_HARD_FAIL_ON_NO_SOURCES
+        value: "0"
+      - key: HEXAMIND_PARALLEL_AGENTS
+        value: "1"
+      - key: HEXAMIND_RATE_LIMIT_PER_MINUTE
+        value: "90"
+      - key: HEXAMIND_CORS_ORIGINS
+        fromService:
+          type: web
+          name: hexamind-web
+          envVarKey: RENDER_EXTERNAL_URL
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: OPENROUTER_API_KEY
@@ -62,3 +85,5 @@ services:
           type: web
           name: hexamind-api
           envVarKey: RENDER_EXTERNAL_URL
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"

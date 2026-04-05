@@ -51,6 +51,49 @@ class ResearcherProtocol(Protocol):
         ...
 
 
+OVERLOAD_RETRY_MESSAGE = (
+    "We are seeing heavy traffic and upstream API rate limits right now. "
+    "Please try again in a few minutes. We will be back shortly."
+)
+
+
+@dataclass
+class ExhaustedPipelineModelProvider:
+    configured_provider: str = "cloud-chain"
+    model_name: str = "none"
+    reason: str = OVERLOAD_RETRY_MESSAGE
+
+    async def build_research_context(self, query: str) -> ResearchContext | None:
+        return None
+
+    async def build_agent_text(
+        self,
+        agent_id: str,
+        query: str,
+        research: ResearchContext | None = None,
+    ) -> str:
+        raise RuntimeError(self.reason)
+
+    async def compose_final_answer(
+        self,
+        query: str,
+        outputs: dict[str, str],
+        research: ResearchContext | None = None,
+        refinement_note: str | None = None,
+    ) -> str:
+        raise RuntimeError(self.reason)
+
+    def diagnostics(self) -> dict[str, str | int | bool]:
+        return {
+            "configuredProvider": self.configured_provider,
+            "activeProvider": "none",
+            "modelName": self.model_name,
+            "isFallback": True,
+            "fallbackCount": 0,
+            "lastError": self.reason,
+        }
+
+
 @dataclass
 class _ProviderHealthManager:
     provider_name: str
@@ -196,6 +239,21 @@ def _provider_cooldown_seconds() -> float:
 
 def _provider_backoff_seconds() -> float:
     return max(0.05, _env_float("HEXAMIND_PROVIDER_BACKOFF_SECONDS", 0.25))
+
+
+def _parse_api_key_pool(primary_env: str, pool_env: str) -> list[str]:
+    keys: list[str] = []
+    primary = os.getenv(primary_env, "").strip()
+    if primary:
+        keys.append(primary)
+
+    raw_pool = os.getenv(pool_env, "").strip()
+    if raw_pool:
+        for item in raw_pool.split(","):
+            value = item.strip()
+            if value and value not in keys:
+                keys.append(value)
+    return keys
 
 
 def _local_strict_mode() -> bool:
@@ -1634,10 +1692,11 @@ class GeminiPipelineModelProvider:
             backoff_seconds=_provider_backoff_seconds(),
         )
         self._researcher = _create_researcher()
-        self._model = ChatGoogleGenerativeAI(
-            model=model_name,
-            temperature=0.35,
-        )
+        self._api_keys = _parse_api_key_pool("GOOGLE_API_KEY", "GOOGLE_API_KEYS")
+        self._api_key_index = 0
+        self._chat_cls = ChatGoogleGenerativeAI
+        self._models_by_key: dict[str, object] = {}
+        self._model = self._build_model(self._api_keys[0] if self._api_keys else None)
         self._fallback = fallback or DeterministicPipelineModelProvider(
             configured_provider="gemini",
             model_name=model_name,
@@ -1909,15 +1968,59 @@ class GeminiPipelineModelProvider:
         self._last_error = message[:240]
 
     async def _ainvoke(self, prompt: str) -> str:
-        response = await self._model.ainvoke(prompt)
-        content = getattr(response, "content", "")
-        return str(content).strip()
+        if not self._api_keys:
+            response = await self._model.ainvoke(prompt)
+            content = getattr(response, "content", "")
+            return str(content).strip()
+
+        last_exc: Exception | None = None
+        for _ in range(len(self._api_keys)):
+            api_key = self._next_api_key()
+            model = self._model_for_key(api_key)
+            try:
+                response = await model.ainvoke(prompt)
+                content = getattr(response, "content", "")
+                return str(content).strip()
+            except Exception as exc:
+                last_exc = exc
+                text = f"{type(exc).__name__}: {exc}".lower()
+                if "429" in text or "rate" in text or "quota" in text or "resource_exhausted" in text:
+                    continue
+                raise
+
+        if last_exc is not None:
+            raise RuntimeError("Gemini rate-limited across all configured keys") from last_exc
+        raise RuntimeError("Gemini invocation failed")
+
+    def _build_model(self, api_key: str | None) -> object:
+        kwargs = {
+            "model": self._model_name,
+            "temperature": 0.35,
+        }
+        if api_key:
+            kwargs["google_api_key"] = api_key
+        return self._chat_cls(**kwargs)
+
+    def _model_for_key(self, api_key: str) -> object:
+        cached = self._models_by_key.get(api_key)
+        if cached is not None:
+            return cached
+        model = self._build_model(api_key)
+        self._models_by_key[api_key] = model
+        return model
+
+    def _next_api_key(self) -> str:
+        if not self._api_keys:
+            return ""
+        key = self._api_keys[self._api_key_index % len(self._api_keys)]
+        self._api_key_index = (self._api_key_index + 1) % len(self._api_keys)
+        return key
 
 
 class OpenRouterPipelineModelProvider:
     def __init__(self, default_model: str, fallback: PipelineModelProvider | None = None) -> None:
-        api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
-        if not api_key:
+        api_keys = _parse_api_key_pool("OPENROUTER_API_KEY", "OPENROUTER_API_KEYS")
+        if not api_keys:
             raise RuntimeError("OPENROUTER_API_KEY is required for provider=openrouter")
 
         self._default_model = default_model
@@ -1932,9 +2035,10 @@ class OpenRouterPipelineModelProvider:
         )
         self._base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
         self._timeout_seconds = float(os.getenv("OPENROUTER_TIMEOUT_SECONDS", "35"))
+        self._api_keys = api_keys
+        self._api_key_index = 0
         self._cost_mode = _cost_mode()
-        self._headers = {
-            "Authorization": f"Bearer {api_key}",
+        self._headers_base = {
             "HTTP-Referer": os.getenv("OPENROUTER_HTTP_REFERER", "https://hexamind.local"),
             "X-Title": os.getenv("OPENROUTER_X_TITLE", "Hexamind ARIA"),
             "Content-Type": "application/json",
@@ -2064,7 +2168,7 @@ class OpenRouterPipelineModelProvider:
                 "final",
                 lambda: self._chat(
                     model=model_name,
-                    system_prompt=_provider_final_prompt(self.provider_name),
+                    system_prompt=_provider_final_prompt("openrouter"),
                     user_prompt=(
                         f"Question: {query.strip()}\n\n"
                         f"ADVOCATE:\n{advocate_output}\n\n"
@@ -2147,59 +2251,97 @@ class OpenRouterPipelineModelProvider:
                 {"role": "user", "content": user_prompt},
             ],
         }
-        response = await client.post(
-            f"{self._base_url}/chat/completions",
-            headers=self._headers,
-            json=payload,
-        )
-        if response.status_code == 400:
-            # Retry with tighter prompt bounds before declaring provider failure.
-            compact_payload = {
-                "model": model,
-                "temperature": 0.2,
-                "messages": [
-                    {"role": "system", "content": _trim_for_prompt(system_prompt, 1200)},
-                    {"role": "user", "content": _trim_for_prompt(user_prompt, 3200)},
-                ],
-            }
-            retry = await client.post(
-                f"{self._base_url}/chat/completions",
-                headers=self._headers,
-                json=compact_payload,
-            )
-            if retry.is_success:
-                return retry.json()
+        had_rate_limit = False
+        last_error = ""
 
-            # Some OpenRouter-backed providers reject system/developer instructions.
-            # Fall back to a single user message that inlines the instruction block.
-            error_text = (retry.text or response.text or "").lower()
-            if "developer instruction" in error_text:
-                compatibility_payload = {
+        for _ in range(len(self._api_keys)):
+            api_key = self._next_api_key()
+            headers = {
+                **self._headers_base,
+                "Authorization": f"Bearer {api_key}",
+            }
+
+            response = await client.post(
+                f"{self._base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+
+            if response.status_code == 429:
+                had_rate_limit = True
+                last_error = response.text[:200]
+                continue
+
+            if response.status_code in {401, 402, 403}:
+                last_error = response.text[:200]
+                continue
+
+            if response.status_code == 400:
+                # Retry with tighter prompt bounds before declaring provider failure.
+                compact_payload = {
                     "model": model,
                     "temperature": 0.2,
                     "messages": [
-                        {
-                            "role": "user",
-                            "content": (
-                                f"System instructions:\n{_trim_for_prompt(system_prompt, 1200)}\n\n"
-                                f"User request:\n{_trim_for_prompt(user_prompt, 3200)}"
-                            ),
-                        }
+                        {"role": "system", "content": _trim_for_prompt(system_prompt, 1200)},
+                        {"role": "user", "content": _trim_for_prompt(user_prompt, 3200)},
                     ],
                 }
-                compat = await client.post(
+                retry = await client.post(
                     f"{self._base_url}/chat/completions",
-                    headers=self._headers,
-                    json=compatibility_payload,
+                    headers=headers,
+                    json=compact_payload,
                 )
-                if compat.is_success:
-                    return compat.json()
-                raise RuntimeError(f"OpenRouter 400 after compatibility retry: {compat.text[:200]}")
+                if retry.is_success:
+                    return retry.json()
+                if retry.status_code == 429:
+                    had_rate_limit = True
+                    last_error = retry.text[:200]
+                    continue
 
-            raise RuntimeError(f"OpenRouter 400 after compact retry: {retry.text[:200]}")
+                # Some OpenRouter-backed providers reject system/developer instructions.
+                error_text = (retry.text or response.text or "").lower()
+                if "developer instruction" in error_text:
+                    compatibility_payload = {
+                        "model": model,
+                        "temperature": 0.2,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": (
+                                    f"System instructions:\n{_trim_for_prompt(system_prompt, 1200)}\n\n"
+                                    f"User request:\n{_trim_for_prompt(user_prompt, 3200)}"
+                                ),
+                            }
+                        ],
+                    }
+                    compat = await client.post(
+                        f"{self._base_url}/chat/completions",
+                        headers=headers,
+                        json=compatibility_payload,
+                    )
+                    if compat.is_success:
+                        return compat.json()
+                    if compat.status_code == 429:
+                        had_rate_limit = True
+                        last_error = compat.text[:200]
+                        continue
+                    raise RuntimeError(f"OpenRouter 400 after compatibility retry: {compat.text[:200]}")
 
-        response.raise_for_status()
-        return response.json()
+                raise RuntimeError(f"OpenRouter 400 after compact retry: {retry.text[:200]}")
+
+            response.raise_for_status()
+            return response.json()
+
+        if had_rate_limit:
+            raise RuntimeError("OpenRouter rate-limited across all configured keys")
+        raise RuntimeError(f"OpenRouter request failed across all configured keys: {last_error}")
+
+    def _next_api_key(self) -> str:
+        if not self._api_keys:
+            return ""
+        key = self._api_keys[self._api_key_index % len(self._api_keys)]
+        self._api_key_index = (self._api_key_index + 1) % len(self._api_keys)
+        return key
 
     def _register_fallback(self, exc: Exception) -> None:
         self._fallback_count += 1
@@ -2209,8 +2351,8 @@ class OpenRouterPipelineModelProvider:
 
 class GroqPipelineModelProvider:
     def __init__(self, default_model: str, fallback: PipelineModelProvider | None = None) -> None:
-        api_key = os.getenv("GROQ_API_KEY", "").strip()
-        if not api_key:
+        api_keys = _parse_api_key_pool("GROQ_API_KEY", "GROQ_API_KEYS")
+        if not api_keys:
             raise RuntimeError("GROQ_API_KEY is required for provider=groq")
 
         self._default_model = default_model
@@ -2225,8 +2367,9 @@ class GroqPipelineModelProvider:
         )
         self._base_url = "https://api.groq.com/openai/v1".rstrip("/")
         self._timeout_seconds = float(os.getenv("GROQ_TIMEOUT_SECONDS", "30"))
-        self._headers = {
-            "Authorization": f"Bearer {api_key}",
+        self._api_keys = api_keys
+        self._api_key_index = 0
+        self._headers_base = {
             "Content-Type": "application/json",
         }
         self._researcher = _create_researcher()
@@ -2331,7 +2474,7 @@ class GroqPipelineModelProvider:
                 "final",
                 lambda: self._chat(
                     model=model_name,
-                    system_prompt=_provider_final_prompt(self.provider_name),
+                    system_prompt=_provider_final_prompt("groq"),
                     user_prompt=(
                         f"Question: {query.strip()}\n\n"
                         f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
@@ -2410,33 +2553,64 @@ class GroqPipelineModelProvider:
                 {"role": "user", "content": user_prompt},
             ],
         }
-        response = await client.post(
-            f"{self._base_url}/chat/completions",
-            headers=self._headers,
-            json=base_payload,
-        )
-        if response.status_code in {400, 429}:
-            if response.status_code == 429:
-                await asyncio.sleep(1.0)
-            compact_payload = {
-                "model": model,
-                "temperature": 0.1,
-                "messages": [
-                    {"role": "system", "content": _trim_for_prompt(system_prompt, 1100)},
-                    {"role": "user", "content": _trim_for_prompt(user_prompt, 3000)},
-                ],
-            }
-            retry = await client.post(
-                f"{self._base_url}/chat/completions",
-                headers=self._headers,
-                json=compact_payload,
-            )
-            if retry.is_success:
-                return retry.json()
-            raise RuntimeError(f"Groq request failed after compact retry: {retry.status_code} {retry.text[:200]}")
+        had_rate_limit = False
+        last_error = ""
 
-        response.raise_for_status()
-        return response.json()
+        for _ in range(len(self._api_keys)):
+            api_key = self._next_api_key()
+            headers = {
+                **self._headers_base,
+                "Authorization": f"Bearer {api_key}",
+            }
+
+            response = await client.post(
+                f"{self._base_url}/chat/completions",
+                headers=headers,
+                json=base_payload,
+            )
+            if response.status_code == 429:
+                had_rate_limit = True
+                last_error = response.text[:200]
+                continue
+            if response.status_code in {401, 402, 403}:
+                last_error = response.text[:200]
+                continue
+
+            if response.status_code == 400:
+                compact_payload = {
+                    "model": model,
+                    "temperature": 0.1,
+                    "messages": [
+                        {"role": "system", "content": _trim_for_prompt(system_prompt, 1100)},
+                        {"role": "user", "content": _trim_for_prompt(user_prompt, 3000)},
+                    ],
+                }
+                retry = await client.post(
+                    f"{self._base_url}/chat/completions",
+                    headers=headers,
+                    json=compact_payload,
+                )
+                if retry.is_success:
+                    return retry.json()
+                if retry.status_code == 429:
+                    had_rate_limit = True
+                    last_error = retry.text[:200]
+                    continue
+                raise RuntimeError(f"Groq request failed after compact retry: {retry.status_code} {retry.text[:200]}")
+
+            response.raise_for_status()
+            return response.json()
+
+        if had_rate_limit:
+            raise RuntimeError("Groq rate-limited across all configured keys")
+        raise RuntimeError(f"Groq request failed across all configured keys: {last_error}")
+
+    def _next_api_key(self) -> str:
+        if not self._api_keys:
+            return ""
+        key = self._api_keys[self._api_key_index % len(self._api_keys)]
+        self._api_key_index = (self._api_key_index + 1) % len(self._api_keys)
+        return key
 
     def _register_fallback(self, exc: Exception) -> None:
         self._fallback_count += 1
@@ -2646,7 +2820,7 @@ class LocalPipelineModelProvider:
                     "final",
                     lambda: self._chat(
                         model=model_name,
-                        system_prompt=_provider_final_prompt(self.provider_name),
+                        system_prompt=_provider_final_prompt("local"),
                         user_prompt=(
                             f"Question: {query.strip()}\n\n"
                             f"ADVOCATE:\n{outputs.get('advocate', '')}\n\n"
@@ -3021,11 +3195,11 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
     # helper to check if a provider is "available" (has keys)
     def is_available(name: str) -> bool:
         if name in {"gemini", "google", "google-genai"}:
-            return bool(os.getenv("GOOGLE_API_KEY", "").strip())
+            return bool(os.getenv("GOOGLE_API_KEY", "").strip() or os.getenv("GOOGLE_API_KEYS", "").strip())
         if name in {"openrouter", "router"}:
-            return bool(os.getenv("OPENROUTER_API_KEY", "").strip())
+            return bool(os.getenv("OPENROUTER_API_KEY", "").strip() or os.getenv("OPENROUTER_API_KEYS", "").strip())
         if name in {"groq"}:
-            return bool(os.getenv("GROQ_API_KEY", "").strip())
+            return bool(os.getenv("GROQ_API_KEY", "").strip() or os.getenv("GROQ_API_KEYS", "").strip())
         if name in {"local", "ollama", "lmstudio", "llama", "local-openai"}:
             # We don't chain local by default as it's environment specific
             return False 
@@ -3046,19 +3220,19 @@ def create_pipeline_model_provider() -> PipelineModelProvider:
             chain_names.append(p)
             
     # 2. Build the chain from the bottom up (last to first)
-    # The absolute last fallback is always Deterministic
-    current_chain: PipelineModelProvider = DeterministicPipelineModelProvider(
-        configured_provider="chain-end",
-        model_name="deterministic",
-        reason="All available cloud providers in the chain failed or were exhausted."
-    )
-    
-    # If we are in strict mode, we don't want the deterministic fallback at the very end
-    if strict_mode and chain_names:
-        # In strict mode, we want the last REAL provider to throw its error instead of falling back to text
-        # So we'll skip the deterministic tail if chain is non-empty. 
-        # But for now, let's keep it simple: strict mode usually means "don't fall back to local/text"
-        pass
+    # In strict mode, end with explicit overload error (no deterministic report fallback).
+    if strict_mode:
+        current_chain: PipelineModelProvider = ExhaustedPipelineModelProvider(
+            configured_provider="chain-end",
+            model_name="none",
+            reason=OVERLOAD_RETRY_MESSAGE,
+        )
+    else:
+        current_chain = DeterministicPipelineModelProvider(
+            configured_provider="chain-end",
+            model_name="deterministic",
+            reason="All available cloud providers in the chain failed or were exhausted.",
+        )
 
     # Functional mapping to create providers
     def instantiate_provider(name: str, fb: PipelineModelProvider) -> PipelineModelProvider:

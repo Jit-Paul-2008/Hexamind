@@ -254,10 +254,23 @@ Workflow design reference:
 
 - `src/docs/aria-free-power-workflow.md`
 - `src/docs/free-api-setup-and-smoke-test.md`
+- `PUBLIC_DEMO_ROLLOUT.md` (cloud-only public demo deployment)
 
 Quality API for each completed session:
 
 - `GET /api/pipeline/{sessionId}/quality`
+
+## Public Link Deployment (No Local Runtime)
+
+If you want users on any device to use one public link, deploy with cloud APIs only:
+
+1. Deploy backend to Render using `render.yaml`.
+2. Add backend secrets (`OPENROUTER_API_KEY`, `TAVILY_API_KEY`) in Render.
+3. Deploy frontend to Vercel.
+4. In Vercel, set `NEXT_PUBLIC_API_BASE_URL=https://<your-render-api-domain>`.
+5. In backend env, set `HEXAMIND_CORS_ORIGINS=https://<your-vercel-domain>`.
+
+Cloud-only profile avoids local model dependencies and serves live API-backed research/report generation to public users.
 
 ## Quality Checks
 

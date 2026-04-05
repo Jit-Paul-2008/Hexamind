@@ -21,6 +21,13 @@ from model_provider import (
 )
 
 
+_PUBLIC_OVERLOAD_MESSAGE = (
+    "## Service Busy\n"
+    "We are seeing very high traffic and API rate limits right now. "
+    "Please try again in a few minutes. We will be back shortly, and we are sorry for the inconvenience."
+)
+
+
 @dataclass
 class PipelineSession:
     id: str
@@ -177,12 +184,13 @@ class PipelineService:
                 )
                 if content.strip():
                     return (agent_id, content)
-            except Exception:
-                pass
+            except Exception as exc:
+                if fallback_provider is None:
+                    raise RuntimeError(_PUBLIC_OVERLOAD_MESSAGE) from exc
             
             # Fallback to deterministic provider
             if fallback_provider is None:
-                return (agent_id, f"## Agent Error\nLive provider unavailable for `{agent_id}`. Please retry shortly.")
+                raise RuntimeError(_PUBLIC_OVERLOAD_MESSAGE)
             try:
                 content = await asyncio.wait_for(
                     fallback_provider.build_agent_text(
@@ -359,8 +367,10 @@ class PipelineService:
                             timeout=self._agent_timeout_seconds,
                         )
                         timings["agentSeconds"] += time.perf_counter() - agent_started
-                    except Exception:
-                        content = f"## Agent Error\nLive provider unavailable for `{agent.id}`. Please retry shortly." if disable_failsafe else ""
+                    except Exception as exc:
+                        if disable_failsafe:
+                            raise RuntimeError(_PUBLIC_OVERLOAD_MESSAGE) from exc
+                        content = ""
 
                     if not content.strip() and fallback_provider is not None:
                         agent_started = time.perf_counter()
@@ -413,8 +423,10 @@ class PipelineService:
                     timeout=self._final_timeout_seconds,
                 )
                 timings["finalSeconds"] += time.perf_counter() - final_started
-            except Exception:
-                final_answer = "## Final Report Error\nLive provider request failed. Please retry in a moment." if disable_failsafe else ""
+            except Exception as exc:
+                if disable_failsafe:
+                    raise RuntimeError(_PUBLIC_OVERLOAD_MESSAGE) from exc
+                final_answer = ""
 
             if not final_answer.strip() and fallback_provider is not None:
                 final_started = time.perf_counter()
@@ -522,11 +534,15 @@ class PipelineService:
             }
             await asyncio.sleep(0)
         except Exception as exc:
-            failure_message = (
-                "## Pipeline Aborted\n"
-                "The run was stopped because required research sources were not retrieved.\n\n"
-                f"Reason: {type(exc).__name__}: {exc}"
-            )
+            exc_text = f"{type(exc).__name__}: {exc}".lower()
+            if "rate" in exc_text or "429" in exc_text or "overload" in exc_text or "busy" in exc_text:
+                failure_message = _PUBLIC_OVERLOAD_MESSAGE
+            else:
+                failure_message = (
+                    "## Pipeline Aborted\n"
+                    "The run was stopped because required research sources were not retrieved.\n\n"
+                    f"Reason: {type(exc).__name__}: {exc}"
+                )
             quality_report = analyze_pipeline_quality(
                 query=session.query,
                 assembled=assembled,

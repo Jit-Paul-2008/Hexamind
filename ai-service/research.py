@@ -175,7 +175,9 @@ class InternetResearcher:
     def __init__(self, timeout_seconds: float = 15.0, max_sources: int = 14) -> None:
         self._timeout_seconds = timeout_seconds
         self._tavily_api_key = os.getenv("TAVILY_API_KEY", "").strip()
-        self._search_provider = _research_provider(self._tavily_api_key)
+        self._tavily_api_keys = self._parse_api_key_pool("TAVILY_API_KEY", "TAVILY_API_KEYS")
+        self._tavily_key_index = 0
+        self._search_provider = _research_provider(self._tavily_api_keys[0] if self._tavily_api_keys else "")
         # Increased defaults for deeper research
         configured_max_sources = _env_int("HEXAMIND_RESEARCH_MAX_SOURCES", max(max_sources, 14))
         self._max_sources = max(6, configured_max_sources)  # Minimum 6 for triangulation
@@ -200,7 +202,7 @@ class InternetResearcher:
         self._deep_extraction = _env_bool("HEXAMIND_DEEP_EXTRACTION", True)  # Enable by default
         self._evidence_excerpt_limit = _env_int("HEXAMIND_EVIDENCE_EXCERPT_LIMIT", 600)  # Longer excerpts
         self._embeddings = LocalEmbeddingsClient() if _env_bool("HEXAMIND_ENABLE_LOCAL_EMBEDDINGS", False) else None
-        if self._search_provider == "tavily" and not self._tavily_api_key:
+        if self._search_provider == "tavily" and not self._tavily_api_keys:
             raise RuntimeError("Tavily provider is enabled but TAVILY_API_KEY is missing.")
 
     async def research(self, query: str) -> ResearchContext:
@@ -488,7 +490,7 @@ class InternetResearcher:
         workflow_profile: ResearchWorkflowProfile,
         search_passes: Iterable[str],
     ) -> list[SearchHit]:
-        if not self._tavily_api_key:
+        if not self._tavily_api_keys:
             return []
 
         results: list[SearchHit] = []
@@ -508,25 +510,37 @@ class InternetResearcher:
                     if not _term_matches_pass(term, pass_name):
                         continue
 
-                    payload = {
-                        "api_key": self._tavily_api_key,
-                        "query": f"{term} ({pass_name} evidence)",
-                        "search_depth": "basic",
-                        "max_results": max_hits,
-                        "include_raw_content": True,
-                        "include_images": False,
-                        "include_answer": False,
-                    }
+                    body = None
+                    for _ in range(len(self._tavily_api_keys)):
+                        api_key = self._next_tavily_api_key()
+                        payload = {
+                            "api_key": api_key,
+                            "query": f"{term} ({pass_name} evidence)",
+                            "search_depth": "basic",
+                            "max_results": max_hits,
+                            "include_raw_content": True,
+                            "include_images": False,
+                            "include_answer": False,
+                        }
+                        try:
+                            response = await self._request_with_retries(
+                                client,
+                                "POST",
+                                "https://api.tavily.com/search",
+                                json=payload,
+                            )
+                            body = response.json()
+                            break
+                        except httpx.HTTPStatusError as exc:
+                            if getattr(exc.response, "status_code", None) == 429:
+                                continue
+                            body = None
+                            break
+                        except Exception:
+                            body = None
+                            continue
 
-                    try:
-                        response = await self._request_with_retries(
-                            client,
-                            "POST",
-                            "https://api.tavily.com/search",
-                            json=payload,
-                        )
-                        body = response.json()
-                    except Exception:
+                    if body is None:
                         calls_made += 1
                         continue
 
@@ -562,6 +576,27 @@ class InternetResearcher:
                     break
 
         return _dedupe_hits(results)
+
+    def _parse_api_key_pool(self, primary_env: str, pool_env: str) -> list[str]:
+        keys: list[str] = []
+        primary = os.getenv(primary_env, "").strip()
+        if primary:
+            keys.append(primary)
+
+        raw_pool = os.getenv(pool_env, "").strip()
+        if raw_pool:
+            for item in raw_pool.split(","):
+                value = item.strip()
+                if value and value not in keys:
+                    keys.append(value)
+        return keys
+
+    def _next_tavily_api_key(self) -> str:
+        if not self._tavily_api_keys:
+            return ""
+        key = self._tavily_api_keys[self._tavily_key_index % len(self._tavily_api_keys)]
+        self._tavily_key_index = (self._tavily_key_index + 1) % len(self._tavily_api_keys)
+        return key
 
     async def _request_with_retries(
         self,
