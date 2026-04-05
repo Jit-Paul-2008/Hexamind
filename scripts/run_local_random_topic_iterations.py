@@ -115,7 +115,9 @@ def _apply_runtime_env(tuning: TuningState) -> None:
     os.environ["HEXAMIND_LOCAL_BASE_URL"] = os.getenv("HEXAMIND_LOCAL_BASE_URL", "http://127.0.0.1:11434/v1")
     os.environ["HEXAMIND_LOCAL_STRICT"] = "1"
     os.environ["HEXAMIND_WEB_RESEARCH"] = "1"
-    os.environ["HEXAMIND_RESEARCH_PROVIDER"] = os.getenv("HEXAMIND_RESEARCH_PROVIDER", "duckduckgo")
+    os.environ["HEXAMIND_RESEARCH_PROVIDER"] = os.getenv("HEXAMIND_RESEARCH_PROVIDER", "searxng")
+    if not os.getenv("HEXAMIND_SEARXNG_BASE_URL"):
+        os.environ["HEXAMIND_SEARXNG_BASE_URL"] = "http://127.0.0.1:8080"
 
     os.environ["HEXAMIND_TOKEN_MODE"] = tuning.token_mode
     os.environ["HEXAMIND_RESEARCH_MAX_SOURCES"] = str(tuning.max_sources)

@@ -2372,4 +2372,6 @@ def _research_provider(tavily_api_key: str) -> str:
     configured = os.getenv("HEXAMIND_RESEARCH_PROVIDER", "auto").strip().lower()
     if configured in {"tavily", "duckduckgo", "searxng"}:
         return configured
-    return "tavily" if tavily_api_key else "duckduckgo"
+    # Prefer SearxNG for local-style stacks (docker-compose, start_v1_nocredit_local.sh);
+    # _search_hits falls back to DuckDuckGo when SearxNG yields no usable hits.
+    return "tavily" if tavily_api_key else "searxng"
