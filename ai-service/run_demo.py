@@ -27,7 +27,17 @@ async def run_live_trial():
             payload = json.loads(data)
             print(f"🧠 [BRAIN] Stage: {payload['agentId'].upper()} initialized...")
         
+        if event_type == "pipeline_error":
+            import json
+            payload = json.loads(data)
+            print("-" * 50)
+            print(f"❌ [CRITICAL ERROR] Stage: {payload['agentId'].upper()} failed.")
+            print(f"Reason: {payload['fullContent']}")
+            print("-" * 50)
+            return
+
         if event_type == "pipeline_done":
+
             import json
             payload = json.loads(data)
             final_report = payload["fullContent"]

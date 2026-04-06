@@ -42,8 +42,14 @@ class AuroraGraph:
         
         # 1. PLAN
         yield self._event(PipelineEventType.AGENT_START, "planner")
-        await self._plan_phase()
+        success = await self._plan_phase()
+        if not success:
+            yield self._event(PipelineEventType.PIPELINE_ERROR, "planner", self.context.get("plan", "Unknown Error during Planning"))
+            logger.error("Pipeline halted: Planning failed.")
+            return # HALT the graph
+            
         yield self._event(PipelineEventType.AGENT_DONE, "planner", self.context["plan"])
+
         
         # 2. SEARCH
         yield self._event(PipelineEventType.AGENT_START, "researcher")
@@ -80,15 +86,23 @@ class AuroraGraph:
             "data": event.model_dump_json()
         }
 
-    async def _plan_phase(self):
+    async def _plan_phase(self) -> bool:
         """Planner Agent: Decomposes the query into sub-tasks."""
         prompt = f"Decompose this research query into 3 specific sub-questions: {self.query}"
         plan_text = await self.provider.generate_text(
             prompt, 
-            system_prompt="You are the Lead Strategist for Hexamind Aurora. Break complex queries into clear, searchable sub-goals."
+            system_prompt="You are the Lead Strategist for Hexamind Aurora. Break complex queries into clear, searchable sub-goals. Output only the questions, one per line."
         )
+        
+        # Validation
+        if "Inference Error" in plan_text or not plan_text.strip():
+            self.context["plan"] = plan_text
+            return False
+            
         self.context["plan"] = plan_text
         logger.info(f"Plan generated: {plan_text}")
+        return True
+
 
     async def _search_phase(self):
         """Researcher Agent: Fetches data for each sub-goal."""
