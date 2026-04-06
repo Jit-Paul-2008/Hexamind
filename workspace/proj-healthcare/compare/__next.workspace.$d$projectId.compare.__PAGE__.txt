@@ -1,6 +1,6 @@
 1:"$Sreact.fragment"
-2:I[43753,["/Hexamind/_next/static/chunks/01xlw8hd842-c.js","/Hexamind/_next/static/chunks/0d3shmwh5_nmn.js","/Hexamind/_next/static/chunks/12h-6kiut8b-0.js","/Hexamind/_next/static/chunks/0c-pz_lwwl0wp.js"],"default"]
+2:I[43753,["/Hexamind/_next/static/chunks/01xlw8hd842-c.js","/Hexamind/_next/static/chunks/0d3shmwh5_nmn.js","/Hexamind/_next/static/chunks/0vjju7i8y-uua.js","/Hexamind/_next/static/chunks/0c-pz_lwwl0wp.js"],"default"]
 3:I[97367,["/Hexamind/_next/static/chunks/01xlw8hd842-c.js","/Hexamind/_next/static/chunks/0d3shmwh5_nmn.js"],"OutletBoundary"]
 4:"$Sreact.suspense"
-0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"projectId":"proj-healthcare"}],[["$","script","script-0",{"src":"/Hexamind/_next/static/chunks/0c-pz_lwwl0wp.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"_Lm1dSSV1i2-qxTSVIlyl"}
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"projectId":"proj-healthcare"}],[["$","script","script-0",{"src":"/Hexamind/_next/static/chunks/0c-pz_lwwl0wp.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"6OsxlX8x_3uckIfj2j-k2"}
 5:null
