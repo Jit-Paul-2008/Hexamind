@@ -1,45 +1,44 @@
 "use client";
 
 import React from 'react';
+import ResearchConsole from '@/components/ResearchConsole';
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-[#F8F9FF] text-[#1A1A1A] font-[family-name:var(--font-space-grotesk)]">
-      <div className="max-w-3xl w-full text-center space-y-8 animate-in fade-in duration-700">
-        <header className="space-y-4">
-          <div className="inline-block px-4 py-1 rounded-full bg-indigo-50 text-indigo-600 text-sm font-semibold tracking-wide border border-indigo-100 uppercase">
-            Fresh Start - Phase 1 Complete
-          </div>
-          <h1 className="text-5xl md:text-7xl font-bold font-[family-name:var(--font-playfair)] text-[#0F172A] tracking-tight">
-            Hexamind <span className="text-indigo-600 italic">Research</span> Console
-          </h1>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
-            Workspace reset and infrastructure stabilized. Ready for the **70B Model Redesign** and advanced multi-agent orchestration.
-          </p>
-        </header>
+    <main className="flex min-h-screen flex-col items-center p-4 lg:p-12 overflow-x-hidden">
+      {/* Aurora Background Glows */}
+      <div className="fixed top-0 left-1/4 w-[500px] h-[500px] bg-indigo-600/10 blur-[120px] rounded-full -z-10 animate-pulse"></div>
+      <div className="fixed bottom-0 right-1/4 w-[400px] h-[400px] bg-cyan-600/10 blur-[100px] rounded-full -z-10"></div>
 
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-          <div className="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-200 group">
-            <h3 className="font-bold text-lg mb-2 text-[#0F172A] group-hover:text-indigo-600 transition-colors">Backend Ready</h3>
-            <p className="text-slate-500 text-sm">FastAPI service stabilized with core model providers and research engines preserved.</p>
+      {/* Global Header */}
+      <div className="max-w-6xl w-full mb-12 flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
+            H
           </div>
-          <div className="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-200 group">
-            <h3 className="font-bold text-lg mb-2 text-[#0F172A] group-hover:text-indigo-600 transition-colors">Clean Frontend</h3>
-            <p className="text-slate-500 text-sm">Legacy UI components stripped. Workspace initialized with a lean Next.js boilerplate.</p>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">Hexamind <span className="text-indigo-400">Aurora</span></h1>
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Research Intelligence V4</p>
           </div>
-          <div className="p-6 rounded-2xl bg-white border border-slate-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-200 group">
-            <h3 className="font-bold text-lg mb-2 text-[#0F172A] group-hover:text-indigo-600 transition-colors">Deployment Ready</h3>
-            <p className="text-slate-500 text-sm">Render and Docker configurations verified. All environment variables preserved.</p>
+        </div>
+        
+        <div className="hidden md:flex items-center space-x-6 text-sm">
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
+            <span className="text-slate-400 font-mono text-xs">Ollama: DeepSeek-R1-14B</span>
           </div>
-        </section>
-
-        <footer className="pt-12">
-          <div className="text-slate-400 text-sm font-mono flex items-center justify-center space-x-4">
-            <span>Status: Operational (70B Redesign)</span>
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+          <div className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-slate-400">
+            Zero Cost Mode
           </div>
-        </footer>
+        </div>
       </div>
+
+      <ResearchConsole />
+
+      <footer className="mt-24 pb-12 text-center space-y-4">
+        <p className="text-slate-600 text-xs font-medium uppercase tracking-[0.2em]"> Powered by Local Inference & Stateful Reasoning Graphs </p>
+        <div className="h-px w-12 bg-indigo-500/20 mx-auto"></div>
+      </footer>
     </main>
   );
 }

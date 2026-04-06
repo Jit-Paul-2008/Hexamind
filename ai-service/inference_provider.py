@@ -47,7 +47,8 @@ class InferenceProvider:
         messages.append({"role": "user", "content": prompt})
 
         try:
-            async with httpx.AsyncClient(timeout=300.0) as client:
+            async with httpx.AsyncClient(timeout=600.0) as client:
+
                 async with client.stream(
                     "POST",
                     f"{self.base_url}/chat/completions",
