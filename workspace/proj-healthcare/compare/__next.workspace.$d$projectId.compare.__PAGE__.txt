@@ -2,5 +2,5 @@
 2:I[43753,["/Hexamind/_next/static/chunks/01xlw8hd842-c.js","/Hexamind/_next/static/chunks/0d3shmwh5_nmn.js","/Hexamind/_next/static/chunks/03~zuohqddfmf.js","/Hexamind/_next/static/chunks/0c-pz_lwwl0wp.js"],"default"]
 3:I[97367,["/Hexamind/_next/static/chunks/01xlw8hd842-c.js","/Hexamind/_next/static/chunks/0d3shmwh5_nmn.js"],"OutletBoundary"]
 4:"$Sreact.suspense"
-0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"projectId":"proj-healthcare"}],[["$","script","script-0",{"src":"/Hexamind/_next/static/chunks/0c-pz_lwwl0wp.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"-f2fzm9vNpvXGvc-ZkDOj"}
+0:{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"projectId":"proj-healthcare"}],[["$","script","script-0",{"src":"/Hexamind/_next/static/chunks/0c-pz_lwwl0wp.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":false,"staleTime":300,"varyParams":null,"buildId":"hZEekersm0uwC548xueiW"}
 5:null
