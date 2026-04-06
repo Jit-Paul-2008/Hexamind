@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { cases } from "@/lib/mock-data";
+import { cases, projects } from "@/lib/mock-data";
+
+export function generateStaticParams() {
+  return projects.map((p) => ({ projectId: p.id }));
+}
 
 export default async function ProjectPage({
   params,
