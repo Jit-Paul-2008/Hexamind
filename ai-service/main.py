@@ -145,7 +145,7 @@ async def security_and_audit_middleware(request: Request, call_next):
 
 
 @app.get("/health")
-def health_check() -> dict[str, str | int | bool]:
+def health_check() -> dict[str, object]:
     payload = pipeline_service.health()
     payload["rateLimitPerMinute"] = _rate_limit_per_minute()
     payload["auditLoggingEnabled"] = True
