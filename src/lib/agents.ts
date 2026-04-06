@@ -14,8 +14,29 @@ export interface Agent {
   processingOrder: number; // 1-indexed pipeline position
 }
 
-// Processing order: Advocate → Skeptic → Synthesiser → Oracle → Verifier
+// Processing order: Researcher → Critic (Two-Brain framework)
 export const AGENTS: Agent[] = [
+  {
+    id: "researcher",
+    codename: "Researcher",
+    role: "Evidence Gathering and Structured Analysis",
+    purpose: "Synthesizes sources into a comprehensive, well-structured research report.",
+    accentColor: "#10b981",
+    glowColor: "rgba(16, 185, 129, 0.28)",
+    shape: "tetrahedron",
+    processingOrder: 1,
+  },
+  {
+    id: "critic",
+    codename: "Critic",
+    role: "Bias Detection and Quality Assurance",
+    purpose: "Reviews the research report for bias, gaps, and unsupported claims.",
+    accentColor: "#f59e0b",
+    glowColor: "rgba(245, 158, 11, 0.28)",
+    shape: "icosahedron",
+    processingOrder: 2,
+  },
+  // Legacy agents for V2 framework
   {
     id: "advocate",
     codename: "Advocate",
@@ -23,8 +44,8 @@ export const AGENTS: Agent[] = [
     purpose: "Builds the strongest evidence-based upside case and execution path.",
     accentColor: "#818cf8",
     glowColor: "rgba(99, 102, 241, 0.28)",
-    shape: "tetrahedron",
-    processingOrder: 1,
+    shape: "dodecahedron",
+    processingOrder: 3,
   },
   {
     id: "skeptic",
@@ -34,7 +55,7 @@ export const AGENTS: Agent[] = [
     accentColor: "#f87171",
     glowColor: "rgba(239, 68, 68, 0.28)",
     shape: "icosahedron",
-    processingOrder: 2,
+    processingOrder: 4,
   },
   {
     id: "synthesiser",
@@ -44,7 +65,7 @@ export const AGENTS: Agent[] = [
     accentColor: "#34d399",
     glowColor: "rgba(16, 185, 129, 0.28)",
     shape: "dodecahedron",
-    processingOrder: 3,
+    processingOrder: 5,
   },
   {
     id: "oracle",
@@ -54,16 +75,16 @@ export const AGENTS: Agent[] = [
     accentColor: "#fbbf24",
     glowColor: "rgba(245, 158, 11, 0.28)",
     shape: "box",
-    processingOrder: 4,
+    processingOrder: 6,
   },
   {
     id: "verifier",
     codename: "Verifier",
-    role: "Claim Validation and Evidence Audit",
-    purpose: "Checks whether major claims are verified, weakly-supported, contested, or unverified.",
+    role: "Evidence Audit and Claim Verification",
+    purpose: "Audits source claims, triangulates evidence, and flags unsupported statements.",
     accentColor: "#60a5fa",
     glowColor: "rgba(59, 130, 246, 0.28)",
     shape: "sphere",
-    processingOrder: 5,
+    processingOrder: 7,
   },
 ];

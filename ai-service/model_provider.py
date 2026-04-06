@@ -2542,6 +2542,8 @@ class LocalPipelineModelProvider:
             "large": os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", default_model).strip() or default_model,
         }
         self._model_by_role = {
+            "researcher": _cost_aware_agent_model("local", "researcher", get_agent_model_config("researcher").primary_ollama_model),
+            "critic": _cost_aware_agent_model("local", "critic", get_agent_model_config("critic").primary_ollama_model),
             "advocate": _cost_aware_agent_model("local", "advocate", get_agent_model_config("advocate").primary_ollama_model),
             "skeptic": _cost_aware_agent_model("local", "skeptic", get_agent_model_config("skeptic").primary_ollama_model),
             "synthesiser": _cost_aware_agent_model("local", "synthesiser", get_agent_model_config("synthesiser").primary_ollama_model),
@@ -2582,6 +2584,16 @@ class LocalPipelineModelProvider:
             return await self._fallback.build_agent_text(agent_id, query, research)
 
         prompts = {
+            "researcher": (
+                "RESEARCHER agent (local, evidence synthesis mode).\n"
+                "SECTIONS: '## Executive Summary', '## Key Findings', '## Evidence Analysis', '## Implications', '## Limitations', '## Citations Used'.\n"
+                "Synthesize sources into a comprehensive, well-structured research report. Be thorough and evidence-based."
+            ),
+            "critic": (
+                "CRITIC agent (local, quality review mode).\n"
+                "SECTIONS: '## Bias Assessment', '## Quality Gaps', '## Unsupported Claims', '## Missing Perspectives', '## Recommendations', '## Citations Used'.\n"
+                "Review the research report for bias, gaps, and unsupported claims. Be critical but constructive."
+            ),
             "advocate": (
                 "ADVOCATE agent (local, research-paper mode).\n"
                 "SECTIONS: '## Opportunity Thesis', '## Strategic Upside', '## Supporting Logic', '## Actionable Next Step', '## Citations Used'.\n"

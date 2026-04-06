@@ -51,6 +51,8 @@ def select_agent_sequence(
     workflow_profile: ResearchWorkflowProfile | None = None,
 ) -> tuple[str, ...]:
     framework_version = _framework_version()
+    if framework_version == "v3":
+        return _v3_twobrain_sequence(query, workflow_profile)
     if framework_version == "v2":
         return _v2_multiagent_sequence(query, workflow_profile)
 
@@ -61,7 +63,7 @@ def select_agent_sequence(
 
 def _framework_version() -> str:
     value = os.getenv("HEXAMIND_FRAMEWORK_VERSION", "v1").strip().lower()
-    return value if value in {"v1", "v2"} else "v1"
+    return value if value in {"v1", "v2", "v3"} else "v1"
 
 
 def _v2_multiagent_sequence(
@@ -92,6 +94,15 @@ def _v2_multiagent_sequence(
         return ("advocate", "skeptic", "oracle", "verifier", "synthesiser")
 
     return ("advocate", "skeptic", "synthesiser", "oracle", "verifier")
+
+
+def _v3_twobrain_sequence(
+    query: str,
+    workflow_profile: ResearchWorkflowProfile | None = None,
+) -> tuple[str, ...]:
+    """Two-Brain framework: Researcher + Critic for balanced analysis"""
+    _ = query, workflow_profile  # Query complexity doesn't change the sequence
+    return ("researcher", "critic")
 
 
 def _resolve_tenant_id(headers: Mapping[str, str] | None = None) -> str:

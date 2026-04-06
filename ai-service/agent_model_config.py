@@ -29,6 +29,24 @@ AGENT_MODEL_SPECIALIZATION = {
         system_prompt_suffix="Focus on building the strongest evidence-based case."
     ),
     
+    "researcher": AgentModelConfig(
+        agent_id="researcher",
+        primary_ollama_model="mistral:7b",  # Fast and thorough synthesis
+        fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
+        temperature=0.6,
+        max_tokens=1000,
+        system_prompt_suffix="Synthesize sources into a comprehensive, well-structured research report."
+    ),
+    
+    "critic": AgentModelConfig(
+        agent_id="critic",
+        primary_ollama_model="mistral:7b",  # Critical but constructive
+        fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
+        temperature=0.7,
+        max_tokens=900,
+        system_prompt_suffix="Review the research report for bias, gaps, and unsupported claims."
+    ),
+    
     "skeptic": AgentModelConfig(
         agent_id="skeptic",
         primary_ollama_model="llama3.1:8b",  # Excellent for critical thinking
