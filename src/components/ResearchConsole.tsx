@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReasoningGraph from './ReasoningGraph';
 import { PipelineEvent, PipelineEventType } from '@/types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 
 export default function ResearchConsole() {
@@ -35,17 +35,18 @@ export default function ResearchConsole() {
 
     try {
       // 1. Create session
-      const startRes = await fetch(`${API_BASE}/pipeline/start`, {
+      const startRes = await fetch(`${API_BASE}/api/pipeline/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query }),
       });
       
-      if (!startRes.ok) throw new Error('Failed to start research session');
+      if (!startRes.ok) throw new Error(`Failed to start research session: ${startRes.statusText}`);
       const { sessionId } = await startRes.json();
 
       // 2. Connect to SSE
-      const eventSource = new EventSource(`${API_BASE}/pipeline/stream?sessionId=${sessionId}`);
+      const eventSource = new EventSource(`${API_BASE}/api/pipeline/${sessionId}/stream`);
+
 
 
       eventSource.onmessage = (event) => {

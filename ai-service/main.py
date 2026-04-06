@@ -13,7 +13,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from sse_starlette.sse import EventSourceResponse
+
 
 # Repo root is one level above ai-service/ (Docker WORKDIR is ai-service; .env lives at project root).
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -51,7 +53,15 @@ def _cors_allowed_origins() -> list[str]:
     return origins or ["*"]
 
 
-app = FastAPI(title="Hexamind AI Service", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifecycle manager for Aurora backend services."""
+    if _db_persistence_enabled():
+        await init_db()
+    yield
+
+app = FastAPI(title="Hexamind AI Service", version="1.0.0", lifespan=lifespan)
+
 sarvam_service = SarvamService()
 _REQUEST_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
 _AUDIT_LOG_PATH = Path(__file__).resolve().with_name(".data").joinpath("audit-log.jsonl")
@@ -68,17 +78,17 @@ _REQUEST_DURATION_SECONDS = Histogram(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_allowed_origins(),
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001", *(_cors_allowed_origins())],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-@app.on_event("startup")
-async def startup_initialize_database() -> None:
-    if _db_persistence_enabled():
-        await init_db()
+
+
+
+
 
 
 app.include_router(workspaces_router)
