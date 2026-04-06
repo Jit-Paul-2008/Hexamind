@@ -26,7 +26,7 @@ jobs:
 
       - name: Build
         env:
-          NEXT_PUBLIC_API_BASE_URL: ${{ secrets.NEXT_PUBLIC_API_BASE_URL }}
+          NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
           NEXT_PUBLIC_BASE_PATH: /Hexamind
         run: npm run build
 
