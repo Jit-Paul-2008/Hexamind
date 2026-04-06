@@ -1,305 +1,394 @@
 "use client";
 
-import { useState } from "react";
-import { V1_AGENTS } from "@/lib/v1Agents";
+import { useState, useEffect, useRef } from "react";
+import { AGENTS } from "@/lib/agents";
 import { usePipelineStore } from "@/lib/store";
-import { useRunStore } from "@/store/runStore";
-import { startPipelineRun } from "@/lib/pipelineClient";
-import { ResearchPaperFormatter } from "@/lib/researchPaperFormatter";
+import { startPipelineRun, type ReportLength } from "@/lib/pipelineClient";
+import { publicApiBaseUrl } from "@/lib/publicApiBaseUrl";
 
+// ── Inline markdown renderer ─────────────────────────────────────────────────
+function inlineFormat(line: string): React.ReactNode {
+  const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith("**") && part.endsWith("**"))
+          return <strong key={i}>{part.slice(2, -2)}</strong>;
+        if (part.startsWith("*") && part.endsWith("*"))
+          return <em key={i}>{part.slice(1, -1)}</em>;
+        if (part.startsWith("`") && part.endsWith("`"))
+          return <code key={i} className="bg-slate-100 text-rose-600 px-1 rounded text-[0.8em] font-mono">{part.slice(1, -1)}</code>;
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+function MarkdownReport({ text }: { text: string }) {
+  const lines = text.split("\n");
+  const nodes: React.ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.startsWith("```")) {
+      const block: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) { block.push(lines[i]); i++; }
+      nodes.push(
+        <pre key={key++} className="bg-slate-900 text-emerald-300 rounded-lg p-4 overflow-x-auto text-sm font-mono my-4">
+          <code>{block.join("\n")}</code>
+        </pre>
+      );
+      i++; continue;
+    }
+    if (line.startsWith("# ")) {
+      nodes.push(<h1 key={key++} className="text-2xl font-bold text-slate-900 mt-6 mb-2">{inlineFormat(line.slice(2))}</h1>);
+      i++; continue;
+    }
+    if (line.startsWith("## ")) {
+      nodes.push(<h2 key={key++} className="text-xl font-bold text-slate-800 mt-5 mb-2 border-b border-slate-200 pb-1">{inlineFormat(line.slice(3))}</h2>);
+      i++; continue;
+    }
+    if (line.startsWith("### ")) {
+      nodes.push(<h3 key={key++} className="text-base font-semibold text-slate-800 mt-4 mb-1">{inlineFormat(line.slice(4))}</h3>);
+      i++; continue;
+    }
+    if (line.match(/^[-*]{3,}$/) || line.match(/^_{3,}$/)) {
+      nodes.push(<hr key={key++} className="border-slate-200 my-4" />);
+      i++; continue;
+    }
+    if (line.startsWith("> ")) {
+      nodes.push(
+        <blockquote key={key++} className="border-l-4 border-blue-400 pl-4 py-1 my-2 bg-blue-50 rounded-r text-slate-600 italic text-sm">
+          {inlineFormat(line.slice(2))}
+        </blockquote>
+      );
+      i++; continue;
+    }
+    if (line.startsWith("- ") || line.startsWith("* ")) {
+      const items: string[] = [];
+      while (i < lines.length && (lines[i].startsWith("- ") || lines[i].startsWith("* "))) {
+        items.push(lines[i].slice(2)); i++;
+      }
+      nodes.push(
+        <ul key={key++} className="list-disc list-inside space-y-1 my-2 text-slate-700">
+          {items.map((it, ii) => <li key={ii} className="text-sm leading-relaxed">{inlineFormat(it)}</li>)}
+        </ul>
+      );
+      continue;
+    }
+    if (line.match(/^\d+\. /)) {
+      const items: string[] = [];
+      while (i < lines.length && lines[i].match(/^\d+\. /)) {
+        items.push(lines[i].replace(/^\d+\. /, "")); i++;
+      }
+      nodes.push(
+        <ol key={key++} className="list-decimal list-inside space-y-1 my-2 text-slate-700">
+          {items.map((it, ii) => <li key={ii} className="text-sm leading-relaxed">{inlineFormat(it)}</li>)}
+        </ol>
+      );
+      continue;
+    }
+    if (line.trim() === "") { i++; continue; }
+
+    nodes.push(
+      <p key={key++} className="text-slate-700 text-sm leading-relaxed my-1.5">{inlineFormat(line)}</p>
+    );
+    i++;
+  }
+
+  return <div className="space-y-0.5">{nodes}</div>;
+}
+
+// ── Backend health hook ───────────────────────────────────────────────────────
+function useBackendHealth() {
+  const [status, setStatus] = useState<"checking" | "online" | "offline">("checking");
+  useEffect(() => {
+    fetch(`${publicApiBaseUrl}/health`, { signal: AbortSignal.timeout(4000) })
+      .then((r) => setStatus(r.ok ? "online" : "offline"))
+      .catch(() => setStatus("offline"));
+  }, []);
+  return status;
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function Home() {
   const [query, setQuery] = useState("");
+  const [reportLength, setReportLength] = useState<ReportLength>("moderate");
   const [isRunning, setIsRunning] = useState(false);
-  const [activeTab, setActiveTab] = useState("technical");
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
+
   const session = usePipelineStore((s) => s.session);
   const statuses = usePipelineStore((s) => s.nodeStatuses);
-  const { runs } = useRunStore();
-
-  const currentAgents = V1_AGENTS;
-  
-  // Get research paper from actual technical output
-  const researchPaper = session?.finalAnswer && query 
-    ? ResearchPaperFormatter.formatTechnicalOutputToPaper(session.finalAnswer, query)
-    : null;
+  const resetPipeline = usePipelineStore((s) => s.resetPipeline);
+  const backendHealth = useBackendHealth();
 
   const handleRun = async () => {
     if (!query.trim() || isRunning) return;
-    
+    resetPipeline();
+    setExpandedAgent(null);
     setIsRunning(true);
-    
-    const handlers = {
-      startPipeline: (q: string) => usePipelineStore.getState().startPipeline(q),
-      setBackendSessionId: (id: string) => usePipelineStore.getState().setBackendSessionId(id),
-      setNodeStatus: (id: string, status: any) => usePipelineStore.getState().setNodeStatus(id, status),
-      appendChunk: (id: string, chunk: string) => usePipelineStore.getState().appendChunk(id, chunk),
-      setFinalAnswer: (answer: string) => usePipelineStore.getState().setFinalAnswer(answer),
+
+    const store = usePipelineStore.getState();
+    await startPipelineRun(query, {
+      startPipeline: (q) => store.startPipeline(q),
+      setBackendSessionId: (id) => usePipelineStore.getState().setBackendSessionId(id),
+      setNodeStatus: (id, st) => usePipelineStore.getState().setNodeStatus(id, st),
+      appendChunk: (id, chunk) => usePipelineStore.getState().appendChunk(id, chunk),
+      setFinalAnswer: (ans) => usePipelineStore.getState().setFinalAnswer(ans),
       setQualityLoading: () => usePipelineStore.getState().setQualityLoading(),
-      setQualityReport: (report: any) => usePipelineStore.getState().setQualityReport(report),
+      setQualityReport: (r) => usePipelineStore.getState().setQualityReport(r),
       setQualityError: () => usePipelineStore.getState().setQualityError(),
-      setPipelineError: (message: string) => usePipelineStore.getState().setPipelineError(message),
-    };
-    
-    await startPipelineRun(query, handlers);
+      setPipelineError: (msg) => usePipelineStore.getState().setPipelineError(msg),
+    }, { reportLength });
+
     setIsRunning(false);
+    setTimeout(() => reportRef.current?.scrollIntoView({ behavior: "smooth" }), 200);
   };
 
-  const getAgentStatusClass = (status: string) => {
-    switch (status) {
-      case "active": return "agent-card active";
-      case "done": return "agent-card done";
-      default: return "agent-card";
-    }
-  };
-
-  const downloadReport = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/markdown' });
+  const downloadReport = () => {
+    if (!session?.finalAnswer) return;
+    const blob = new Blob([session.finalAnswer], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
+    a.download = `${query.slice(0, 40).replace(/\s+/g, "_")}_report.md`;
     a.click();
-    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* Header */}
-        <header className="text-center mb-10">
-          <h1 className="text-4xl font-bold text-slate-800 mb-3">Hexamind</h1>
-          <p className="text-slate-600 text-lg">AI-Powered Research & Analysis Platform</p>
-          <div className="mt-4 flex items-center justify-center gap-4 text-sm text-slate-500">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-              V1 Optimized Mode
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-              Local 70B Model
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-              Live Web Research
-            </span>
-          </div>
-        </header>
+  const hasReport = !!session?.finalAnswer;
+  const hasError = session?.status === "error";
 
-        {/* Query Input */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-          <label className="block text-sm font-semibold text-slate-700 mb-3">
-            Research Topic
-          </label>
+  return (
+    <div className="min-h-screen bg-[#f8fafc]">
+      {/* ── Top bar ── */}
+      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-3">
+          <span className="text-xl font-bold tracking-tight text-slate-900">Hexamind</span>
+          <span className="text-xs text-slate-400 hidden sm:inline">Multi-Agent Research Intelligence</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+            backendHealth === "online" ? "bg-emerald-500" :
+            backendHealth === "offline" ? "bg-red-500" :
+            "bg-amber-400 animate-pulse"
+          }`} />
+          <span className="text-slate-500">
+            {backendHealth === "online" ? "Backend live · llama3.1:70b" :
+             backendHealth === "offline" ? "Backend offline — start with: sudo systemctl start hexamind-backend" :
+             "Connecting…"}
+          </span>
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto px-4 py-8 space-y-5">
+
+        {/* ── Query ── */}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Research Query</h2>
           <textarea
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Enter your research topic (e.g., 'quantum computing applications in drug discovery')..."
-            className="w-full p-4 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-slate-700"
-            rows={4}
+            onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleRun(); }}
+            placeholder="What do you want to research? (Ctrl+Enter to run)"
+            rows={3}
             disabled={isRunning}
+            className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-slate-800 placeholder-slate-400 disabled:opacity-60 text-sm"
           />
-          <div className="mt-4 flex items-center justify-between">
-            <div className="text-sm text-slate-500">
-              {isRunning ? "Research in progress..." : "Ready to analyze"}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">Depth:</span>
+              {(["brief", "moderate", "huge"] as ReportLength[]).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => setReportLength(l)}
+                  disabled={isRunning}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                    reportLength === l ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {l.charAt(0).toUpperCase() + l.slice(1)}
+                </button>
+              ))}
             </div>
             <button
               onClick={handleRun}
-              disabled={!query.trim() || isRunning}
-              className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-                isRunning 
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg hover:shadow-xl'
-              }`}
+              disabled={!query.trim() || isRunning || backendHealth !== "online"}
+              className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm flex items-center gap-2"
             >
               {isRunning ? (
-                <span className="flex items-center gap-2">
-                  <span className="animate-spin">⏳</span>
-                  Processing...
-                </span>
-              ) : (
-                'Start Research'
-              )}
+                <>
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Running…
+                </>
+              ) : "Run Research"}
             </button>
           </div>
-        </div>
+        </section>
 
-        {/* Agent Status */}
-        {isRunning && (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-              <span className="animate-pulse">🤖</span>
-              Agent Progress
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {currentAgents.map((agent) => (
-                <div
-                  key={agent.id}
-                  className={`p-4 rounded-lg border-2 transition-all ${
-                    statuses[agent.id] === 'active' 
-                      ? 'border-blue-500 bg-blue-50 animate-pulse' 
-                      : statuses[agent.id] === 'done'
-                      ? 'border-emerald-500 bg-emerald-50'
-                      : 'border-slate-200 bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-slate-800">{agent.codename}</span>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      statuses[agent.id] === 'active' 
-                        ? 'bg-blue-100 text-blue-700' 
-                        : statuses[agent.id] === 'done'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      {statuses[agent.id] || 'waiting'}
-                    </span>
-                  </div>
-                  <div className="text-sm text-slate-600">{agent.role}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* ── Agent pipeline ── */}
+        {session && (
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">Agent Pipeline</h2>
+            <div className="space-y-2">
+              {AGENTS.map((agent) => {
+                const st = statuses[agent.id] ?? "idle";
+                const output = session.outputs[agent.id];
+                const hasContent = (output?.content?.length ?? 0) > 0;
+                const isExpanded = expandedAgent === agent.id;
 
-        {/* Quality Metrics */}
-        {session?.qualityReport && (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4">Research Quality</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-slate-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">
-                  {session.qualityReport.overallScore.toFixed(1)}
-                </div>
-                <div className="text-sm text-slate-600">Quality Score</div>
-              </div>
-              <div className="text-center p-4 bg-slate-50 rounded-lg">
-                <div className="text-2xl font-bold text-emerald-600">
-                  {session.qualityReport.metrics.sourceCount}
-                </div>
-                <div className="text-sm text-slate-600">Sources Found</div>
-              </div>
-              <div className="text-center p-4 bg-slate-50 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">
-                  {session.qualityReport.trustScore?.toFixed(1) || "N/A"}
-                </div>
-                <div className="text-sm text-slate-600">Trust Score</div>
-              </div>
-              <div className="text-center p-4 bg-slate-50 rounded-lg">
-                <div className="text-2xl font-bold text-amber-600">
-                  {session.qualityReport.metrics.contradictionCount}
-                </div>
-                <div className="text-sm text-slate-600">Issues Found</div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Results Section */}
-        {session?.finalAnswer && (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-            {/* Tab Navigation */}
-            <div className="flex items-center justify-between mb-6 border-b border-slate-200">
-              <div className="flex gap-4">
-                <button
-                  onClick={() => setActiveTab('technical')}
-                  className={`pb-3 px-4 font-semibold transition-colors ${
-                    activeTab === 'technical' 
-                      ? 'text-blue-600 border-b-2 border-blue-600' 
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Technical Analysis
-                </button>
-                <button
-                  onClick={() => setActiveTab('paper')}
-                  className={`pb-3 px-4 font-semibold transition-colors ${
-                    activeTab === 'paper' 
-                      ? 'text-emerald-600 border-b-2 border-emerald-600' 
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Research Paper
-                </button>
-              </div>
-              <div className="flex gap-2">
-                {activeTab === 'technical' && (
-                  <button
-                    onClick={() => downloadReport(session.finalAnswer || '', `${query.replace(/\s+/g, '_')}_technical.md`)}
-                    className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors text-sm font-medium"
-                  >
-                    Download Technical
-                  </button>
-                )}
-                {activeTab === 'paper' && researchPaper && (
-                  <button
-                    onClick={() => downloadReport(researchPaper, `${query.replace(/\s+/g, '_')}_research_paper.md`)}
-                    className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition-colors text-sm font-medium"
-                  >
-                    Download Paper
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Tab Content */}
-            {activeTab === 'technical' ? (
-              <div className="prose prose-slate max-w-none">
-                <div className="bg-slate-50 rounded-lg p-6 font-mono text-sm text-slate-700 whitespace-pre-wrap">
-                  {session.finalAnswer}
-                </div>
-              </div>
-            ) : (
-              <div className="prose prose-slate max-w-none">
-                {researchPaper ? (
-                  <div className="bg-emerald-50 rounded-lg p-6 border-2 border-emerald-100">
-                    <div className="prose-headings:text-emerald-800 prose-p:text-slate-700 whitespace-pre-wrap">
-                      {researchPaper}
+                return (
+                  <div key={agent.id} className={`rounded-lg border overflow-hidden transition-colors ${
+                    st === "active" ? "border-blue-300 bg-blue-50" :
+                    st === "done"   ? "border-emerald-300 bg-emerald-50" :
+                    st === "error"  ? "border-red-300 bg-red-50" :
+                    "border-slate-200 bg-slate-50"
+                  }`}>
+                    <div
+                      className={`flex items-center gap-3 px-4 py-3 ${hasContent ? "cursor-pointer select-none" : ""}`}
+                      onClick={() => hasContent && setExpandedAgent(isExpanded ? null : agent.id)}
+                    >
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                        st === "active" ? "bg-blue-500 animate-pulse" :
+                        st === "done"   ? "bg-emerald-500" :
+                        st === "error"  ? "bg-red-500" : "bg-slate-300"
+                      }`} />
+                      <span className="font-medium text-sm text-slate-800 w-24 flex-shrink-0">{agent.codename}</span>
+                      <span className="text-xs text-slate-500 flex-1 truncate hidden sm:block">{agent.role}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                        st === "active" ? "bg-blue-100 text-blue-700" :
+                        st === "done"   ? "bg-emerald-100 text-emerald-700" :
+                        st === "error"  ? "bg-red-100 text-red-700" :
+                        "bg-slate-100 text-slate-500"
+                      }`}>{st}</span>
+                      {hasContent && (
+                        <svg className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-12 text-slate-500">
-                    Research paper will be generated from technical analysis
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Previous Research */}
-        {runs.length > 1 && (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4">Research History</h2>
-            <div className="space-y-3">
-              {runs.slice(0, 5).map((run) => (
-                <div key={run.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                  <div>
-                    <div className="font-medium text-slate-800 truncate max-w-md">
-                      {run.answer ? run.answer.substring(0, 50) + '...' : 'Untitled Research'}
-                    </div>
-                    <div className="text-sm text-slate-500">
-                      {new Date(run.createdAt).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {run.quality && (
-                      <span className="text-sm px-2 py-1 bg-blue-100 text-blue-700 rounded">
-                        Score: {run.quality.overallScore?.toFixed(1) || 'N/A'}
-                      </span>
+                    {isExpanded && hasContent && (
+                      <div className="px-4 pb-4">
+                        <div className="bg-white rounded border border-slate-200 p-3 max-h-52 overflow-y-auto text-xs text-slate-600 font-mono whitespace-pre-wrap leading-relaxed">
+                          {output.content}
+                          {st === "active" && <span className="inline-block w-1.5 h-3 bg-blue-500 animate-pulse ml-0.5 align-middle" />}
+                        </div>
+                      </div>
                     )}
                   </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* ── Error ── */}
+        {hasError && (
+          <section className="bg-red-50 border border-red-300 rounded-xl p-5 flex items-start gap-3">
+            <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <p className="font-semibold text-red-800 text-sm">Pipeline Error</p>
+              <p className="text-red-700 text-sm mt-1">{session?.errorMessage || "An unknown error occurred."}</p>
+            </div>
+          </section>
+        )}
+
+        {/* ── Report ── */}
+        {hasReport && (
+          <section ref={reportRef} className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Research Report</h2>
+              <button
+                onClick={downloadReport}
+                className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Download .md
+              </button>
+            </div>
+            <MarkdownReport text={session.finalAnswer} />
+          </section>
+        )}
+
+        {/* ── Quality metrics ── */}
+        {session?.qualityReport && session.qualityStatus === "ready" && (
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-4">Quality Analysis</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+              {[
+                { label: "Overall Score", value: session.qualityReport.overallScore?.toFixed(1), color: "text-blue-600" },
+                { label: "Trust Score",   value: session.qualityReport.trustScore?.toFixed(1) ?? "—", color: "text-emerald-600" },
+                { label: "Sources",       value: String(session.qualityReport.metrics.sourceCount), color: "text-purple-600" },
+                { label: "Citations",     value: String(session.qualityReport.metrics.citationCount), color: "text-amber-600" },
+              ].map((m) => (
+                <div key={m.label} className="bg-slate-50 rounded-lg p-4 text-center border border-slate-100">
+                  <div className={`text-2xl font-bold ${m.color}`}>{m.value}</div>
+                  <div className="text-xs text-slate-500 mt-1">{m.label}</div>
                 </div>
               ))}
             </div>
-          </div>
+
+            {session.qualityReport.claimVerifications?.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Claim Verifications</h3>
+                <div className="space-y-1.5">
+                  {session.qualityReport.claimVerifications.slice(0, 6).map((cv, i) => (
+                    <div key={i} className={`flex items-start gap-2 p-2.5 rounded-lg text-xs border ${
+                      cv.status === "verified"   ? "bg-emerald-50 border-emerald-200" :
+                      cv.status === "contested"  ? "bg-amber-50 border-amber-200" :
+                      "bg-slate-50 border-slate-200"
+                    }`}>
+                      <span className={`font-semibold flex-shrink-0 ${
+                        cv.status === "verified"  ? "text-emerald-700" :
+                        cv.status === "contested" ? "text-amber-700" : "text-slate-500"
+                      }`}>{cv.status}</span>
+                      <span className="text-slate-700">{cv.claim}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {session.qualityReport.contradictionFindings?.length > 0 && (
+              <div>
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Contradictions</h3>
+                <div className="space-y-1.5">
+                  {session.qualityReport.contradictionFindings.slice(0, 3).map((c, i) => (
+                    <div key={i} className="text-xs p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-rose-700">{c.reason}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
         )}
 
-        {/* Footer */}
-        <footer className="text-center mt-12 text-sm text-slate-500">
-          <p>Powered by Multi-Agent AI • Local 70B Model • Zero API Costs</p>
-        </footer>
-      </div>
+        {session?.qualityStatus === "loading" && (
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center gap-3 text-sm text-slate-500">
+            <svg className="animate-spin w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            Analysing report quality…
+          </section>
+        )}
+
+      </main>
+
+      <footer className="text-center py-8 text-xs text-slate-400">
+        Hexamind · Multi-agent AI · llama3.1:70b · Zero cost
+      </footer>
     </div>
   );
 }
