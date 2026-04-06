@@ -27,6 +27,11 @@ async def run_live_trial():
             payload = json.loads(data)
             print(f"🧠 [BRAIN] Stage: {payload['agentId'].upper()} initialized...")
         
+        if event_type == "agent_done":
+            import json
+            payload = json.loads(data)
+            print(f"✅ [BRAIN] Stage: {payload['agentId'].upper()} completed.")
+        
         if event_type == "pipeline_error":
             import json
             payload = json.loads(data)
@@ -37,10 +42,10 @@ async def run_live_trial():
             return
 
         if event_type == "pipeline_done":
-
             import json
             payload = json.loads(data)
             final_report = payload["fullContent"]
+
 
     # Save to "demo runs"
     output_path = Path(__file__).resolve().parent.parent / "demo runs"
