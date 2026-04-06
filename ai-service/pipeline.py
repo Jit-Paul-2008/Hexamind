@@ -408,8 +408,11 @@ class PipelineService:
                         )
                         timings["agentSeconds"] += time.perf_counter() - agent_started
                     except Exception as exc:
+                        exc_text = f"{type(exc).__name__}: {exc}".lower()
                         if disable_failsafe:
-                            raise RuntimeError(_PUBLIC_OVERLOAD_MESSAGE) from exc
+                            if "rate" in exc_text or "429" in exc_text or "overload" in exc_text or "busy" in exc_text:
+                                raise RuntimeError(_PUBLIC_OVERLOAD_MESSAGE) from exc
+                            raise
                         content = ""
 
                     if not content.strip() and fallback_provider is not None:
@@ -465,8 +468,11 @@ class PipelineService:
                 )
                 timings["finalSeconds"] += time.perf_counter() - final_started
             except Exception as exc:
+                exc_text = f"{type(exc).__name__}: {exc}".lower()
                 if disable_failsafe:
-                    raise RuntimeError(_PUBLIC_OVERLOAD_MESSAGE) from exc
+                    if "rate" in exc_text or "429" in exc_text or "overload" in exc_text or "busy" in exc_text:
+                        raise RuntimeError(_PUBLIC_OVERLOAD_MESSAGE) from exc
+                    raise
                 final_answer = ""
 
             if not final_answer.strip() and fallback_provider is not None:
