@@ -17,13 +17,20 @@ def _resolve_query() -> str:
 
 async def run_live_trial():
     query = _resolve_query()
-    print(f"🚀 Initiating Aurora v4 Deep Research...")
-    print(f"Query: {query}")
-    print("-" * 50)
-    
     graph = AuroraGraph(query)
     final_report = ""
-    
+
+    status_file = Path(__file__).resolve().parent.parent / "research_status.md"
+    with open(status_file, "w", encoding="utf-8") as f:
+        f.write(f"🚀 Initiating Aurora v4 Deep Research...\n")
+        f.write(f"Query: {query}\n")
+        f.write("-" * 50 + "\n")
+
+    def log_status(msg: str):
+        print(msg)
+        with open(status_file, "a", encoding="utf-8") as f:
+            f.write(msg + "\n")
+
     async for event in graph.run():
         event_type = event["event"]
         data = event["data"]
@@ -32,22 +39,22 @@ async def run_live_trial():
         if event_type == "agent_start":
             import json
             payload = json.loads(data)
-            print(f"🧠 [BRAIN] Stage: {payload['agentId'].upper()} initialized...")
+            log_status(f"🧠 [BRAIN] Stage: {payload['agentId'].upper()} initialized...")
         
         if event_type == "agent_done":
             import json
             payload = json.loads(data)
-            print(f"✅ [BRAIN] Stage: {payload['agentId'].upper()} completed.")
-            print(f"📄 [REPORT] {payload['agentId'].upper()} Findings:\n{payload['fullContent']}\n")
-            print("-" * 50)
+            log_status(f"✅ [BRAIN] Stage: {payload['agentId'].upper()} completed.")
+            log_status(f"📄 [REPORT] {payload['agentId'].upper()} Findings:\n{payload['fullContent']}\n")
+            log_status("-" * 50)
         
         if event_type == "pipeline_error":
             import json
             payload = json.loads(data)
-            print("-" * 50)
-            print(f"❌ [CRITICAL ERROR] Stage: {payload['agentId'].upper()} failed.")
-            print(f"Reason: {payload['fullContent']}")
-            print("-" * 50)
+            log_status("-" * 50)
+            log_status(f"❌ [CRITICAL ERROR] Stage: {payload['agentId'].upper()} failed.")
+            log_status(f"Reason: {payload['fullContent']}")
+            log_status("-" * 50)
             return
 
         if event_type == "pipeline_done":

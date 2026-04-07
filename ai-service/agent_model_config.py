@@ -114,11 +114,11 @@ AGENT_MODEL_SPECIALIZATION = {
 
     "drafter": AgentModelConfig(
         agent_id="drafter",
-        primary_ollama_model="qwen2.5:0.5b",
+        primary_ollama_model="qwen2.5:7b",
         fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
         temperature=0.4,
-        max_tokens=1000,
-        system_prompt_suffix="Generate a comprehensive, cohesive Markdown research report. Use the provided evidence density."
+        max_tokens=2000,
+        system_prompt_suffix="Generate a comprehensive, encyclopedic Markdown research report in an LLM-Wiki format."
     ),
 
     "orchestrator": AgentModelConfig(

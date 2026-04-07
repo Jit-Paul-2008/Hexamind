@@ -52,18 +52,20 @@ class ResearchWorker:
     async def _generate_search_query(self, topic: str) -> str:
         """Tailor the search query based on the worker's role."""
         normalized_topic = topic.lower()
-        india_iit_focus = any(token in normalized_topic for token in ["iit", "indian institute", "india", "employab", "placement", "student development"])
+        # Only focus on IIT if the user explicitly mentioned it
+        iit_keywords = ["iit", "indian institute", "jee", "iitian"]
+        is_iit_specific = any(token in normalized_topic for token in iit_keywords)
 
         prompts = {
-            WorkerRole.RESEARCHER: f"Find current facts, placement statistics, student outcomes, internships, employability data, and recent case studies about {topic}",
-            WorkerRole.HISTORIAN: f"Find historical evolution, reforms, curriculum changes, admissions trends, and institutional development history for {topic}",
-            WorkerRole.AUDITOR: f"Find critical reviews, student welfare concerns, placement declines, skill gaps, mental health issues, and failures related to {topic}",
-            WorkerRole.ANALYST: f"Find curriculum structure, industry readiness, practical training, internship pipelines, and mechanisms affecting employability for {topic}"
+            WorkerRole.RESEARCHER: f"Find current facts, statistical paradoxes, outcomes, and recent case studies about {topic}",
+            WorkerRole.HISTORIAN: f"Find historical evolution, policy shifts, and developmental timeline for {topic}",
+            WorkerRole.AUDITOR: f"Find critical assessments, failures, social downsides, and dissenting views on {topic}",
+            WorkerRole.ANALYST: f"Find implementation strategies, future projections, and mechanistic outcomes for {topic}"
         }
 
         query = prompts.get(self.role, topic)
-        if india_iit_focus:
-            query += " IIT India placements employability student outcomes curriculum internships alumni recent years"
+        if is_iit_specific:
+            query += " IIT India placement student outcomes case study"
         return query
 
     async def _analyze(self, topic: str, sources: List[Any], context: Optional[str] = None, initial_draft: Optional[str] = None) -> str:
@@ -108,13 +110,14 @@ class DraftingWorker:
             combined_evidence += "\n".join([f"- {s.excerpt}" for s in ctx.sources[:5]])
 
         prompt = (
-            f"Write a detailed, cohesive Markdown research report for the query: {query}\n\n"
-            f"Use this dense factual evidence:\n{combined_evidence}\n\n"
-            "Requirements:\n"
-            "1. Use clear H2 and H3 headings.\n"
-            "2. Be comprehensive but stay grounded in the evidence.\n"
-            "3. DO NOT use conversational filler.\n"
-            "4. Mention specific facts and data points provided."
+            f"Write a high-fidelity encyclopedic research report in 'LLM-Wiki' format for the query: {query}\n\n"
+            f"Use this dense factual record:\n{combined_evidence}\n\n"
+            "Wiki Layout Requirements:\n"
+            "1. Lead with a 'Definition & Context' section.\n"
+            "2. Use H2 for major themes and H3 for sub-details.\n"
+            "3. Be objective, factual, and extremely dense with data points.\n"
+            "4. NEVER use conversational filler or personal pronouns.\n"
+            "5. Ensure every section ends with a logical transition to the next theme."
         )
         
         return await self.provider.generate_text(
