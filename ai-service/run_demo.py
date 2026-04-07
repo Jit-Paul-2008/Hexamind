@@ -31,6 +31,8 @@ async def run_live_trial():
             import json
             payload = json.loads(data)
             print(f"✅ [BRAIN] Stage: {payload['agentId'].upper()} completed.")
+            print(f"📄 [REPORT] {payload['agentId'].upper()} Findings:\n{payload['fullContent']}\n")
+            print("-" * 50)
         
         if event_type == "pipeline_error":
             import json

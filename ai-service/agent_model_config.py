@@ -19,28 +19,29 @@ class AgentModelConfig:
 
 # Agent-Model Specialization Matrix
 # Each agent gets the best model for its role
+# ALL HARMONIZED TO 14B FOR XEON POWER
 AGENT_MODEL_SPECIALIZATION = {
     "advocate": AgentModelConfig(
         agent_id="advocate",
-        primary_ollama_model="mistral:7b",  # Fast, strong reasoning
+        primary_ollama_model="qwen2.5:7b",
         fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
-        temperature=0.6,  # Lower temp = more focused reasoning
-        max_tokens=900,
-        system_prompt_suffix="Focus on building the strongest evidence-based case."
+        temperature=0.6,
+        max_tokens=600,
+        system_prompt_suffix="Focus on building the strongest evidence-based case. MAX 3 PARAGRAPHS. DO NOT OVERTHINK."
     ),
     
     "researcher": AgentModelConfig(
         agent_id="researcher",
-        primary_ollama_model="mistral:7b",  # Fast and thorough synthesis
+        primary_ollama_model="qwen2.5:7b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
         temperature=0.6,
-        max_tokens=1000,
-        system_prompt_suffix="Synthesize sources into a comprehensive, well-structured research report."
+        max_tokens=800,
+        system_prompt_suffix="Synthesize sources into a comprehensive, well-structured research report. BE BRIEF AND DIRECT."
     ),
     
     "critic": AgentModelConfig(
         agent_id="critic",
-        primary_ollama_model="mistral:7b",  # Critical but constructive
+        primary_ollama_model="deepseek-r1:14b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
         temperature=0.7,
         max_tokens=900,
@@ -49,7 +50,7 @@ AGENT_MODEL_SPECIALIZATION = {
     
     "skeptic": AgentModelConfig(
         agent_id="skeptic",
-        primary_ollama_model="llama3.1:8b",  # Excellent for critical thinking
+        primary_ollama_model="deepseek-r1:14b",
         fallback_hf_model="meta-llama/Llama-2-70b-chat-hf",
         temperature=0.7,
         max_tokens=900,
@@ -58,7 +59,7 @@ AGENT_MODEL_SPECIALIZATION = {
     
     "synthesiser": AgentModelConfig(
         agent_id="synthesiser",
-        primary_ollama_model="qwen2.5:7b",  # Good at balancing perspectives
+        primary_ollama_model="deepseek-r1:14b",
         fallback_hf_model="tiiuae/falcon-7b-instruct",
         temperature=0.75,
         max_tokens=800,
@@ -67,20 +68,20 @@ AGENT_MODEL_SPECIALIZATION = {
     
     "oracle": AgentModelConfig(
         agent_id="oracle",
-        primary_ollama_model="deepseek-coder:6.7b",  # Strong at structured forecasting
+        primary_ollama_model="deepseek-r1:14b",
         fallback_hf_model="EleutherAI/gpt-neox-20b",
-        temperature=0.8,  # Higher temp = more creative scenarios
+        temperature=0.8,
         max_tokens=900,
         system_prompt_suffix="Generate specific forecasts with confidence levels and triggers."
     ),
     
     "verifier": AgentModelConfig(
         agent_id="verifier",
-        primary_ollama_model="mistral:7b",  # Precise fact-checking
+        primary_ollama_model="qwen2.5:7b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
-        temperature=0.5,  # Very low temp = precise verification
-        max_tokens=700,
-        system_prompt_suffix="Verify claims against evidence with clear verdicts."
+        temperature=0.5,
+        max_tokens=500,
+        system_prompt_suffix="Verify claims against evidence with clear verdicts. USE BULLET POINTS."
     ),
 }
 

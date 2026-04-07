@@ -5,8 +5,9 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from enum import Enum
 
-from inference_provider import get_provider
+from inference_provider import get_provider, InferenceProvider
 from research import InternetResearcher
+from agent_model_config import get_agent_model_config
 
 from worker_agents import ResearchWorker, WorkerRole
 from research import InternetResearcher
@@ -63,7 +64,23 @@ class AuroraGraph:
             return
         yield self._event(PipelineEventType.AGENT_DONE, "orchestrator", f"Decomposed into {len(self.task_tree)} specialized tasks.")
 
-        # 2. HIERARCHICAL EXECUTION (Workers)
+        # 2. PARALLEL EVIDENCE GATHERING
+        print("🌍 Launching parallel web searches...", flush=True)
+        yield self._event(PipelineEventType.AGENT_START, "orchestrator", "Fetching evidence in parallel...")
+        
+        workers = {}
+        fetch_tasks = []
+        for node in self.task_tree:
+            agent_config = get_agent_model_config(node.role)
+            worker_provider = InferenceProvider(model_name=agent_config.primary_ollama_model)
+            worker = ResearchWorker(node.role, worker_provider)
+            workers[node.id] = worker
+            fetch_tasks.append(worker.gather_evidence(node.topic))
+            
+        contexts = await asyncio.gather(*fetch_tasks)
+        node_contexts = {node.id: context for node, context in zip(self.task_tree, contexts)}
+
+        # 3. HIERARCHICAL EXECUTION (Workers Inference)
         semaphore = asyncio.Semaphore(1) # Limit to 1 for maximum stability on CPU
         
         async def run_worker_task(node: HierarchicalNode):
@@ -73,8 +90,9 @@ class AuroraGraph:
                 
                 try:
                     yield self._event(PipelineEventType.AGENT_START, node.id)
-                    worker = ResearchWorker(node.role, self.provider)
-                    result = await worker.run(node.topic, context=self.query)
+                    worker = workers[node.id]
+                    context = node_contexts[node.id]
+                    result = await worker.run_analysis(node.topic, context, self.query)
                     node.analysis = result["analysis"]
                     node.sources = result["sources"]
                     node.status = NodeStatus.COMPLETED
@@ -88,7 +106,7 @@ class AuroraGraph:
                     heartbeat_task.cancel()
                     print(f"✅ Worker task {node.id} finished.", flush=True)
 
-        # Execute all nodes in the tree
+        # Execute all inference nodes sequentially
         for node in self.task_tree:
             async for event_item in run_worker_task(node):
                 yield event_item
@@ -104,10 +122,12 @@ class AuroraGraph:
         yield self._event(PipelineEventType.PIPELINE_DONE, "output", final_report)
 
     async def _emit_heartbeat(self, agent_id: str):
-        """Sends a periodic 'Thinking' signal to prevent SSE timeouts."""
+        """Sends a periodic signal to console to show active thinking."""
+        count = 1
         while True:
-            await asyncio.sleep(15)
-            logger.debug(f"Heartbeat: {agent_id} is still thinking...")
+            await asyncio.sleep(20)
+            print(f"⏳ [THINKING] {agent_id.upper()} has been deep-reasoning for {count * 20}s... (Step {count})", flush=True)
+            count += 1
 
     def _event(self, type: PipelineEventType, agent_id: str, content: str = "") -> dict:
         """Helper to create a serialized PipelineEvent."""
@@ -153,17 +173,22 @@ class AuroraGraph:
             "You are the Editor-in-Chief. Synthesize the final multi-agent research report.\n\n"
             f"Original Query: {self.query}\n\n"
             f"Gathered Evidence:\n{worker_outputs}\n\n"
+            "CRITICAL: Produce TWO reports in this exact order and only with these top-level headings:\n"
+            "1. '## Technical report': Must contain a concise executive summary, methods, evidence-backed findings, research quality stats, and source inventory.\n"
+            "2. '## Report on Topic': Must be polished, human-readable, structured with clear subheadings, and focused on the user's query.\n\n"
             "Style Guide:\n"
-            "1. Start with a Executive Summary.\n"
-            "2. Use Markdown headings (##).\n"
-            "3. Add a unified 'Synthesis of Perspectives' section.\n"
-            "4. Add a References section with all unique URLs.\n\n"
-            "CRITICAL: Be concise. Direct synthesis only. No conversational filler."
+            "- Use concrete claims and [Sx] citations.\n"
+            "- No conversational filler or meta-commentary.\n"
+            "- Ground every insight in the provided evidence."
         )
 
-        return await self.provider.generate_text(
+        synth_config = get_agent_model_config("synthesiser")
+        synth_provider = InferenceProvider(model_name=synth_config.primary_ollama_model)
+
+        return await synth_provider.generate_text(
             prompt,
-            system_prompt="You are a High-Precision Synthesis Agent. Your output must be the gold standard of integrated research."
+            system_prompt="You are a High-Precision Synthesis Agent. Your output must be the gold standard of integrated research.",
+            max_tokens=2500
         )
 
 

@@ -13,9 +13,12 @@ class InferenceProvider:
         self.model_name = model_name
         # Use native Ollama API by default
         self.base_url = base_url or os.getenv("HEXAMIND_LOCAL_BASE_URL", "http://localhost:11434/api/chat")
+        # Ensure base_url is the root for native API calls
+        if self.base_url.endswith("/v1"):
+             self.base_url = self.base_url.replace("/v1", "/api/chat")
         self.api_key = api_key or os.getenv("HEXAMIND_AUTH_TOKEN", "")
 
-    async def generate_text(self, prompt: str, system_prompt: Optional[str] = None, stream: bool = False) -> str:
+    async def generate_text(self, prompt: str, system_prompt: Optional[str] = None, stream: bool = False, max_tokens: int = 1500) -> str:
         """Single-shot generation via Native Ollama API."""
         messages = []
         if system_prompt:
@@ -33,7 +36,8 @@ class InferenceProvider:
                         "options": {
                             "temperature": 0.2,
                             "num_ctx": 4096,
-                            "num_thread": 8  # Optimize for Xeon concurrency
+                            "num_thread": 2,  # Adjusted for 2-core hardware
+                            "num_predict": max_tokens
                         }
                     }
                 )
@@ -55,8 +59,8 @@ class InferenceProvider:
 
 
 
-    async def stream_text(self, prompt: str, system_prompt: Optional[str] = None) -> AsyncGenerator[str, None]:
-        """Streaming generation for the UI."""
+    async def stream_text(self, prompt: str, system_prompt: Optional[str] = None, max_tokens: int = 2000) -> AsyncGenerator[str, None]:
+        """Streaming generation for the UI using Native Ollama API."""
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -64,16 +68,19 @@ class InferenceProvider:
 
         try:
             async with httpx.AsyncClient(timeout=1200.0) as client:
-
                 async with client.stream(
                     "POST",
-                    f"{self.base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {self.api_key}" if self.api_key else ""},
+                    f"{self.base_url}",
                     json={
                         "model": self.model_name,
                         "messages": messages,
-                        "temperature": 0.3,
                         "stream": True,
+                        "options": {
+                            "temperature": 0.3,
+                            "num_ctx": 4096,
+                            "num_thread": 2,  # Adjusted for 2-core hardware
+                            "num_predict": max_tokens
+                        }
                     }
                 ) as response:
                     if response.status_code != 200:
@@ -81,15 +88,17 @@ class InferenceProvider:
                         return
 
                     async for line in response.aiter_lines():
-                        if not line or not line.startswith("data: "):
+                        if not line:
                             continue
-                        if line == "data: [DONE]":
-                            break
                         try:
-                            chunk = json.loads(line[6:])
-                            content = chunk["choices"][0].get("delta", {}).get("content", "")
-                            if content:
-                                yield content
+                            chunk = json.loads(line)
+                            # Native Ollama stream format: chunk["message"]["content"]
+                            if "message" in chunk and "content" in chunk["message"]:
+                                content = chunk["message"]["content"]
+                                if content:
+                                    yield content
+                            if chunk.get("done"):
+                                break
                         except json.JSONDecodeError:
                             continue
         except httpx.ReadTimeout:

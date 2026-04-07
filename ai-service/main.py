@@ -373,15 +373,15 @@ def _append_audit_log(
 
 def _local_base_url() -> str:
     provider = getattr(pipeline_service, "_model_provider", None)
-    base_url = getattr(provider, "_base_url", os.getenv("HEXAMIND_LOCAL_BASE_URL", "http://127.0.0.1:11434/v1"))
+    base_url = getattr(provider, "_base_url", os.getenv("HEXAMIND_LOCAL_BASE_URL", "http://127.0.0.1:11434/api/chat"))
     return str(base_url).rstrip("/")
 
 
 def _required_local_models() -> list[str]:
     required = [
-        os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", "mistral:7b").strip() or "mistral:7b",
-        os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", "qwen2.5:7b").strip() or "qwen2.5:7b",
-        os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "llama3.1:8b").strip() or "llama3.1:8b",
+        os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", "deepseek-r1:14b").strip() or "deepseek-r1:14b",
+        os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", "deepseek-r1:14b").strip() or "deepseek-r1:14b",
+        os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "deepseek-r1:14b").strip() or "deepseek-r1:14b",
     ]
     deduped: list[str] = []
     for model in required:
@@ -393,9 +393,11 @@ def _required_local_models() -> list[str]:
 async def _local_model_status() -> dict[str, object]:
     base_url = _local_base_url()
     required = _required_local_models()
+    # Check Ollama tags via native API (usually at /api/tags regardless of chat endpoint)
+    root_url = base_url.removesuffix("/api/chat")
     endpoints = [
-        f"{base_url.removesuffix('/v1')}/api/tags",
-        f"{base_url}/models",
+        f"{root_url}/api/tags",
+        f"{root_url}/api/show", # Alternative check
     ]
     last_error = ""
 

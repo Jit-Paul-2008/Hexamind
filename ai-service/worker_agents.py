@@ -21,15 +21,16 @@ class ResearchWorker:
         self.provider = provider or get_provider()
         self.researcher = InternetResearcher()
 
-    async def run(self, topic: str, context: Optional[str] = None) -> Dict[str, Any]:
-        """Execute the worker's specialized task with a Mini-Critique loop."""
-        logger.info(f"Worker [{self.role}] starting on topic: {topic}")
-        
-        # 1. Specialized Search
+    async def gather_evidence(self, topic: str) -> Any:
+        """Prefetch research context over the network (run in parallel)."""
         search_query = await self._generate_search_query(topic)
-        research_context = await self.researcher.research(search_query)
+        return await self.researcher.research(search_query)
+
+    async def run_analysis(self, topic: str, research_context: Any, context: Optional[str] = None) -> Dict[str, Any]:
+        """Execute the worker's inference and Mini-Critique sequentially."""
+        logger.info(f"Worker [{self.role}] starting inference on topic: {topic}")
         
-        # 2. Specialized Analysis
+        # 2. Specialized Analysis (with pruned context)
         analysis = await self._analyze(topic, research_context.sources, context)
         
         # 3. Mini-Critique (Recursive verification)
@@ -52,22 +53,26 @@ class ResearchWorker:
         prompt = (
             f"Review this {self.role} analysis of {topic}:\n{analysis}\n\n"
             f"Evidence context:\n{source_text}\n\n"
-            "Task: List 2 missing details or logical flaws. If the analysis is perfect, output 'Satisfied'."
+            "Task: List 2 missing details or logical flaws. If the analysis is perfect, output 'Satisfied'. "
+            "CRITICAL CONSTRAINTS: Be extremely concise. Max 3 sentences. Limit <think> tags to a maximum of 2 sentences. Do NOT overthink."
         )
         return await self.provider.generate_text(
             prompt,
-            system_prompt="You are a skeptical Peer Reviewer. Your goal is to ensure scientific rigor."
+            system_prompt="You are a skeptical Peer Reviewer. Your goal is to ensure scientific rigor. DO NOT OVERTHINK.",
+            max_tokens=400
         )
 
     async def _refine(self, topic: str, initial_analysis: str, critique: str) -> str:
         """Refines the analysis based on the mini-critique."""
         prompt = (
             f"Improve this {self.role} analysis of {topic} based on these notes:\n{critique}\n\n"
-            f"Original Analysis:\n{initial_analysis}"
+            f"Original Analysis:\n{initial_analysis}\n\n"
+            "CRITICAL CONSTRAINTS: Fix the issues directly. Limit <think> tags to a maximum of 2 sentences. Do NOT output a long thought process."
         )
         return await self.provider.generate_text(
             prompt,
-            system_prompt=f"You are a professional {self.role.capitalize()}. Refine the report."
+            system_prompt=f"You are a professional {self.role.capitalize()}. Refine the report. BE BRIEF.",
+            max_tokens=600
         )
 
 
@@ -82,8 +87,25 @@ class ResearchWorker:
         return prompts.get(self.role, topic)
 
     async def _analyze(self, topic: str, sources: List[Any], context: Optional[str] = None) -> str:
-        """Perform specialized synthesis."""
-        source_text = "\n".join([f"- {s.title}: {s.snippet}" for s in sources[:5]])
+        """Perform specialized synthesis with Neuro-Symbolic Context Pruning."""
+        role_keywords = {
+            WorkerRole.HISTORIAN: ["history", "timeline", "past", "evolution", "century", "early", "origin", "pedagogy", "traditional"],
+            WorkerRole.AUDITOR: ["fail", "risk", "gap", "lack", "issue", "problem", "challenge", "criticism", "limitation"],
+            WorkerRole.ANALYST: ["how", "mechanism", "structure", "system", "outcome", "framework", "practical", "implement"],
+            WorkerRole.RESEARCHER: ["study", "data", "percent", "evidence", "research", "case", "report", "finding"]
+        }.get(self.role, [])
+
+        pruned_sources = []
+        for s in sources:
+            snippet_text = s.snippet.lower() if s.snippet else ""
+            if any(kw in snippet_text for kw in role_keywords):
+                pruned_sources.append(s)
+        
+        # Soft-fallback: If pruning removes EVERYTHING, just use the top 3 generally.
+        if not pruned_sources:
+            pruned_sources = sources[:3]
+
+        source_text = "\n".join([f"- {s.title}: {s.snippet}" for s in pruned_sources[:5]])
         
         system_prompts = {
             WorkerRole.RESEARCHER: "You are a Fact-Checking Specialist. Report objective data.",
@@ -94,14 +116,17 @@ class ResearchWorker:
         
         prompt = (
             f"Analyze this topic using the provided evidence: {topic}\n\n"
-            f"Evidence:\n{source_text}\n\n"
+            f"Role-Pruned Evidence:\n{source_text}\n\n"
             f"Global Context:\n{context or 'No additional context provided.'}\n\n"
             "Requirements:\n"
             "1. Be specific to your role.\n"
             "2. Cite your sources.\n"
+            "3. BE EXTREMELY BRIEF (Max 3 paragraphs).\n"
+            "4. CRITICAL THINKING BUDGET: Limit your <think> tags to a maximum of 3 sentences. DO NOT spiral into infinite reasoning loops.\n"
         )
         
         return await self.provider.generate_text(
             prompt,
-            system_prompt=system_prompts.get(self.role, "You are a Research Assistant.")
+            system_prompt=system_prompts.get(self.role, "You are a Research Assistant. DO NOT OVERTHINK."),
+            max_tokens=800
         )
