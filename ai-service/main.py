@@ -78,7 +78,7 @@ _REQUEST_DURATION_SECONDS = Histogram(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001", *(_cors_allowed_origins())],
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -229,7 +229,12 @@ def stream_pipeline(session_id: str, request: Request):
     tenant_id = getattr(request.state, "tenant_id", None)
     if not pipeline_service.has_session(session_id, tenant_id):
         raise HTTPException(status_code=404, detail="Unknown pipeline session")
-    return EventSourceResponse(pipeline_service.stream_events(session_id, tenant_id))
+    return EventSourceResponse(
+        pipeline_service.stream_events(session_id, tenant_id),
+        ping=5,
+        ping_header_name="X-Accel-Buffering",
+        ping_header_value="no"
+    )
 
 
 @app.get("/api/pipeline/{session_id}/quality")
