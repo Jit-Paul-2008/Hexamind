@@ -50,21 +50,32 @@ export default function ResearchConsole() {
 
 
       eventSource.onmessage = (event) => {
-        const parsed = JSON.parse(event.data);
-        const data = JSON.parse(parsed.data) as PipelineEvent;
-        
-        const content = data.chunk || data.fullContent || '';
-        setEvents(prev => [...prev, { type: parsed.event, agent: data.agentId, content }]);
-        
-        if (parsed.event === PipelineEventType.AGENT_START) {
-          setActiveAgent(data.agentId);
-        }
-        
-        if (parsed.event === PipelineEventType.PIPELINE_DONE) {
-          setFinalReport(data.fullContent || '');
-          setStatus('completed');
-          setActiveAgent(null);
-          eventSource.close();
+        try {
+          const parsed = JSON.parse(event.data);
+          const data = JSON.parse(parsed.data) as PipelineEvent;
+
+          const content = data.chunk || data.fullContent || '';
+          setEvents(prev => [...prev, { type: parsed.event, agent: data.agentId, content }]);
+
+          if (parsed.event === PipelineEventType.AGENT_START) {
+            setActiveAgent(data.agentId);
+          }
+
+          if (parsed.event === PipelineEventType.PIPELINE_DONE) {
+            setFinalReport(data.fullContent || '');
+            setStatus('completed');
+            setActiveAgent(null);
+            eventSource.close();
+          }
+
+          if (parsed.event === PipelineEventType.PIPELINE_ERROR) {
+            setError(data.fullContent || data.error || 'Pipeline encountered an internal error.');
+            setStatus('error');
+            setActiveAgent(null);
+            eventSource.close();
+          }
+        } catch (parseErr) {
+          console.error('Failed to parse SSE frame:', parseErr);
         }
       };
 

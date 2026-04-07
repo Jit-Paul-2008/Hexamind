@@ -15,6 +15,26 @@ class AgentConfig:
 
 AGENTS: tuple[AgentConfig, ...] = (
     AgentConfig(
+        id="orchestrator",
+        codename="Orchestrator",
+        role="Task Decomposition and Planning",
+        purpose="Decomposes the research query into specialized expert tasks for the Aurora diamond team.",
+        accent_color="#6366f1",
+        glow_color="rgba(99, 102, 241, 0.28)",
+        shape="sphere",
+        processing_order=0,
+    ),
+    AgentConfig(
+        id="historian",
+        codename="Historian",
+        role="Historical Evolution and Contextual Grounding",
+        purpose="Traces the historical development, timelines, and pedagogical evolution of the research topic.",
+        accent_color="#a78bfa",
+        glow_color="rgba(167, 139, 250, 0.28)",
+        shape="tetrahedron",
+        processing_order=1,
+    ),
+    AgentConfig(
         id="researcher",
         codename="Researcher",
         role="Evidence Gathering and Structured Analysis",
@@ -83,5 +103,25 @@ AGENTS: tuple[AgentConfig, ...] = (
         glow_color="rgba(59, 130, 246, 0.28)",
         shape="sphere",
         processing_order=7,
+    ),
+    AgentConfig(
+        id="auditor",
+        codename="Auditor",
+        role="Critical Assessment and Gap Analysis",
+        purpose="Identifies gaps, contradictions, and educator challenges in the research evidence.",
+        accent_color="#f87171",
+        glow_color="rgba(248, 113, 113, 0.28)",
+        shape="icosahedron",
+        processing_order=8,
+    ),
+    AgentConfig(
+        id="analyst",
+        codename="Analyst",
+        role="Implementation Strategy and Practical Outcomes",
+        purpose="Evaluates implementation pathways, practical mechanisms, and measurable outcomes.",
+        accent_color="#38bdf8",
+        glow_color="rgba(56, 189, 248, 0.28)",
+        shape="box",
+        processing_order=9,
     ),
 )

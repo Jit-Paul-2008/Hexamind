@@ -8,10 +8,11 @@ interface ReasoningGraphProps {
 }
 
 const STAGES = [
-  { id: 'planner', label: 'Planner', icon: '🧠', color: 'indigo' },
+  { id: 'orchestrator', label: 'Orchestrator', icon: '🛰️', color: 'indigo' },
+  { id: 'historian', label: 'Historian', icon: '📜', color: 'violet' },
   { id: 'researcher', label: 'Researcher', icon: '📡', color: 'cyan' },
-  { id: 'analyst', label: 'Analyst', icon: '🔍', color: 'blue' },
-  { id: 'critic', label: 'Critic', icon: '🛡️', color: 'purple' },
+  { id: 'auditor', label: 'Auditor', icon: '�️', color: 'red' },
+  { id: 'analyst', label: 'Analyst', icon: '�', color: 'blue' },
   { id: 'synthesizer', label: 'Synthesizer', icon: '✨', color: 'emerald' },
 ];
 

@@ -83,6 +83,43 @@ AGENT_MODEL_SPECIALIZATION = {
         max_tokens=500,
         system_prompt_suffix="Verify claims against evidence with clear verdicts. USE BULLET POINTS."
     ),
+
+    # Aurora Diamond Expert roles (AuroraGraph / reasoning_graph.py)
+    "historian": AgentModelConfig(
+        agent_id="historian",
+        primary_ollama_model="qwen2.5:7b",
+        fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
+        temperature=0.6,
+        max_tokens=800,
+        system_prompt_suffix="Focus on timelines, historical evolution, and changes over time. BE CONCISE."
+    ),
+
+    "auditor": AgentModelConfig(
+        agent_id="auditor",
+        primary_ollama_model="deepseek-r1:14b",
+        fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
+        temperature=0.7,
+        max_tokens=900,
+        system_prompt_suffix="Focus on gaps, contradictions, and critical weaknesses. Limit <think> to 2 sentences."
+    ),
+
+    "analyst": AgentModelConfig(
+        agent_id="analyst",
+        primary_ollama_model="qwen2.5:7b",
+        fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
+        temperature=0.65,
+        max_tokens=800,
+        system_prompt_suffix="Focus on implementation strategies, mechanisms, and practical outcomes. BE DIRECT."
+    ),
+
+    "orchestrator": AgentModelConfig(
+        agent_id="orchestrator",
+        primary_ollama_model="qwen2.5:7b",
+        fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
+        temperature=0.5,
+        max_tokens=400,
+        system_prompt_suffix="Decompose the query into specialized research tasks."
+    ),
 }
 
 

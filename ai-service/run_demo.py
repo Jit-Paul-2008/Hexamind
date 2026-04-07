@@ -8,8 +8,15 @@ sys.path.append(str(Path(__file__).resolve().parent))
 
 from reasoning_graph import AuroraGraph
 
+
+def _resolve_query() -> str:
+    value = " ".join(sys.argv[1:]).strip()
+    if value:
+        return value
+    return "Importance of switching to project based teaching rather than traditional course based teaching"
+
 async def run_live_trial():
-    query = "Importance of switching to project based teaching rather than traditional course based teaching"
+    query = _resolve_query()
     print(f"🚀 Initiating Aurora v4 Deep Research...")
     print(f"Query: {query}")
     print("-" * 50)

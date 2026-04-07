@@ -3,6 +3,7 @@ export enum PipelineEventType {
   AGENT_CHUNK = "agent_chunk",
   AGENT_DONE = "agent_done",
   PIPELINE_DONE = "pipeline_done",
+  PIPELINE_ERROR = "pipeline_error",
   ERROR = "error",
 }
 
