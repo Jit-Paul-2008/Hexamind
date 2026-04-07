@@ -58,6 +58,14 @@ This document outlines high-complexity, research-backed architectural and logica
 *   **Concept**: Running 4-bit vs 8-bit based on task complexity.
 *   **Implementation**: Use 8-bit for the Orchestrator (high precision planning) and 4-bit/1.58-bit for the initial broad research passes to maximize speed on your Xeon CPUs.
 
+## 5. LLM Wikipedia Concept (by Andrej Karpathy)
+Andrej Karpathy's concept of an "LLM Wiki" (or utilizing an LLM to generate, synthesize, and maintain a definitive, self-updating repository of knowledge) is highly relevant to Hexamind's architecture!
+
+We currently use the Synthesizer and Analyst to merge multiple perspectives. Incorporating the "LLM Wiki" format into our end-stage output could dramatically improve the final report format:
+* **Dynamic Synthesis:** Instead of isolated reports, our multi-agent pipeline could contribute to a central "Concept Wiki" database over time.
+* **Dense Structuring:** The Synthesizer agent can be prompted to output its final markdown strictly formatted as a hyperlinked, encyclopedic wiki page.
+* **Continuous Grounding:** The Auditor and Researcher agents act perfectly as "Wiki Editors", constantly verifying claims and integrating live web data into the wiki tree.
+
 ---
 
 **Next Steps**: Use these ideas as a menu for our "Slow Implementation" phase. Each one can be integrated into the Aurora v5.x framework without breaking the existing stability.

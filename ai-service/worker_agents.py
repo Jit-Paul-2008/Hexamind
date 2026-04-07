@@ -59,7 +59,7 @@ class ResearchWorker:
         return await self.provider.generate_text(
             prompt,
             system_prompt="You are a skeptical Peer Reviewer. Your goal is to ensure scientific rigor. DO NOT OVERTHINK.",
-            max_tokens=180
+            max_tokens=100
         )
 
     async def _refine(self, topic: str, initial_analysis: str, critique: str) -> str:
@@ -72,7 +72,7 @@ class ResearchWorker:
         return await self.provider.generate_text(
             prompt,
             system_prompt=f"You are a professional {self.role.capitalize()}. Refine the report. BE BRIEF.",
-            max_tokens=260
+            max_tokens=150
         )
 
 
@@ -135,5 +135,5 @@ class ResearchWorker:
         return await self.provider.generate_text(
             prompt,
             system_prompt=system_prompts.get(self.role, "You are a Research Assistant. DO NOT OVERTHINK."),
-            max_tokens=320
+            max_tokens=180
         )

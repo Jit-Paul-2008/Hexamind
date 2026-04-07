@@ -35,7 +35,7 @@ AGENT_MODEL_SPECIALIZATION = {
         primary_ollama_model="qwen2.5:7b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
         temperature=0.6,
-        max_tokens=800,
+        max_tokens=400,
         system_prompt_suffix="Synthesize sources into a comprehensive, well-structured research report. BE BRIEF AND DIRECT."
     ),
     
@@ -90,7 +90,7 @@ AGENT_MODEL_SPECIALIZATION = {
         primary_ollama_model="qwen2.5:7b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
         temperature=0.6,
-        max_tokens=800,
+        max_tokens=400,
         system_prompt_suffix="Focus on timelines, historical evolution, and changes over time. BE CONCISE."
     ),
 
@@ -99,8 +99,8 @@ AGENT_MODEL_SPECIALIZATION = {
         primary_ollama_model="qwen2.5:7b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
         temperature=0.7,
-        max_tokens=900,
-        system_prompt_suffix="Focus on gaps, contradictions, and critical weaknesses. Limit </think> to 2 sentences."
+        max_tokens=400,
+        system_prompt_suffix="Focus on gaps, contradictions, and critical weaknesses. Limit </think> to 1 sentence."
     ),
 
     "analyst": AgentModelConfig(
@@ -108,7 +108,7 @@ AGENT_MODEL_SPECIALIZATION = {
         primary_ollama_model="qwen2.5:7b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
         temperature=0.65,
-        max_tokens=800,
+        max_tokens=400,
         system_prompt_suffix="Focus on implementation strategies, mechanisms, and practical outcomes. BE DIRECT."
     ),
 
@@ -117,8 +117,8 @@ AGENT_MODEL_SPECIALIZATION = {
         primary_ollama_model="qwen2.5:7b",
         fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
         temperature=0.5,
-        max_tokens=400,
-        system_prompt_suffix="Decompose the query into specialized research tasks."
+        max_tokens=200,
+        system_prompt_suffix="Decompose the query into specialized research tasks. Do not think, just output JSON list."
     ),
 }
 

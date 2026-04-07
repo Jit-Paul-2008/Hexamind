@@ -26,7 +26,7 @@ class InferenceProvider:
         messages.append({"role": "user", "content": prompt})
 
         try:
-            async with httpx.AsyncClient(timeout=1200.0) as client:
+            async with httpx.AsyncClient(timeout=300.0) as client:
                 response = await client.post(
                     f"{self.base_url}",
                     json={
@@ -36,7 +36,7 @@ class InferenceProvider:
                         "options": {
                             "temperature": 0.2,
                             "num_ctx": 4096,
-                            "num_thread": 2,  # Adjusted for 2-core hardware
+                            "num_thread": 2,
                             "num_predict": max_tokens
                         }
                     }
@@ -44,7 +44,14 @@ class InferenceProvider:
                 response.raise_for_status()
                 data = response.json()
                 # Native Ollama response format: data["message"]["content"]
-                return data["message"]["content"]
+                content = data["message"]["content"]
+                
+                # Strip thinking bounds to keep context memory pure
+                import re
+                content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+                # Cleanup dangling tags if cutoff occurs
+                content = content.replace('<think>', '').replace('</think>', '').strip()
+                return content
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 err_msg = f"Model '{self.model_name}' not found. Please run 'ollama pull {self.model_name}'."
