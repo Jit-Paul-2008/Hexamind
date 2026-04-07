@@ -102,26 +102,40 @@ class DraftingWorker:
     def __init__(self, provider: Optional[InferenceProvider] = None):
         self.provider = provider if provider is not None else get_provider()
 
-    async def draft(self, query: str, contexts: List[Any]) -> str:
-        """Generate a full Markdown draft from multiple research contexts."""
+    async def draft(self, query: str, contexts: List[Any], existing_wiki: Optional[str] = None) -> str:
+        """Generate a full Markdown draft from multiple research contexts, merging with existing wiki if provided."""
         combined_evidence = ""
         for ctx in contexts:
             combined_evidence += f"\n--- Evidence for {ctx.query} ---\n"
             combined_evidence += "\n".join([f"- {s.excerpt}" for s in ctx.sources[:5]])
 
-        prompt = (
-            f"Write a high-fidelity encyclopedic research report in 'LLM-Wiki' format for the query: {query}\n\n"
-            f"Use this dense factual record:\n{combined_evidence}\n\n"
-            "Wiki Layout Requirements:\n"
-            "1. Lead with a 'Definition & Context' section.\n"
-            "2. Use H2 for major themes and H3 for sub-details.\n"
-            "3. Be objective, factual, and extremely dense with data points.\n"
-            "4. NEVER use conversational filler or personal pronouns.\n"
-            "5. Ensure every section ends with a logical transition to the next theme."
-        )
+        if existing_wiki:
+            # EXPERT WIKI EDITOR MODE
+            prompt = (
+                f"You are an Expert Wiki Editor. You are given an existing Wiki Page and newly retrieved Web Evidence for the query: {query}\n\n"
+                f"EXISTING WIKI CONTENT:\n{existing_wiki}\n\n"
+                f"NEW WEB EVIDENCE:\n{combined_evidence}\n\n"
+                "Your Task:\n"
+                "1. Update, expand, and rewrite the existing Wiki Page seamlessly to incorporate new facts.\n"
+                "2. DO NOT duplicate existing points; merge them logically.\n"
+                "3. Maintain the structured 'LLM-Wiki' format (H2/H3 headings).\n"
+                "4. Output the COMPLETE updated Markdown. DO NOT output partial snippets."
+            )
+        else:
+            # FRESH DRAFT MODE
+            prompt = (
+                f"Write a high-fidelity encyclopedic research report in 'LLM-Wiki' format for the query: {query}\n\n"
+                f"Use this dense factual record:\n{combined_evidence}\n\n"
+                "Wiki Layout Requirements:\n"
+                "1. Lead with a 'Definition & Context' section.\n"
+                "2. Use H2 for major themes and H3 for sub-details.\n"
+                "3. Be objective, factual, and extremely dense with data points.\n"
+                "4. NEVER use conversational filler or personal pronouns.\n"
+                "5. Ensure every section ends with a logical transition to the next theme."
+            )
         
         return await self.provider.generate_text(
             prompt,
-            system_prompt="You are a Fast Report Drafter. Output ONLY a clean Markdown report.",
-            max_tokens=1000
+            system_prompt="You are a Professional Wiki Editor. Output ONLY clean Markdown.",
+            max_tokens=2000
         )

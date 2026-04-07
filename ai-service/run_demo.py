@@ -63,23 +63,31 @@ async def run_live_trial():
             final_report = payload["fullContent"]
 
 
-    # Save to "demo_outputs"
-    from datetime import datetime
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_query = "".join([c if c.isalnum() else "_" for c in query[:30]])
-    output_dir = Path(__file__).resolve().parent.parent / "demo_outputs"
-    output_dir.mkdir(exist_ok=True)
+    # 5. SAVE TO WIKI
+    def titleize(q: str) -> str:
+        import re
+        # Strip common question words
+        q = re.sub(r'^(is|what|how|why|does|do|can|will|should)\s+', '', q, flags=re.IGNORECASE)
+        # Title Case and join underscores
+        words = [w.capitalize() for w in re.findall(r'\w+', q)]
+        return "_".join(words[:5]) or "General_Research"
+
+    output_dir = Path(__file__).resolve().parent.parent / "data" / "wiki"
+    output_dir.mkdir(parents=True, exist_ok=True)
     
-    output_path = output_dir / f"research_{safe_query}_{timestamp}.md"
+    wiki_title = titleize(query)
+    output_path = output_dir / f"{wiki_title}.md"
+    
     with open(output_path, "w", encoding="utf-8") as f:
-        f.write(f"# Aurora v4 Research Report\n")
-        f.write(f"**Query**: {query}\n")
-        f.write(f"**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"# {wiki_title.replace('_', ' ')}\n")
+        f.write(f"**Research Context**: {query}\n")
+        from datetime import datetime
+        f.write(f"**Last Updated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write("-" * 50 + "\n\n")
         f.write(final_report)
     
     print("-" * 50)
-    print(f"✅ Research Complete. Report saved to: {output_path}")
+    print(f"✅ Research Complete. Persistent Wiki Page saved: {output_path}")
 
 if __name__ == "__main__":
     asyncio.run(run_live_trial())

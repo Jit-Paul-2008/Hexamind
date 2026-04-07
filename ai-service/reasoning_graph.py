@@ -4,6 +4,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from enum import Enum
+from pathlib import Path
 
 from inference_provider import get_provider, InferenceProvider
 from research import InternetResearcher
@@ -83,13 +84,32 @@ class AuroraGraph:
         contexts = await asyncio.gather(*fetch_tasks)
         node_contexts = {node.id: context for node, context in zip(self.task_tree, contexts)}
 
+        # 2.4 MEMORY RECALL (Checking for existing knowledge)
+        def titleize(q: str) -> str:
+            import re
+            q = re.sub(r'^(is|what|how|why|does|do|can|will|should)\s+', '', q, flags=re.IGNORECASE)
+            words = [w.capitalize() for w in re.findall(r'\w+', q)]
+            return "_".join(words[:5]) or "General_Research"
+
+        wiki_dir = Path(__file__).resolve().parent.parent / "data" / "wiki"
+        wiki_path = wiki_dir / f"{titleize(self.query)}.md"
+        
+        existing_wiki = None
+        if wiki_path.exists():
+            print(f"📖 [MEMORY] Existing Wiki found for '{self.query}'. Recaling knowledge...")
+            try:
+                with open(wiki_path, "r", encoding="utf-8") as f:
+                    existing_wiki = f.read()
+            except Exception as e:
+                logger.error(f"Failed to read wiki memory: {e}")
+
         # 2.5 FAST DRAFTING PHASE
-        print("📝 Generating initial 0.5B draft...", flush=True)
+        print("📝 Generating Wiki Draft/Update...", flush=True)
         yield self._event(PipelineEventType.AGENT_START, "drafter")
         drafter_config = get_agent_model_config("drafter")
         drafter_provider = InferenceProvider(model_name=drafter_config.primary_ollama_model)
         drafter = DraftingWorker(drafter_provider)
-        self.initial_draft = await drafter.draft(self.query, list(node_contexts.values()))
+        self.initial_draft = await drafter.draft(self.query, list(node_contexts.values()), existing_wiki=existing_wiki)
         yield self._event(PipelineEventType.AGENT_DONE, "drafter", self.initial_draft)
 
         # 3. HIERARCHICAL EXECUTION (Workers Inference as Editors)
