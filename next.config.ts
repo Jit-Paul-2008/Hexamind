@@ -4,8 +4,8 @@ const nextConfig: NextConfig = {
   output: "export",
   distDir: "out",
   trailingSlash: true,
-  basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
-  assetPrefix: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
+  basePath: "/Hexamind",
+  assetPrefix: "/Hexamind",
   images: {
     unoptimized: true
   }

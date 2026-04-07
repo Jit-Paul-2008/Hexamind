@@ -42,7 +42,7 @@ export default function ResearchConsole() {
       const startRes = await fetch(`${API_BASE}/api/pipeline/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, agaMode, mathMode }),
+        body: JSON.stringify({ query, agaMode: false, mathMode: false }),
       });
 
       if (!startRes.ok) throw new Error(`Failed to start research session: ${startRes.statusText}`);
@@ -132,10 +132,13 @@ export default function ResearchConsole() {
         <div className="flex flex-wrap gap-4 px-2">
           <div className="flex items-center space-x-3">
             <button
-              onClick={() => setAgaMode(!agaMode)}
-              className={`w-12 h-6 rounded-full transition-colors relative ${agaMode ? 'bg-emerald-500' : 'bg-slate-700'}`}
+              onClick={() => {
+                setToast("Under Development: Strict Fact Mode is disabled for this public demo.");
+                setTimeout(() => setToast(null), 4000);
+              }}
+              className={`w-12 h-6 rounded-full transition-colors relative bg-slate-700 opacity-50 cursor-not-allowed`}
             >
-              <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${agaMode ? 'translate-x-7' : 'translate-x-1'}`} />
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform translate-x-1`} />
             </button>
             <div className="flex flex-col">
               <span className="text-sm font-semibold text-slate-200">Strict Fact Mode (AGA)</span>
@@ -146,16 +149,12 @@ export default function ResearchConsole() {
           <div className="flex items-center space-x-3">
             <button
               onClick={() => {
-                const newMode = !mathMode;
-                setMathMode(newMode);
-                if (newMode) {
-                  setToast("WARNING: Entering Mathematical Territory. LLM Creativity Disabled.");
-                  setTimeout(() => setToast(null), 4000);
-                }
+                setToast("Under Development: Math Engine is disabled for this public demo.");
+                setTimeout(() => setToast(null), 4000);
               }}
-              className={`w-12 h-6 rounded-full transition-colors relative ${mathMode ? 'bg-blue-500' : 'bg-slate-700'}`}
+              className={`w-12 h-6 rounded-full transition-colors relative bg-slate-700 opacity-50 cursor-not-allowed`}
             >
-              <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${mathMode ? 'translate-x-7' : 'translate-x-1'}`} />
+              <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform translate-x-1`} />
             </button>
             <div className="flex flex-col">
               <span className="text-sm font-semibold text-blue-300">Math Engine (Supercomputer)</span>
