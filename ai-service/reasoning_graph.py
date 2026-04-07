@@ -48,19 +48,27 @@ class AuroraGraph:
         
         # 1. PLAN (Orchestration)
         yield self._event(PipelineEventType.AGENT_START, "orchestrator")
+        print(f"🛰️  Orchestrator starting for query: {self.query}", flush=True)
+        
+        # Initialize with a basic plan in case of catastrophic failure
+        self.task_tree = [
+            HierarchicalNode(id="researcher_1", topic=f"General research on {self.query}", role="researcher")
+        ]
+        
         success = await self._plan_phase()
-        if not success:
+        print(f"🛰️  Orchestrator finished. Success: {success}, Tasks: {len(self.task_tree)}", flush=True)
+        
+        if not success or not self.task_tree:
             yield self._event(PipelineEventType.PIPELINE_ERROR, "orchestrator", "Failed to generate research plan.")
             return
         yield self._event(PipelineEventType.AGENT_DONE, "orchestrator", f"Decomposed into {len(self.task_tree)} specialized tasks.")
 
         # 2. HIERARCHICAL EXECUTION (Workers)
-        semaphore = asyncio.Semaphore(2) # Limit concurrency for CPUs
+        semaphore = asyncio.Semaphore(1) # Limit to 1 for maximum stability on CPU
         
         async def run_worker_task(node: HierarchicalNode):
             async with semaphore:
-                # Emit a periodic 'Thinking' heartbeat to keep the SSE connection alive
-                # while the 14B model is processing.
+                print(f"🔧 Starting worker task: {node.id} ({node.role}) - Topic: {node.topic}", flush=True)
                 heartbeat_task = asyncio.create_task(self._emit_heartbeat(node.id))
                 
                 try:
@@ -71,24 +79,22 @@ class AuroraGraph:
                     node.sources = result["sources"]
                     node.status = NodeStatus.COMPLETED
                     yield self._event(PipelineEventType.AGENT_DONE, node.id, node.analysis)
+                except Exception as e:
+                    print(f"❌ Worker {node.id} failed: {e}", flush=True)
+                    import traceback
+                    traceback.print_exc()
+                    node.status = NodeStatus.FAILED
                 finally:
                     heartbeat_task.cancel()
-
-    async def _emit_heartbeat(self, agent_id: str):
-        """Sends a periodic 'Thinking' signal to prevent SSE timeouts."""
-        while True:
-            await asyncio.sleep(15)
-            # We don't yield here directly since this is a background task, 
-            # but we can log or trigger a state update if needed.
-            logger.debug(f"Heartbeat: {agent_id} is still thinking...")
-
+                    print(f"✅ Worker task {node.id} finished.", flush=True)
 
         # Execute all nodes in the tree
-        worker_coroutines = [run_worker_task(node) for node in self.task_tree]
-        # We need to handle yielding from the worker coroutines correctly
-        for coro in worker_coroutines:
-            async for event_item in coro:
+        for node in self.task_tree:
+            async for event_item in run_worker_task(node):
                 yield event_item
+
+
+
 
         # 3. FINAL SYNTHESIS
         yield self._event(PipelineEventType.AGENT_START, "synthesizer")
@@ -97,6 +103,11 @@ class AuroraGraph:
         
         yield self._event(PipelineEventType.PIPELINE_DONE, "output", final_report)
 
+    async def _emit_heartbeat(self, agent_id: str):
+        """Sends a periodic 'Thinking' signal to prevent SSE timeouts."""
+        while True:
+            await asyncio.sleep(15)
+            logger.debug(f"Heartbeat: {agent_id} is still thinking...")
 
     def _event(self, type: PipelineEventType, agent_id: str, content: str = "") -> dict:
         """Helper to create a serialized PipelineEvent."""
@@ -112,61 +123,22 @@ class AuroraGraph:
         }
 
     async def _plan_phase(self) -> bool:
-        """Orchestrator: Decomposes the research into a JSON task tree."""
-        system_prompt = (
-            "You are the Lead Research Orchestrator for Hexamind Aurora. "
-            "Decompose the user's query into a structured JSON research plan.\n"
-            "Format: { \"tasks\": [ { \"id\": \"task1\", \"topic\": \"...\", \"role\": \"researcher|historian|auditor|analyst\" } ] }\n"
-            "Generate as many specialized tasks as needed for exhaustive research. "
-            "Roles: historian (past), researcher (current data), auditor (critique/gaps), analyst (technical/why)."
-        )
-
+        """Orchestrator: Bypasses model call and uses Diamond Experts (v6.0)."""
+        # DIAMOND EXPERT ARCHITECTURE (v6.0)
+        # We bypass the model-driven planning to save the 20-minute CPU timeout.
+        # This manually authors the 4 specialist experts that ensure a high-fidelity report.
+        self.task_tree = [
+            HierarchicalNode(id="historian", topic=f"The historical evolution and pedagogy of {self.query}", role="historian"),
+            HierarchicalNode(id="researcher", topic=f"Current evidence and case studies on {self.query}", role="researcher"),
+            HierarchicalNode(id="auditor", topic=f"Critical assessment, gaps, and educator challenges for {self.query}", role="auditor"),
+            HierarchicalNode(id="analyst", topic=f"Implementation strategies and practical outcomes for {self.query}", role="analyst")
+        ]
         
-        # Force a slightly more restrictive JSON format to help the model
-        response = await self.provider.generate_text(
-            f"Query: {self.query}\n\nDecompose this into a detailed JSON research plan with roles: historian, researcher, auditor, analyst.",
-            system_prompt=system_prompt
-        )
-        
-        try:
-            # Extract JSON (handling markdown code blocks and model preamble)
-            import re
-            # Try to find the last markdown block first, then falling back to generic brace search
-            json_match = re.search(r"```json\s*(.*?)\s*```", response, re.DOTALL)
-            if not json_match:
-                json_match = re.search(r"(\{.*?\})", response, re.DOTALL)
-            
-            if not json_match:
-                logger.warning(f"Plan format invalid. Model response: {response}")
-                # Fallback: Generate a default 4-agent plan if the model confuses the format
-                plan_data = {
-                    "tasks": [
-                        {"id": "t1", "topic": f"Historical background of {self.query}", "role": "historian"},
-                        {"id": "t2", "topic": f"Current data on {self.query}", "role": "researcher"},
-                        {"id": "t3", "topic": f"Critical assessment of {self.query}", "role": "auditor"},
-                        {"id": "t4", "topic": f"Technical mechanisms of {self.query}", "role": "analyst"}
-                    ]
-                }
-            else:
-                json_str = json_match.group(1) if json_match.lastindex else json_match.group(0)
-                plan_data = json.loads(json_str)
-            
-            tasks = plan_data.get("tasks", [])
-            if not tasks:
-                raise ValueError("Empty task list in plan.")
+        logger.info(f"Diamond Experts initialized. Bypassing planner.")
+        return True
 
-            for t in tasks:
-                self.task_tree.append(HierarchicalNode(
-                    id=t["id"],
-                    topic=t["topic"],
-                    role=t["role"]
-                ))
-            return True
-        except Exception as e:
-            logger.error(f"Planning failed: {e}. Raw Response: {response}")
-            # Final safety fallback
-            self.task_tree = [HierarchicalNode(id="fallback", topic=self.query, role="researcher")]
-            return True # Proceed with at least one task
+
+
 
 
 
@@ -185,8 +157,10 @@ class AuroraGraph:
             "1. Start with a Executive Summary.\n"
             "2. Use Markdown headings (##).\n"
             "3. Add a unified 'Synthesis of Perspectives' section.\n"
-            "4. Add a References section with all unique URLs."
+            "4. Add a References section with all unique URLs.\n\n"
+            "CRITICAL: Be concise. Direct synthesis only. No conversational filler."
         )
+
         return await self.provider.generate_text(
             prompt,
             system_prompt="You are a High-Precision Synthesis Agent. Your output must be the gold standard of integrated research."

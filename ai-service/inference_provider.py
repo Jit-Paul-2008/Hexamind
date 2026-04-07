@@ -11,11 +11,12 @@ class InferenceProvider:
     
     def __init__(self, model_name: str, base_url: Optional[str] = None, api_key: Optional[str] = None):
         self.model_name = model_name
-        self.base_url = base_url or os.getenv("HEXAMIND_LOCAL_BASE_URL", "http://localhost:11434/v1")
+        # Use native Ollama API by default
+        self.base_url = base_url or os.getenv("HEXAMIND_LOCAL_BASE_URL", "http://localhost:11434/api/chat")
         self.api_key = api_key or os.getenv("HEXAMIND_AUTH_TOKEN", "")
 
     async def generate_text(self, prompt: str, system_prompt: Optional[str] = None, stream: bool = False) -> str:
-        """Single-shot generation."""
+        """Single-shot generation via Native Ollama API."""
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -24,25 +25,34 @@ class InferenceProvider:
         try:
             async with httpx.AsyncClient(timeout=1200.0) as client:
                 response = await client.post(
-                    f"{self.base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {self.api_key}" if self.api_key else ""},
+                    f"{self.base_url}",
                     json={
                         "model": self.model_name,
                         "messages": messages,
-                        "temperature": 0.3,
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.2,
+                            "num_ctx": 4096,
+                            "num_thread": 8  # Optimize for Xeon concurrency
+                        }
                     }
                 )
                 response.raise_for_status()
                 data = response.json()
-                return data["choices"][0]["message"]["content"]
-        except httpx.ReadTimeout:
-            err_msg = f"Reading from {self.model_name} timed out after 1200s. The 14B 'Thinking' phase is intensive on CPUs."
+                # Native Ollama response format: data["message"]["content"]
+                return data["message"]["content"]
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                err_msg = f"Model '{self.model_name}' not found. Please run 'ollama pull {self.model_name}'."
+            else:
+                err_msg = f"Inference HTTP error: {e}"
             logger.error(err_msg)
-            return f"Inference Error: {err_msg}"
+            raise Exception(err_msg)
         except Exception as e:
             err_msg = f"Inference failed for {self.model_name}: {str(e)}"
             logger.error(err_msg)
-            return f"Inference Error: {err_msg}"
+            raise Exception(err_msg)
+
 
 
     async def stream_text(self, prompt: str, system_prompt: Optional[str] = None) -> AsyncGenerator[str, None]:
@@ -110,8 +120,7 @@ class InferenceProvider:
 
 def get_provider() -> InferenceProvider:
     """Factory to get the right provider based on config. 
-    Defaults to local Ollama (zero-cost) optimized for user hardware (42GB RAM)."""
-    # Use cloud provider ONLY if explicitly requested in ENV
+    Defaults to local Ollama with fallback logic for Xeon setups."""
     if os.getenv("HEXAMIND_USE_CLOUD", "0") in {"1", "true", "yes", "on"}:
         return InferenceProvider(
             model_name=os.getenv("HEXAMIND_CLOUD_MODEL", "gpt-4o"),
@@ -119,7 +128,11 @@ def get_provider() -> InferenceProvider:
             api_key=os.getenv("HEXAMIND_CLOUD_API_KEY")
         )
     
-    # Default: DeepSeek-R1 (14B-32B) is ideal for 42GB RAM Xeon setup
-    return InferenceProvider(
-        model_name=os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "deepseek-r1:14b")
-    )
+    # Primary: DeepSeek-R1 (14B) for high-fidelity Dual Xeon research
+    # We use 14B because the hardware is sufficient (42GB RAM).
+    preferred_model = os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "deepseek-r1:14b")
+    
+    return InferenceProvider(model_name=preferred_model)
+
+
+

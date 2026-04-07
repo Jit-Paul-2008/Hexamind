@@ -2,3 +2,5 @@
 **Query**: Importance of switching to project based teaching rather than traditional course based teaching
 --------------------------------------------------
 
+Inference Error: Inference failed for deepseek-r1:7b: Client error '404 Not Found' for url 'http://localhost:11434/v1/chat/completions'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
