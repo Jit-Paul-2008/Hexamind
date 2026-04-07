@@ -37,9 +37,10 @@ class HierarchicalNode:
 class AuroraGraph:
     """The central orchestration engine for Hexamind Aurora."""
     
-    def __init__(self, query: str, aga_mode: bool = False):
+    def __init__(self, query: str, aga_mode: bool = False, math_mode: bool = False):
         self.query = query
         self.aga_mode = aga_mode
+        self.math_mode = math_mode
         self.task_tree: List[HierarchicalNode] = []
         self.context: Dict[str, Any] = {"query": query}
         self.provider = get_provider()
@@ -114,6 +115,20 @@ class AuroraGraph:
             anchor_worker = AnchorWorker(anchor_provider)
             anchors = await anchor_worker.extract(self.query, list(node_contexts.values()), existing_wiki=existing_wiki)
             print(f"⚓ Extracted {len(anchors)} Grounding Anchors.", flush=True)
+
+        # 2.48 MATH ENGINE SIMULATION (Optional Math Mode)
+        if self.math_mode:
+            print("🧮 Running Quantitative Math Engine Simulation...", flush=True)
+            from simulation_engine import SimulationWorker
+            sim_config = get_agent_model_config("drafter") # 7B model is best for coding math
+            sim_provider = InferenceProvider(model_name=sim_config.primary_ollama_model)
+            sim_worker = SimulationWorker(sim_provider)
+            chart_data = await sim_worker.simulate(self.query, list(node_contexts.values()))
+            if chart_data:
+                print(f"🧮 Successfully simulated math logic. Emitting chart data.", flush=True)
+                yield self._event(PipelineEventType.AGENT_CHUNK, "drafter", f"\n[CHART_DATA]{json.dumps(chart_data)}[/CHART_DATA]\n")
+            else:
+                print(f"🧮 Simulation failed to produce valid chart JSON.", flush=True)
 
         # 2.5 DRAFTING PHASE
         if self.aga_mode:

@@ -219,6 +219,7 @@ def start_pipeline(payload: StartPipelineRequest, request: Request) -> StartPipe
         tenant_id=tenant_id,
         report_length=payload.reportLength,
         aga_mode=payload.agaMode,
+        math_mode=payload.mathMode,
     )
     return StartPipelineResponse(sessionId=session_id)
 

@@ -47,6 +47,7 @@ class PipelineSession:
     tenant_id: str = "default"
     report_length: str = "moderate"
     aga_mode: bool = False
+    math_mode: bool = False
 
 
 class PipelineService:
@@ -80,7 +81,7 @@ class PipelineService:
         self._retrieval_failures = 0
         self._retrieval_quality_sum = 0.0
 
-    def start(self, query: str, tenant_id: str = "default", report_length: str = "moderate", aga_mode: bool = False) -> str:
+    def start(self, query: str, tenant_id: str = "default", report_length: str = "moderate", aga_mode: bool = False, math_mode: bool = False) -> str:
         query = redact_pii(query.strip())
         tenant_id = tenant_id.strip() or "default"
         report_length = self._normalize_report_length(report_length)
@@ -92,6 +93,7 @@ class PipelineService:
             tenant_id=tenant_id,
             report_length=report_length,
             aga_mode=aga_mode,
+            math_mode=math_mode,
         )
         self._save_sessions()
         return session_id
@@ -255,7 +257,7 @@ class PipelineService:
 
     async def stream_events(self, session_id: str, tenant_id: str | None = None):
         session = self._get_session(session_id, tenant_id)
-        graph = AuroraGraph(session.query, aga_mode=session.aga_mode)
+        graph = AuroraGraph(session.query, aga_mode=session.aga_mode, math_mode=session.math_mode)
 
         try:
             # We wrap the graph execution in the semaphore to manage concurrency
@@ -348,6 +350,7 @@ class PipelineService:
                     tenant_id=str(item.get("tenant_id", "default")),
                     report_length=self._normalize_report_length(str(item.get("report_length", "moderate"))),
                     aga_mode=item.get("aga_mode", False),
+                    math_mode=item.get("math_mode", False),
                 )
             except (KeyError, TypeError, ValueError):
                 continue
@@ -364,6 +367,7 @@ class PipelineService:
                 "tenant_id": session.tenant_id,
                 "report_length": session.report_length,
                 "aga_mode": session.aga_mode,
+                "math_mode": session.math_mode,
             }
             for session_id, session in self._sessions.items()
         }
