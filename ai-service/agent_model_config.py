@@ -96,11 +96,11 @@ AGENT_MODEL_SPECIALIZATION = {
 
     "auditor": AgentModelConfig(
         agent_id="auditor",
-        primary_ollama_model="deepseek-r1:14b",
+        primary_ollama_model="qwen2.5:7b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
         temperature=0.7,
         max_tokens=900,
-        system_prompt_suffix="Focus on gaps, contradictions, and critical weaknesses. Limit <think> to 2 sentences."
+        system_prompt_suffix="Focus on gaps, contradictions, and critical weaknesses. Limit </think> to 2 sentences."
     ),
 
     "analyst": AgentModelConfig(

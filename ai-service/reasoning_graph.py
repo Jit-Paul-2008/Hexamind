@@ -183,12 +183,13 @@ class AuroraGraph:
         )
 
         synth_config = get_agent_model_config("synthesiser")
-        synth_provider = InferenceProvider(model_name=synth_config.primary_ollama_model)
+        # Use 7B model for faster synthesis on CPU
+        synth_provider = InferenceProvider(model_name="qwen2.5:7b")
 
         return await synth_provider.generate_text(
             prompt,
             system_prompt="You are a High-Precision Synthesis Agent. Your output must be the gold standard of integrated research.",
-            max_tokens=2500
+            max_tokens=1200
         )
 
 

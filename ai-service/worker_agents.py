@@ -18,7 +18,7 @@ class ResearchWorker:
     
     def __init__(self, role: str, provider: Optional[InferenceProvider] = None):
         self.role = role
-        self.provider = provider or get_provider()
+        self.provider = provider if provider is not None else get_provider()
         self.researcher = InternetResearcher()
 
     async def gather_evidence(self, topic: str) -> Any:
@@ -59,7 +59,7 @@ class ResearchWorker:
         return await self.provider.generate_text(
             prompt,
             system_prompt="You are a skeptical Peer Reviewer. Your goal is to ensure scientific rigor. DO NOT OVERTHINK.",
-            max_tokens=400
+            max_tokens=180
         )
 
     async def _refine(self, topic: str, initial_analysis: str, critique: str) -> str:
@@ -72,27 +72,34 @@ class ResearchWorker:
         return await self.provider.generate_text(
             prompt,
             system_prompt=f"You are a professional {self.role.capitalize()}. Refine the report. BE BRIEF.",
-            max_tokens=600
+            max_tokens=260
         )
 
 
     async def _generate_search_query(self, topic: str) -> str:
         """Tailor the search query based on the worker's role."""
+        normalized_topic = topic.lower()
+        india_iit_focus = any(token in normalized_topic for token in ["iit", "indian institute", "india", "employab", "placement", "student development"])
+
         prompts = {
-            WorkerRole.RESEARCHER: f"Find current facts and data about {topic}",
-            WorkerRole.HISTORIAN: f"Find historical context and evolution of {topic}",
-            WorkerRole.AUDITOR: f"Find critical reviews and common failures of {topic}",
-            WorkerRole.ANALYST: f"Find technical mechanisms and logical structures of {topic}"
+            WorkerRole.RESEARCHER: f"Find current facts, placement statistics, student outcomes, internships, employability data, and recent case studies about {topic}",
+            WorkerRole.HISTORIAN: f"Find historical evolution, reforms, curriculum changes, admissions trends, and institutional development history for {topic}",
+            WorkerRole.AUDITOR: f"Find critical reviews, student welfare concerns, placement declines, skill gaps, mental health issues, and failures related to {topic}",
+            WorkerRole.ANALYST: f"Find curriculum structure, industry readiness, practical training, internship pipelines, and mechanisms affecting employability for {topic}"
         }
-        return prompts.get(self.role, topic)
+
+        query = prompts.get(self.role, topic)
+        if india_iit_focus:
+            query += " IIT India placements employability student outcomes curriculum internships alumni recent years"
+        return query
 
     async def _analyze(self, topic: str, sources: List[Any], context: Optional[str] = None) -> str:
         """Perform specialized synthesis with Neuro-Symbolic Context Pruning."""
         role_keywords = {
-            WorkerRole.HISTORIAN: ["history", "timeline", "past", "evolution", "century", "early", "origin", "pedagogy", "traditional"],
-            WorkerRole.AUDITOR: ["fail", "risk", "gap", "lack", "issue", "problem", "challenge", "criticism", "limitation"],
-            WorkerRole.ANALYST: ["how", "mechanism", "structure", "system", "outcome", "framework", "practical", "implement"],
-            WorkerRole.RESEARCHER: ["study", "data", "percent", "evidence", "research", "case", "report", "finding"]
+            WorkerRole.HISTORIAN: ["history", "timeline", "past", "evolution", "reform", "admission", "curriculum", "institution", "iit", "india"],
+            WorkerRole.AUDITOR: ["fail", "risk", "gap", "lack", "issue", "problem", "challenge", "criticism", "limitation", "placement", "stress", "unemployment", "skill gap"],
+            WorkerRole.ANALYST: ["how", "mechanism", "structure", "system", "outcome", "framework", "practical", "implement", "internship", "curriculum", "industry", "employability"],
+            WorkerRole.RESEARCHER: ["study", "data", "percent", "evidence", "research", "case", "report", "finding", "placement", "salary", "hiring", "employability"]
         }.get(self.role, [])
 
         pruned_sources = []
@@ -128,5 +135,5 @@ class ResearchWorker:
         return await self.provider.generate_text(
             prompt,
             system_prompt=system_prompts.get(self.role, "You are a Research Assistant. DO NOT OVERTHINK."),
-            max_tokens=800
+            max_tokens=320
         )
