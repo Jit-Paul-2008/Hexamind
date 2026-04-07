@@ -56,11 +56,18 @@ async def run_live_trial():
             final_report = payload["fullContent"]
 
 
-    # Save to "demo runs"
-    output_path = Path(__file__).resolve().parent.parent / "demo runs"
+    # Save to "demo_outputs"
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_query = "".join([c if c.isalnum() else "_" for c in query[:30]])
+    output_dir = Path(__file__).resolve().parent.parent / "demo_outputs"
+    output_dir.mkdir(exist_ok=True)
+    
+    output_path = output_dir / f"research_{safe_query}_{timestamp}.md"
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(f"# Aurora v4 Research Report\n")
         f.write(f"**Query**: {query}\n")
+        f.write(f"**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write("-" * 50 + "\n\n")
         f.write(final_report)
     
