@@ -32,11 +32,11 @@ AGENT_MODEL_SPECIALIZATION = {
     
     "researcher": AgentModelConfig(
         agent_id="researcher",
-        primary_ollama_model="qwen2.5:7b",
+        primary_ollama_model="qwen2.5:0.5b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
-        temperature=0.6,
+        temperature=0.4,
         max_tokens=400,
-        system_prompt_suffix="Synthesize sources into a comprehensive, well-structured research report. BE BRIEF AND DIRECT."
+        system_prompt_suffix="Identify factual errors or missing current statistics in the draft. Output ONLY JSON diffs."
     ),
     
     "critic": AgentModelConfig(
@@ -87,29 +87,29 @@ AGENT_MODEL_SPECIALIZATION = {
     # Aurora Diamond Expert roles (AuroraGraph / reasoning_graph.py)
     "historian": AgentModelConfig(
         agent_id="historian",
-        primary_ollama_model="qwen2.5:7b",
+        primary_ollama_model="qwen2.5:0.5b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
-        temperature=0.6,
+        temperature=0.4,
         max_tokens=400,
-        system_prompt_suffix="Focus on timelines, historical evolution, and changes over time. BE CONCISE."
+        system_prompt_suffix="Identify historical factual errors in the draft. Output ONLY JSON diffs."
     ),
 
     "auditor": AgentModelConfig(
         agent_id="auditor",
-        primary_ollama_model="qwen2.5:7b",
+        primary_ollama_model="qwen2.5:0.5b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
-        temperature=0.7,
+        temperature=0.4,
         max_tokens=400,
-        system_prompt_suffix="Focus on gaps, contradictions, and critical weaknesses. Limit </think> to 1 sentence."
+        system_prompt_suffix="Identify quality issues, gaps, or contradictions in the draft. Output ONLY JSON diffs."
     ),
 
     "analyst": AgentModelConfig(
         agent_id="analyst",
-        primary_ollama_model="qwen2.5:7b",
+        primary_ollama_model="qwen2.5:0.5b",
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
-        temperature=0.65,
+        temperature=0.4,
         max_tokens=400,
-        system_prompt_suffix="Focus on implementation strategies, mechanisms, and practical outcomes. BE DIRECT."
+        system_prompt_suffix="Identify technical implementation errors or outcome gaps in the draft. Output ONLY JSON diffs."
     ),
 
     "drafter": AgentModelConfig(
