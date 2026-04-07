@@ -17,19 +17,28 @@ The parameters:
 
 Rules for your Python code:
 1. Use `import json`, `import numpy as np`, `import pandas as pd`, `from scipy import stats` etc.
-2. Calculate the historical trends, comparative ROI, or projections as requested.
-3. You must construct a dictionary with the exact following schema:
-{{
-  "chartType": "line", // or "bar" or "area"
-  "title": "Descriptive Chart Title",
-  "xAxis": "Label for X (e.g., Year)",
-  "yAxis": "Label for Y (e.g., Revenue $)",
-  "data": [
-      {{"Year": "2024", "Metric A": 100, "Metric B": 200}},
-      {{"Year": "2025", "Metric A": 150, "Metric B": 180}}
-  ]
-}}
-4. Use `print(json.dumps(final_dict))` at the very end of your script to output the data.
+2. Calculate the historical trends, comparative ROI, or projections as requested, mapping different scenarios if comparisons are requested.
+3. You must construct a JSON ARRAY (a python list of dictionaries) with the exact following schema:
+[
+  {{
+    "chartType": "area", // or "bar" or "line" or "radar"
+    "title": "Descriptive Chart Title (e.g., Scenario A)",
+    "xAxis": "Label for X",
+    "yAxis": "Label for Y",
+    "data": [
+        {{"Year": "2024", "Metric A": 100, "Metric B": 200}},
+        {{"Year": "2025", "Metric A": 150, "Metric B": 180}}
+    ]
+  }},
+  {{
+     "chartType": "bar",
+     "title": "Scenario B",
+     "xAxis": "...",
+     "yAxis": "...",
+     "data": [...]
+  }}
+]
+4. Use `print(json.dumps(final_list))` at the very end of your script to output the data.
 5. DO NOT print anything else. DO NOT use markdown code blocks like ```python. Just output raw valid Python code.
 """
 
@@ -87,13 +96,13 @@ class SimulationWorker:
             
             # Find the JSON part
             try:
-                # the simplest way is to parse the last valid json blob
-                json_start = stdout_output.find("{")
-                json_end = stdout_output.rfind("}") + 1
+                # the simplest way is to parse the last valid json blob (now an array)
+                json_start = stdout_output.find("[")
+                json_end = stdout_output.rfind("]") + 1
                 if json_start != -1 and json_end != -1:
                     json_str = stdout_output[json_start:json_end]
                     parsed = json.loads(json_str)
-                    if "data" in parsed and "chartType" in parsed:
+                    if isinstance(parsed, list) and len(parsed) > 0 and "data" in parsed[0]:
                         return parsed
             except Exception as parse_e:
                 logger.error(f"Failed to parse mathematical output: {parse_e}")

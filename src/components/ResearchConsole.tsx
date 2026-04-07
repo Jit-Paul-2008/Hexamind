@@ -12,12 +12,13 @@ export default function ResearchConsole() {
   const [query, setQuery] = useState('');
   const [agaMode, setAgaMode] = useState(false);
   const [mathMode, setMathMode] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'researching' | 'completed' | 'error'>('idle');
   const [events, setEvents] = useState<any[]>([]);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [finalReport, setFinalReport] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,7 +29,7 @@ export default function ResearchConsole() {
 
   const startResearch = async () => {
     if (!query.trim()) return;
-    
+
     // Reset state
     setEvents([]);
     setFinalReport('');
@@ -43,7 +44,7 @@ export default function ResearchConsole() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, agaMode, mathMode }),
       });
-      
+
       if (!startRes.ok) throw new Error(`Failed to start research session: ${startRes.statusText}`);
       const { sessionId } = await startRes.json();
 
@@ -130,7 +131,7 @@ export default function ResearchConsole() {
 
         <div className="flex flex-wrap gap-4 px-2">
           <div className="flex items-center space-x-3">
-            <button 
+            <button
               onClick={() => setAgaMode(!agaMode)}
               className={`w-12 h-6 rounded-full transition-colors relative ${agaMode ? 'bg-emerald-500' : 'bg-slate-700'}`}
             >
@@ -143,8 +144,15 @@ export default function ResearchConsole() {
           </div>
 
           <div className="flex items-center space-x-3">
-            <button 
-              onClick={() => setMathMode(!mathMode)}
+            <button
+              onClick={() => {
+                const newMode = !mathMode;
+                setMathMode(newMode);
+                if (newMode) {
+                  setToast("WARNING: Entering Mathematical Territory. LLM Creativity Disabled.");
+                  setTimeout(() => setToast(null), 4000);
+                }
+              }}
               className={`w-12 h-6 rounded-full transition-colors relative ${mathMode ? 'bg-blue-500' : 'bg-slate-700'}`}
             >
               <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${mathMode ? 'translate-x-7' : 'translate-x-1'}`} />
@@ -155,6 +163,13 @@ export default function ResearchConsole() {
             </div>
           </div>
         </div>
+
+        {toast && (
+          <div className="animate-in fade-in slide-in-from-top-2 text-sm font-bold bg-blue-500/20 text-blue-300 px-4 py-3 mt-4 rounded-xl border border-blue-500/30 flex items-center shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+            <span className="material-icons text-xl mr-2">science</span>
+            {toast}
+          </div>
+        )}
       </div>
 
       {/* Main Grid */}
@@ -162,13 +177,13 @@ export default function ResearchConsole() {
         {/* Left: Graph & Logs */}
         <div className="lg:col-span-4 space-y-8">
           <ReasoningGraph activeAgent={activeAgent} status={status} />
-          
+
           <div className="glass-card flex flex-col h-[400px]">
             <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Thinking Process</span>
               <span className="flex h-2 w-2 rounded-full bg-indigo-500 pulsar"></span>
             </div>
-            <div 
+            <div
               ref={scrollRef}
               className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-2 scrollbar-thin scrollbar-thumb-white/10"
             >
@@ -194,7 +209,7 @@ export default function ResearchConsole() {
         <div className="lg:col-span-8">
           <div className="glass-card flex flex-col h-full min-h-[600px] relative overflow-hidden">
             {status === 'researching' && <div className="scanning-line" />}
-            
+
             <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
               <span className="font-bold text-indigo-300">Research Report</span>
               {status === 'completed' && <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded">Verified Output</span>}
@@ -209,25 +224,36 @@ export default function ResearchConsole() {
                   <p>Your research report will appear here.</p>
                 </div>
               )}
-              
+
               {finalReport ? (
                 <div className="animate-in fade-in slide-in-from-top-4 duration-1000">
                   {/* Extract and render chart data if present */}
                   {(() => {
                     const chartMatch = finalReport.match(/\[CHART_DATA\]([\s\S]*?)\[\/CHART_DATA\]/);
                     let cleanText = finalReport.replace(/\[CHART_DATA\][\s\S]*?\[\/CHART_DATA\]/g, '');
-                    let chartData = null;
+                    let chartDataArray: any[] = [];
                     if (chartMatch && chartMatch[1]) {
                       try {
-                        chartData = JSON.parse(chartMatch[1]);
+                        const parsed = JSON.parse(chartMatch[1]);
+                        if (Array.isArray(parsed)) {
+                          chartDataArray = parsed;
+                        } else {
+                          chartDataArray = [parsed];
+                        }
                       } catch (e) {
                         console.error("Failed to parse chart JSON from text");
                       }
                     }
                     return (
                       <>
-                        {chartData && <DynamicChart data={chartData} />}
-                        <div className="whitespace-pre-wrap font-sans leading-relaxed mt-4">
+                        {chartDataArray.length > 0 && (
+                          <div className={`grid grid-cols-1 ${chartDataArray.length > 1 ? 'xl:grid-cols-2' : ''} gap-6 mt-4 mb-8`}>
+                            {chartDataArray.map((chart, idx) => (
+                              <DynamicChart key={idx} data={chart} />
+                            ))}
+                          </div>
+                        )}
+                        <div className="whitespace-pre-wrap font-sans leading-relaxed">
                           {cleanText}
                         </div>
                       </>
@@ -241,10 +267,10 @@ export default function ResearchConsole() {
                   <div className="h-4 bg-white/5 rounded w-5/6 animate-pulse delay-150"></div>
                 </div>
               )}
-              
+
               {error && (
                 <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
-                   <strong>Error</strong>: {error}
+                  <strong>Error</strong>: {error}
                 </div>
               )}
             </div>
