@@ -2,6 +2,18 @@
 
 This document outlines high-complexity, research-backed architectural and logical improvements to transition Hexamind from a state-of-the-art research tool to a market-nonexistent "Industrial Reasoning Engine."
 
+## 0. TOP PRIORITY: Asymmetric Distillation & Drafting (ADD) Architecture
+
+**The Objective:** Shift computation from "Autoregressive LLM Generation" (CPU-heavy) to "NLP Prompt Shrinking and Small-Model Speculation" (RAM-heavy & fast).
+
+**Concept:**
+1. **Algorithmic Context Pruning:** Before any LLM sees the search results, a lightweight traditional NLP script (e.g., `spaCy`, loading entirely into your 42GB RAM) strips out all filler grammar. It feeds the LLM dense "Entity-Relationship Triplets" (e.g., `[IIT graduates] -> [employability decline] -> [2023]`).
+   * *Benefit:* Instantly slashes input token count by 40-60%.
+2. **Speculative Agent Drafting:** We load a tiny, lightning-fast 0.5B model into RAM to write the initial full-length draft of the report. The heavy **14B Diamond Experts** do NOT write prose; they are constrained to act strictly as **Editors**, outputting only small JSON "diff" corrections against the draft.
+   * *Benefit:* Eliminates the need for 14B models to sequentially generate 500+ tokens of boilerplate text. You get 14B-level reasoning at 0.5B-level generation speeds.
+
+---
+
 ## 1. Core Engine Architecture (Inference Level)
 
 ### A. Dynamic Test-Time Scaling (Inference-Time Compute)
