@@ -18,6 +18,8 @@ class Agent(BaseModel):
 class StartPipelineRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     reportLength: str = Field(default="moderate", pattern="^(brief|moderate|huge)$")
+    agaMode: bool = Field(default=False)
+
 
 
 class StartPipelineResponse(BaseModel):

@@ -37,8 +37,9 @@ class HierarchicalNode:
 class AuroraGraph:
     """The central orchestration engine for Hexamind Aurora."""
     
-    def __init__(self, query: str):
+    def __init__(self, query: str, aga_mode: bool = False):
         self.query = query
+        self.aga_mode = aga_mode
         self.task_tree: List[HierarchicalNode] = []
         self.context: Dict[str, Any] = {"query": query}
         self.provider = get_provider()
@@ -103,13 +104,28 @@ class AuroraGraph:
             except Exception as e:
                 logger.error(f"Failed to read wiki memory: {e}")
 
-        # 2.5 FAST DRAFTING PHASE
-        print("📝 Generating Wiki Draft/Update...", flush=True)
+        # 2.45 FACT-ANCHOR EXTRACTION (Optional AGA Mode)
+        anchors = None
+        if self.aga_mode:
+            print("⚓ Extracting Atomic Grounding Anchors...", flush=True)
+            from worker_agents import AnchorWorker
+            anchor_config = get_agent_model_config("anchor_worker")
+            anchor_provider = InferenceProvider(model_name=anchor_config.primary_ollama_model)
+            anchor_worker = AnchorWorker(anchor_provider)
+            anchors = await anchor_worker.extract(self.query, list(node_contexts.values()), existing_wiki=existing_wiki)
+            print(f"⚓ Extracted {len(anchors)} Grounding Anchors.", flush=True)
+
+        # 2.5 DRAFTING PHASE
+        if self.aga_mode:
+            print("📝 Assembling Wiki Draft via constraint logic...", flush=True)
+        else:
+            print("📝 Generating Wiki Draft/Update...", flush=True)
+            
         yield self._event(PipelineEventType.AGENT_START, "drafter")
         drafter_config = get_agent_model_config("drafter")
         drafter_provider = InferenceProvider(model_name=drafter_config.primary_ollama_model)
         drafter = DraftingWorker(drafter_provider)
-        self.initial_draft = await drafter.draft(self.query, list(node_contexts.values()), existing_wiki=existing_wiki)
+        self.initial_draft = await drafter.draft(self.query, list(node_contexts.values()), existing_wiki=existing_wiki, anchors=anchors)
         yield self._event(PipelineEventType.AGENT_DONE, "drafter", self.initial_draft)
 
         # 3. HIERARCHICAL EXECUTION (Workers Inference as Editors)
@@ -124,7 +140,9 @@ class AuroraGraph:
                     yield self._event(PipelineEventType.AGENT_START, node.id)
                     worker = workers[node.id]
                     context = node_contexts[node.id]
-                    result = await worker.run_analysis(node.topic, context, self.query, self.initial_draft)
+                    
+                    # Pass the anchors to the Auditor or any worker that uses them
+                    result = await worker.run_analysis(node.topic, context, self.query, self.initial_draft, anchors=anchors)
                     node.diffs = result["diffs"]
                     node.sources = result["sources"]
                     node.status = NodeStatus.COMPLETED

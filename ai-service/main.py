@@ -218,6 +218,7 @@ def start_pipeline(payload: StartPipelineRequest, request: Request) -> StartPipe
         payload.query.strip(),
         tenant_id=tenant_id,
         report_length=payload.reportLength,
+        aga_mode=payload.agaMode,
     )
     return StartPipelineResponse(sessionId=session_id)
 

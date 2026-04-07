@@ -129,6 +129,15 @@ AGENT_MODEL_SPECIALIZATION = {
         max_tokens=200,
         system_prompt_suffix="Decompose the query into specialized research tasks. Do not think, just output JSON list."
     ),
+
+    "anchor_worker": AgentModelConfig(
+        agent_id="anchor_worker",
+        primary_ollama_model="qwen2.5:0.5b",
+        fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
+        temperature=0.1,
+        max_tokens=500,
+        system_prompt_suffix="Extract hard facts from text as a strict JSON list of anchors."
+    ),
 }
 
 

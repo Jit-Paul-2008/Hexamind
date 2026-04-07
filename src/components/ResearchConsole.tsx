@@ -9,6 +9,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 export default function ResearchConsole() {
   const [query, setQuery] = useState('');
+  const [agaMode, setAgaMode] = useState(false);
   const [status, setStatus] = useState<'idle' | 'researching' | 'completed' | 'error'>('idle');
   const [events, setEvents] = useState<any[]>([]);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
@@ -38,7 +39,7 @@ export default function ResearchConsole() {
       const startRes = await fetch(`${API_BASE}/api/pipeline/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, agaMode }),
       });
       
       if (!startRes.ok) throw new Error(`Failed to start research session: ${startRes.statusText}`);
@@ -123,6 +124,19 @@ export default function ResearchConsole() {
               <span>Initiate Research</span>
             )}
           </button>
+        </div>
+
+        <div className="flex items-center space-x-3 px-2">
+          <button 
+            onClick={() => setAgaMode(!agaMode)}
+            className={`w-12 h-6 rounded-full transition-colors relative ${agaMode ? 'bg-emerald-500' : 'bg-slate-700'}`}
+          >
+            <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${agaMode ? 'translate-x-7' : 'translate-x-1'}`} />
+          </button>
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold text-slate-200">Strict Fact Mode (AGA)</span>
+            <span className="text-xs text-slate-500">Eliminates hallucination by enforcing atomic source grounding.</span>
+          </div>
         </div>
       </div>
 

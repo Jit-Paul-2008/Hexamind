@@ -9,20 +9,26 @@ sys.path.append(str(Path(__file__).resolve().parent))
 from reasoning_graph import AuroraGraph
 
 
-def _resolve_query() -> str:
-    value = " ".join(sys.argv[1:]).strip()
+def _resolve_query() -> tuple[str, bool]:
+    args = sys.argv[1:]
+    aga_mode = False
+    if "--aga" in args:
+        aga_mode = True
+        args.remove("--aga")
+    value = " ".join(args).strip()
     if value:
-        return value
-    return "Importance of switching to project based teaching rather than traditional course based teaching"
+        return value, aga_mode
+    return "Importance of switching to project based teaching rather than traditional course based teaching", aga_mode
 
 async def run_live_trial():
-    query = _resolve_query()
-    graph = AuroraGraph(query)
+    query, aga_mode = _resolve_query()
+    graph = AuroraGraph(query, aga_mode=aga_mode)
     final_report = ""
 
     status_file = Path(__file__).resolve().parent.parent / "research_status.md"
     with open(status_file, "w", encoding="utf-8") as f:
-        f.write(f"🚀 Initiating Aurora v4 Deep Research...\n")
+        mode_str = "AGA Enabled" if aga_mode else "Standard"
+        f.write(f"🚀 Initiating Aurora v4 Deep Research... (Mode: {mode_str})\n")
         f.write(f"Query: {query}\n")
         f.write("-" * 50 + "\n")
 
