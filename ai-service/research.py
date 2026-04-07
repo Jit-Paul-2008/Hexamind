@@ -1562,6 +1562,50 @@ def _hit_relevance(query: str, term: str, title: str, snippet: str, url: str) ->
     return min(1.0, overlap_score + exact_phrase_bonus + authority_bonus)
 
 
+def _prune_context_to_triplets(text: str) -> str:
+    """Aggressively prune text to keep core data and reduce token count.
+    
+    This replaces grammatical structure with dense, comma-separated tokens.
+    Designed for 0.5B-1.5B models to generate drafts from.
+    """
+    if not text:
+        return ""
+        
+    # Core English Stopwords + Context Filler
+    stop = {
+        "the", "and", "or", "but", "if", "then", "else", "when", "at", "from", 
+        "by", "for", "with", "about", "against", "between", "into", "through", 
+        "during", "before", "after", "above", "below", "to", "up", "down", 
+        "in", "out", "on", "off", "over", "under", "again", "further", 
+        "once", "here", "there", "where", "why", "how", "all", "any", 
+        "both", "each", "few", "more", "most", "other", "some", "such", 
+        "no", "nor", "not", "only", "own", "same", "so", "than", "too", 
+        "very", "s", "t", "can", "will", "just", "don", "should", "now", "i", 
+        "me", "my", "myself", "we", "our", "ours", "ourselves", "you", 
+        "your", "yours", "yourself", "yourselves", "he", "him", "his", 
+        "himself", "she", "her", "hers", "herself", "it", "its", "itself", 
+        "they", "them", "their", "theirs", "themselves", "what", "which", 
+        "who", "whom", "this", "that", "these", "those", "am", "is", "are", 
+        "was", "were", "be", "been", "being", "have", "has", "had", "having", 
+        "do", "does", "did", "doing", "a", "an", "the", "however", "therefore",
+        "additionally", "furthermore", "nonetheless", "whereas", "although"
+    }
+    
+    # Preserve key patterns: Numbers, Percentages, Capitalized Entities, Years
+    # Also generic significant nouns/verbs (3+ chars)
+    tokens = re.findall(r"\b[A-Z0-9][a-zA-Z0-9]*\b|\b[a-zA-Z]{3,}\b|\d+(?:\.\d+)?%", text)
+    
+    pruned = []
+    seen = set()
+    for token in tokens:
+        lower = token.lower()
+        if lower not in stop and lower not in seen:
+            pruned.append(token)
+            seen.add(lower)
+            
+    return ", ".join(pruned[:180]) # Hard limit on density per source fragment
+
+
 def _extract_evidence_excerpt(text: str, query: str, limit: int) -> str:
     cleaned = _clean_text(text)
     if not cleaned:
@@ -1569,18 +1613,21 @@ def _extract_evidence_excerpt(text: str, query: str, limit: int) -> str:
 
     terms = _top_query_terms(query, 8)
     if not terms:
-        return _trim_text(cleaned, limit)
+        return _prune_context_to_triplets(_trim_text(cleaned, limit))
 
     sentences = re.split(r"(?<=[.!?])\s+", cleaned)
     scored: list[tuple[int, str]] = []
     for sentence in sentences:
         lower = sentence.lower()
         score = sum(1 for term in terms if term in lower)
+        # Bonus for numbers/stats
+        if re.search(r"\d+(?:\.\d+)?%", lower) or re.search(r"\d{3,}", lower):
+            score += 2
         if score > 0:
             scored.append((score, sentence.strip()))
 
     if not scored:
-        return _trim_text(cleaned, limit)
+        return _prune_context_to_triplets(_trim_text(cleaned, limit))
 
     scored.sort(key=lambda item: item[0], reverse=True)
     picked: list[str] = []
@@ -1597,7 +1644,7 @@ def _extract_evidence_excerpt(text: str, query: str, limit: int) -> str:
             break
 
     joined = " ".join(picked).strip()
-    return _trim_text(joined or cleaned, limit)
+    return _prune_context_to_triplets(_trim_text(joined or cleaned, limit))
 
 
 def _is_filtered_domain(domain: str) -> bool:

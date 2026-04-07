@@ -112,6 +112,15 @@ AGENT_MODEL_SPECIALIZATION = {
         system_prompt_suffix="Focus on implementation strategies, mechanisms, and practical outcomes. BE DIRECT."
     ),
 
+    "drafter": AgentModelConfig(
+        agent_id="drafter",
+        primary_ollama_model="qwen2.5:0.5b",
+        fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
+        temperature=0.4,
+        max_tokens=1000,
+        system_prompt_suffix="Generate a comprehensive, cohesive Markdown research report. Use the provided evidence density."
+    ),
+
     "orchestrator": AgentModelConfig(
         agent_id="orchestrator",
         primary_ollama_model="qwen2.5:7b",

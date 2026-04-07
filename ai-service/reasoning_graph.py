@@ -29,6 +29,7 @@ class HierarchicalNode:
     role: str
     status: NodeStatus = NodeStatus.PENDING
     analysis: Optional[str] = None
+    diffs: List[Dict[str, str]] = field(default_factory=list)
     sources: List[str] = field(default_factory=list)
 
 
@@ -41,11 +42,13 @@ class AuroraGraph:
         self.context: Dict[str, Any] = {"query": query}
         self.provider = get_provider()
         self.researcher = InternetResearcher()
+        self.initial_draft: str = ""
 
 
     async def run(self):
         """Execute the hierarchical research graph and yield events."""
-        logger.info(f"Starting Aurora v5 Hierarchical Graph for: {self.query}")
+        from worker_agents import DraftingWorker
+        logger.info(f"Starting Aurora v5 ADD Graph for: {self.query}")
         
         # 1. PLAN (Orchestration)
         yield self._event(PipelineEventType.AGENT_START, "orchestrator")
@@ -80,23 +83,32 @@ class AuroraGraph:
         contexts = await asyncio.gather(*fetch_tasks)
         node_contexts = {node.id: context for node, context in zip(self.task_tree, contexts)}
 
-        # 3. HIERARCHICAL EXECUTION (Workers Inference)
+        # 2.5 FAST DRAFTING PHASE
+        print("📝 Generating initial 0.5B draft...", flush=True)
+        yield self._event(PipelineEventType.AGENT_START, "drafter")
+        drafter_config = get_agent_model_config("drafter")
+        drafter_provider = InferenceProvider(model_name=drafter_config.primary_ollama_model)
+        drafter = DraftingWorker(drafter_provider)
+        self.initial_draft = await drafter.draft(self.query, list(node_contexts.values()))
+        yield self._event(PipelineEventType.AGENT_DONE, "drafter", self.initial_draft)
+
+        # 3. HIERARCHICAL EXECUTION (Workers Inference as Editors)
         semaphore = asyncio.Semaphore(1) # Limit to 1 for maximum stability on CPU
         
         async def run_worker_task(node: HierarchicalNode):
             async with semaphore:
-                print(f"🔧 Starting worker task: {node.id} ({node.role}) - Topic: {node.topic}", flush=True)
+                print(f"🔧 Starting editorial worker task: {node.id} ({node.role})", flush=True)
                 heartbeat_task = asyncio.create_task(self._emit_heartbeat(node.id))
                 
                 try:
                     yield self._event(PipelineEventType.AGENT_START, node.id)
                     worker = workers[node.id]
                     context = node_contexts[node.id]
-                    result = await worker.run_analysis(node.topic, context, self.query)
-                    node.analysis = result["analysis"]
+                    result = await worker.run_analysis(node.topic, context, self.query, self.initial_draft)
+                    node.diffs = result["diffs"]
                     node.sources = result["sources"]
                     node.status = NodeStatus.COMPLETED
-                    yield self._event(PipelineEventType.AGENT_DONE, node.id, node.analysis)
+                    yield self._event(PipelineEventType.AGENT_DONE, node.id, f"Editorial review complete. {len(node.diffs)} corrections identified.")
                 except Exception as e:
                     print(f"❌ Worker {node.id} failed: {e}", flush=True)
                     import traceback
@@ -106,18 +118,28 @@ class AuroraGraph:
                     heartbeat_task.cancel()
                     print(f"✅ Worker task {node.id} finished.", flush=True)
 
-        # Execute all inference nodes sequentially
+        # Execute all editorial nodes sequentially
         for node in self.task_tree:
             async for event_item in run_worker_task(node):
                 yield event_item
 
-
-
-
-        # 3. FINAL SYNTHESIS
-        yield self._event(PipelineEventType.AGENT_START, "synthesizer")
-        final_report = await self._finalize_phase()
-        yield self._event(PipelineEventType.AGENT_DONE, "synthesizer", final_report)
+        # 4. FINAL ASSEMBLY (Assembler Logic)
+        print("🏗️ Assembling final report from edits...", flush=True)
+        yield self._event(PipelineEventType.AGENT_START, "assembler")
+        
+        final_report = self.initial_draft
+        total_edits = 0
+        for node in self.task_tree:
+            if node.status == NodeStatus.COMPLETED and node.diffs:
+                for diff in node.diffs:
+                    original = diff.get("original_text_snippet", "")
+                    replacement = diff.get("replacement_text", "")
+                    if original and replacement and original in final_report:
+                        final_report = final_report.replace(original, replacement)
+                        total_edits += 1
+        
+        print(f"✅ Assembly complete. Applied {total_edits} corrections.", flush=True)
+        yield self._event(PipelineEventType.AGENT_DONE, "assembler", final_report)
         
         yield self._event(PipelineEventType.PIPELINE_DONE, "output", final_report)
 

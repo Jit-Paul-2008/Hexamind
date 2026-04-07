@@ -26,7 +26,7 @@ class InferenceProvider:
         messages.append({"role": "user", "content": prompt})
 
         try:
-            async with httpx.AsyncClient(timeout=300.0) as client:
+            async with httpx.AsyncClient(timeout=1200.0) as client:
                 response = await client.post(
                     f"{self.base_url}",
                     json={

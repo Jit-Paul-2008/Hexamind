@@ -26,55 +26,28 @@ class ResearchWorker:
         search_query = await self._generate_search_query(topic)
         return await self.researcher.research(search_query)
 
-    async def run_analysis(self, topic: str, research_context: Any, context: Optional[str] = None) -> Dict[str, Any]:
-        """Execute the worker's inference and Mini-Critique sequentially."""
-        logger.info(f"Worker [{self.role}] starting inference on topic: {topic}")
+    async def run_analysis(self, topic: str, research_context: Any, context: Optional[str] = None, initial_draft: Optional[str] = None) -> Dict[str, Any]:
+        """Execute the worker's inference as a JSON Editor."""
+        logger.info(f"Worker [{self.role}] starting editorial review on topic: {topic}")
         
-        # 2. Specialized Analysis (with pruned context)
-        analysis = await self._analyze(topic, research_context.sources, context)
+        # 1. Specialized Analysis (JSON Diff)
+        json_diff_str = await self._analyze(topic, research_context.sources, context, initial_draft)
         
-        # 3. Mini-Critique (Recursive verification)
-        critique = await self._critique(topic, analysis, research_context.sources)
-        
-        # 4. Refinement
-        if "Inference Error" not in critique and "Satisfied" not in critique:
-            analysis = await self._refine(topic, analysis, critique)
+        # 2. Parse JSON safely
+        try:
+            # Strip any markdown code blocks if the model included them
+            clean_json = re.sub(r"```json\s*|\s*```", "", json_diff_str.strip())
+            diffs = json.loads(clean_json)
+        except Exception:
+            logger.error(f"Worker [{self.role}] failed to produce valid JSON: {json_diff_str}")
+            diffs = []
             
         return {
             "role": self.role,
             "topic": topic,
-            "analysis": analysis,
+            "diffs": diffs,
             "sources": [s.url for s in research_context.sources[:3]]
         }
-
-    async def _critique(self, topic: str, analysis: str, sources: List[Any]) -> str:
-        """Hunts for gaps in the local analysis."""
-        source_text = "\n".join([f"- {s.title}: {s.snippet}" for s in sources[:3]])
-        prompt = (
-            f"Review this {self.role} analysis of {topic}:\n{analysis}\n\n"
-            f"Evidence context:\n{source_text}\n\n"
-            "Task: List 2 missing details or logical flaws. If the analysis is perfect, output 'Satisfied'. "
-            "CRITICAL CONSTRAINTS: Be extremely concise. Max 3 sentences. Limit <think> tags to a maximum of 2 sentences. Do NOT overthink."
-        )
-        return await self.provider.generate_text(
-            prompt,
-            system_prompt="You are a skeptical Peer Reviewer. Your goal is to ensure scientific rigor. DO NOT OVERTHINK.",
-            max_tokens=100
-        )
-
-    async def _refine(self, topic: str, initial_analysis: str, critique: str) -> str:
-        """Refines the analysis based on the mini-critique."""
-        prompt = (
-            f"Improve this {self.role} analysis of {topic} based on these notes:\n{critique}\n\n"
-            f"Original Analysis:\n{initial_analysis}\n\n"
-            "CRITICAL CONSTRAINTS: Fix the issues directly. Limit <think> tags to a maximum of 2 sentences. Do NOT output a long thought process."
-        )
-        return await self.provider.generate_text(
-            prompt,
-            system_prompt=f"You are a professional {self.role.capitalize()}. Refine the report. BE BRIEF.",
-            max_tokens=150
-        )
-
 
     async def _generate_search_query(self, topic: str) -> str:
         """Tailor the search query based on the worker's role."""
@@ -93,47 +66,59 @@ class ResearchWorker:
             query += " IIT India placements employability student outcomes curriculum internships alumni recent years"
         return query
 
-    async def _analyze(self, topic: str, sources: List[Any], context: Optional[str] = None) -> str:
-        """Perform specialized synthesis with Neuro-Symbolic Context Pruning."""
-        role_keywords = {
-            WorkerRole.HISTORIAN: ["history", "timeline", "past", "evolution", "reform", "admission", "curriculum", "institution", "iit", "india"],
-            WorkerRole.AUDITOR: ["fail", "risk", "gap", "lack", "issue", "problem", "challenge", "criticism", "limitation", "placement", "stress", "unemployment", "skill gap"],
-            WorkerRole.ANALYST: ["how", "mechanism", "structure", "system", "outcome", "framework", "practical", "implement", "internship", "curriculum", "industry", "employability"],
-            WorkerRole.RESEARCHER: ["study", "data", "percent", "evidence", "research", "case", "report", "finding", "placement", "salary", "hiring", "employability"]
-        }.get(self.role, [])
-
-        pruned_sources = []
-        for s in sources:
-            snippet_text = s.snippet.lower() if s.snippet else ""
-            if any(kw in snippet_text for kw in role_keywords):
-                pruned_sources.append(s)
-        
-        # Soft-fallback: If pruning removes EVERYTHING, just use the top 3 generally.
-        if not pruned_sources:
-            pruned_sources = sources[:3]
-
-        source_text = "\n".join([f"- {s.title}: {s.snippet}" for s in pruned_sources[:5]])
+    async def _analyze(self, topic: str, sources: List[Any], context: Optional[str] = None, initial_draft: Optional[str] = None) -> str:
+        """Perform specialized synthesis with JSON Diff output for ADD architecture."""
+        source_text = "\n".join([f"- {s.title}: {s.excerpt}" for s in sources[:5]])
         
         system_prompts = {
-            WorkerRole.RESEARCHER: "You are a Fact-Checking Specialist. Report objective data.",
-            WorkerRole.HISTORIAN: "You are a Historian. Focus on timelines and changes over time.",
-            WorkerRole.AUDITOR: "You are a Quality Auditor. Focus on gaps and contradictions.",
-            WorkerRole.ANALYST: "You are a Technical Analyst. Focus on 'How' things work."
+            WorkerRole.RESEARCHER: "You are a Fact-Checking Specialist Editor.",
+            WorkerRole.HISTORIAN: "You are a Historian Editor.",
+            WorkerRole.AUDITOR: "You are a Quality Auditor Editor.",
+            WorkerRole.ANALYST: "You are a Technical Analyst Editor."
         }
         
         prompt = (
-            f"Analyze this topic using the provided evidence: {topic}\n\n"
-            f"Role-Pruned Evidence:\n{source_text}\n\n"
-            f"Global Context:\n{context or 'No additional context provided.'}\n\n"
-            "Requirements:\n"
-            "1. Be specific to your role.\n"
-            "2. Cite your sources.\n"
-            "3. BE EXTREMELY BRIEF (Max 3 paragraphs).\n"
-            "4. CRITICAL THINKING BUDGET: Limit your <think> tags to a maximum of 3 sentences. DO NOT spiral into infinite reasoning loops.\n"
+            f"Review this draft research on: {topic}\n\n"
+            f"Draft to Edit:\n{initial_draft or 'No draft provided.'}\n\n"
+            f"New Evidence to integrate:\n{source_text}\n\n"
+            "Task: Identify errors or missing facts in the draft based ONLY on the new evidence.\n"
+            "Output ONLY a valid JSON array of corrections. DO NOT output paragraphs or conversational filler.\n"
+            "Format: [{\"original_text_snippet\": \"text to replace\", \"replacement_text\": \"new detailed text\"}]\n"
+            "If no changes are needed, return an empty array []."
         )
         
         return await self.provider.generate_text(
             prompt,
-            system_prompt=system_prompts.get(self.role, "You are a Research Assistant. DO NOT OVERTHINK."),
-            max_tokens=180
+            system_prompt=system_prompts.get(self.role, "You are an Editor. Output ONLY JSON."),
+            max_tokens=150
+        )
+
+
+class DraftingWorker:
+    """Fast drafting worker for ADD architecture (0.5B model)."""
+    
+    def __init__(self, provider: Optional[InferenceProvider] = None):
+        self.provider = provider if provider is not None else get_provider()
+
+    async def draft(self, query: str, contexts: List[Any]) -> str:
+        """Generate a full Markdown draft from multiple research contexts."""
+        combined_evidence = ""
+        for ctx in contexts:
+            combined_evidence += f"\n--- Evidence for {ctx.query} ---\n"
+            combined_evidence += "\n".join([f"- {s.excerpt}" for s in ctx.sources[:5]])
+
+        prompt = (
+            f"Write a detailed, cohesive Markdown research report for the query: {query}\n\n"
+            f"Use this dense factual evidence:\n{combined_evidence}\n\n"
+            "Requirements:\n"
+            "1. Use clear H2 and H3 headings.\n"
+            "2. Be comprehensive but stay grounded in the evidence.\n"
+            "3. DO NOT use conversational filler.\n"
+            "4. Mention specific facts and data points provided."
+        )
+        
+        return await self.provider.generate_text(
+            prompt,
+            system_prompt="You are a Fast Report Drafter. Output ONLY a clean Markdown report.",
+            max_tokens=1000
         )
