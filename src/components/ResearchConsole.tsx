@@ -3,8 +3,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PipelineEvent, PipelineEventType } from '@/types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
-
 // List of available agents in the Aurora pipeline
 const AURORA_AGENTS = [
   { id: 'orchestrator', name: 'Orchestrator' },
@@ -21,7 +19,28 @@ const AURORA_AGENTS = [
 ];
 
 export default function ResearchConsole() {
+  const [apiBase, setApiBase] = useState(process.env.NEXT_PUBLIC_API_URL || '');
   const [query, setQuery] = useState('');
+  
+  // Dynamic API discovery for public users
+  useEffect(() => {
+    const discoverApi = async () => {
+      try {
+        // Try to load dynamic config (updated by the local persistence script)
+        const res = await fetch('/Hexamind/config.json');
+        if (res.ok) {
+          const cfg = await res.json();
+          if (cfg.apiUrl) {
+            console.log("🛰️ Aurora API Discovered:", cfg.apiUrl);
+            setApiBase(cfg.apiUrl);
+          }
+        }
+      } catch (e) {
+        // Fallback to build-time env if no config.json exists
+      }
+    };
+    discoverApi();
+  }, []);
   const [status, setStatus] = useState<'idle' | 'researching' | 'completed' | 'error'>('idle');
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [agentLogs, setAgentLogs] = useState<Record<string, string[]>>({});
@@ -48,7 +67,7 @@ export default function ResearchConsole() {
     setActiveAgentId('orchestrator');
 
     try {
-      const startRes = await fetch(`${API_BASE}/api/pipeline/start`, {
+      const startRes = await fetch(`${apiBase}/api/pipeline/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, agaMode: false, mathMode: false }),
@@ -57,7 +76,7 @@ export default function ResearchConsole() {
       if (!startRes.ok) throw new Error(`Failed to start pipeline: ${startRes.statusText}`);
       const { sessionId } = await startRes.json();
 
-      const eventSource = new EventSource(`${API_BASE}/api/pipeline/${sessionId}/stream`);
+      const eventSource = new EventSource(`${apiBase}/api/pipeline/${sessionId}/stream`);
 
       eventSource.onmessage = (event) => {
         try {

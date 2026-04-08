@@ -17,12 +17,25 @@ if ! lsof -i :8000 > /dev/null; then
 fi
 
 # 2. Check Cloudflare Tunnel
-# For Quick Tunnels, we check if the process exists. 
-# In a real Named Tunnel, we'd use 'cloudflared tunnel run'.
 if ! pgrep -f "cloudflared tunnel --url" > /dev/null; then
     echo "[$(date)] Tunnel not running. Starting..."
     cd "$WORKSPACE"
+    # Ensure old log is cleared to avoid stale URL extraction
+    cat /dev/null > tunnel.log
     nohup "$CLOUDFLARED" tunnel --url http://localhost:8000 > tunnel.log 2>&1 &
+    
+    # Wait for URL generation (Cloudflare takes a few seconds)
+    echo "[$(date)] Waiting for public URL generation..."
+    for i in {1..10}; do
+        TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]\+\.trycloudflare\.com' tunnel.log | head -n 1)
+        if [ ! -z "$TUNNEL_URL" ]; then
+            echo "[$(date)] New Tunnel URL: $TUNNEL_URL"
+            # Update public config for frontend discovery
+            echo "{\"apiUrl\": \"$TUNNEL_URL\"}" > "$WORKSPACE/public/config.json"
+            break
+        fi
+        sleep 2
+    done
 fi
 
-echo "[$(date)] Check complete."
+echo "[$(date)] Check complete. If URL changed, please run 'npm run deploy' to update the live site."
