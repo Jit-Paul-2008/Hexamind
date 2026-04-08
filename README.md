@@ -1,142 +1,96 @@
-# Hexamind Aurora: A High-Fidelity Strategic Reasoning Engine for Resource-Constrained Environments
-**Technical Whitepaper v7.5** | *Project Aurora Research Group*
+# Hexamind Aurora: A High-Fidelity Strategic Reasoning Engine
+**Technical Whitepaper v8.0** | *Project Aurora Industrial Release*
 
 ---
 
 > [!ABSTRACT]
-> This document details the architectural formalization of **Hexamind Aurora**, a multi-agent reasoning engine designed to achieve "Gemini-Level" deep research depth on local, consumer-grade hardware. By leveraging the **Asymmetric Distillation & Drafting (ADD)** optimization, the engine maintains high-fidelity strategic output while minimizing the compute-latency product. We present a dynamic swarm topology $(\mathcal{S})$ that adapts its cognitive graph in real-time to solve complex, non-deterministic queries.
+> Hexamind Aurora v8.0 is an industrial-grade reasoning engine designed for deep strategic synthesis in resource-constrained environments. By implementing a hierarchical **Atomic Distillation Swarm (ADS)**, the engine bridges the gap between massive evidentiary pools (100+ sources) and the finite context windows of local 7B models. This version introduces **Interactive Strategic Planning**, allowing for human-in-the-loop validation of research roadmaps before execution.
 
 ---
 
-## 1. Theoretical Framework: ADD Optimization
+## 1. Core Architecture: Atomic Distillation Swarm (ADS)
 
-The core efficiency of Aurora is derived from shifting the computational load from high-latency autoregressive generation to low-latency speculative drafting. The system optimization is formally defined as:
+To achieve "Gemini-Level" search depth while running on local Xeon/ECC-RAM hardware, Aurora v8.0 utilizes a multi-stage distillation pipeline:
 
-$$ \mathcal{O}_{ADD} = \frac{1}{n} \sum_{i=1}^{n} (\tau_{spec} \cdot \delta_{diff}) + \int e^{-\lambda \cdot c_{prune}} dt $$
+$$ \mathcal{O}_{ADS} = \int_{S \in \mathcal{P}} \psi(S, \theta_{0.5B}) \rightarrow \mathcal{L} \xrightarrow{\text{reasoning}} \mathcal{R}_{\theta_{7B}} $$
 
 Where:
-- $\tau_{spec}$ represents the token throughput of the 0.5B Speculative Drafter.
-- $\delta_{diff}$ is the sparse JSON corrective delta from the 7B/14B Expert Swarm.
-- $c_{prune}$ is the context pruning coefficient applied to raw search data.
-
-This allows the engine to bypass the traditional "Hardware Wall," achieving a **70-80% reduction** in inference time on Dual-Core Xeon hardware.
+- $\mathcal{P}$ is the Evidence Pool (100+ sources fetched via **Deep Paging**).
+- $\psi$ is the parallel **Distillation Swarm** (small models) extracting atomic fact triplets.
+- $\mathcal{L}$ is the **Fact Ledger**, a condensed truth pool of high-signal metrics.
+- $\mathcal{R}$ is the final Strategic Report synthesized by high-parameter Expert Analysts.
 
 ---
 
-## 3. System Topology: Dynamic Swarm $(\mathcal{S})$
+## 2. Interactive Strategic Planning
 
-Aurora v7.5 utilizes a **Recursive Directed Acyclic Graph (DAG)** for task decomposition. Unlike static hierarchies, the Swarm topology self-modifies based on intermediate rationale feedback.
+Experience absolute control over the research trajectory. Before any compute is committed, the engine proposes a **Strategic Roadmap**.
+
+```bash
+# Launch the Interactive Planner
+./venv/bin/python ai-service/run_interactive.py "Target Query"
+```
+
+### Protocol Features:
+- **Numbered Swarm Topology**: Visual list of specialty experts and topics.
+- **Hot-Editing**: Add, remove, or redefine experts via CLI commands (`add`, `edit`, `remove`).
+- **Confirmation Gate**: Research only begins when the user triggers the final "Begin" signal.
+
+---
+
+## 3. The 15-Pillar Strategic Logic
+
+Aurora’s reasoning is governed by fifteen industrial logic predicates:
+
+| Dimension | Role | Logic Framework |
+| :--- | :--- | :--- |
+| **P2** | Core | Hard-Data Anchoring (Pillar 2) |
+| **P4** | Psych | Behavioral Economics (Pillar 4) |
+| **P7** | Finance | TCO / ROI Projections (Pillar 7) |
+| **P8** | Synthesis | Dialectical Paradox Resolution (Pillar 8) |
+| **P15** | Visual | Automated Mermaid.js Synthesis (Pillar 15) |
+
+---
+
+## 4. Technical Performance Matrix
+
+Current benchmarks on **Dual Xeon** hardware with 42GB allocated memory:
+
+| Stage | Model Tier | Depth | Latency Product |
+| :--- | :--- | :--- | :--- |
+| **Orchestration** | 7B-Instruct | Planning | Low |
+| **ADS Foraging** | 0.5B-1B | 100+ Sources | Ultra-High Parallel |
+| **Expert Analysis**| 7B-14B | Strategic | High-Precision |
+| **Synthesis** | 7B-14B | Executive | Consolidated |
+
+---
+
+## 5. System Topology: Recursive Swarm
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Orchestrator
-    Orchestrator --> Swarm_Selection: Query Decomposition
+    [*] --> Interactive_Planner: Query Initiation
+    Interactive_Planner --> User_Review: Roadmap Proposal
+    User_Review --> Orchestrator: Confirmation / Edits
     
-    state Swarm_Selection {
-        Expert_A: Niche Domain Specialist
-        Expert_B: Structural Risk Auditor
-        Expert_C: Fiscal Modeler
+    state ADS_Fabric {
+        Layered_Search: Deep Paging (100+ Sources)
+        Distillation: Parallel Fact Extraction (Small Models)
+        Fact_Ledger: Condensed Truth Pool
     }
     
-    Swarm_Selection --> Evidence_Gathering: Parallel I/O
-    Evidence_Gathering --> Expert_Review: ADD Diff Generation
+    Orchestrator --> ADS_Fabric
+    ADS_Fabric --> Expert_Swarm: Anchored Reasoning
     
     state Logic_Gate <<choice>>
-    Expert_Review --> Logic_Gate
+    Expert_Swarm --> Logic_Gate
     
-    Logic_Gate --> Resolver_Node: Contradiction Detected
-    Logic_Gate --> Synthesis: Coherent Evidence
+    Logic_Gate --> Resolver: Contradiction Found
+    Logic_Gate --> Synthesiser: Consensus
     
-    Resolver_Node --> Adjudication: Dialectic Resolution
-    Adjudication --> Synthesis
-    
-    Synthesis --> Dual_Reporting: Technical + Strategic Emission
-    Dual_Reporting --> [*]
-```
-
-### 3.1 Dialectical Conflict Resolution Protocol
-
-To visualize the high-fidelity interaction between experts during a contradiction event, we utilize a recursive adjudication loop:
-
-```mermaid
-sequenceDiagram
-    participant O as Orchestrator
-    participant R as Researcher
-    participant A as Auditor
-    participant Res as Resolver
-    participant S as Synthesiser
-
-    O->>R: Evidence Request [Fusion Scalability]
-    O->>A: Risk Assessment [Silver Supply Bottlenecks]
-    R-->>O: Positive Signal (High Confidence)
-    A-->>O: Critical Warning (Resource Depletion)
-    Note over O: Conflict Detected via Pillar 8
-    O->>Res: Spawning Adjudicator
-    Res->>R: Cross-Examine Evidence
-    Res->>A: Cross-Examine Risk
-    Res-->>O: Dialectical Synthesis (Integrated Strategy)
-    O->>S: Final Intelligence Assembly
-    S-->>User: Dual Report
-```
-
----
-
-## 4. The 15-Pillar Strategic Framework
-
-The engine's reasoning is governed by a logical predicate logic established across fifteen strategic dimensions:
-
-| Dimension | Domain | Model / Pillar | Formal Logic |
-| :--- | :--- | :--- | :--- |
-| **P1** | Core | Multidimensional Reasoning | $\forall c \in \text{Conclusions}, \exists \{E, P, S\}$ |
-| **P4** | Intelligence | Behavioral Frameworks | Maslow $\oplus$ Veblen $\oplus$ Sunk-Cost |
-| **P7** | Finance | TCO / ROI Projections | $ROI = \frac{\sum \text{Benefit} - \text{Cost}}{\text{Cost}}$ |
-| **P12** | Authority | Source Tiering | Weight $W(s) \propto \text{Tier}(s)$ |
-| **P15** | Visual | Logic Synthesis | Mermaid.js Infographic Emission |
-
----
-
-## 5. Hardware Performance Matrix (Dual Xeon Benchmarks)
-
-Performance is measured as a function of **Token/Sec Throughput** vs. **Cognitive Depth**:
-
-| Model Tier | Role | Quantization | Latency (ms/tok) | Sessions / HR |
-| :--- | :--- | :--- | :--- | :--- |
-| **0.5B** | Drafter | Q8_0 | 12.4 | 14.2 |
-| **7B** | Orchestrator | Q4_K_M | 45.1 | 5.8 |
-| **14B** | Expert Editor | IQ4_XS | 112.8 | 2.1 |
-
-*Note: Aurora v7.5 is optimized for 42GB allocated VRAM / ECC RAM configurations.*
-
----
-
-## 6. Algorithmic Specification: Algorithm 1
-
-```pseudo
-Algorithm 1: Dynamic Swarm Adjudication
-Input: User Query Q, Initial Draft D, expert Swarm S
-Output: Strategic Report R
-
-1.  Q -> Orchestrator -> spawn specialized(S_n)
-2.  ForEach Expert e in S_n:
-        e(Q, D) -> JSON_Diff d_e, Rationale r_e
-3.  Audit(r_e) -> Check for Contradictions {C}
-4.  If |C| > 0 Then:
-        spawn Resolver(C) -> synthesize Adjudication A
-        D = D + A
-5.  Apply_Diffs(D, d_e) -> Final Context C_final
-6.  Synthesize(C_final, P1...P15) -> R
-7.  Return R
-```
-
----
-
-## 7. Access & Deployment
-
-Aurora is deployed as an **Asynchronous Distributed System** utilizing the native Ollama API.
-
-```bash
-# Launch the Strategic Reasoning Engine
-./venv/bin/python ai-service/run_demo.py "Query Topic"
+    Resolver --> Synthesiser
+    Synthesiser --> Dual_Report: Technical + Strategic Emission
+    Dual_Report --> [*]
 ```
 
 ---
