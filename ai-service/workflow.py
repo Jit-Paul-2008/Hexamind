@@ -27,7 +27,6 @@ class ResearchWorkflowProfile:
     # Beast workflow additions
     query_type: str  # factual, comparison, decision, forecast, technical, exploratory
     adversarial_queries: tuple[str, ...]  # anti-thesis and edge-case queries
-    stakeholder_perspectives: tuple[str, ...]  # different viewpoints to consider
     requires_verification: bool  # whether claims need cross-checking
     report_mode: str  # brief, technical, decision, synthesis
     min_verification_rate: float  # minimum claim verification threshold
@@ -65,9 +64,7 @@ def build_workflow_profile(query: str) -> ResearchWorkflowProfile:
     subquestions = _build_subquestions(normalized, analysis, audience)
     search_passes = _build_search_passes(normalized, analysis, audience)
     
-    # Beast workflow: adversarial query expansion
     adversarial_queries = _build_adversarial_queries(normalized, analysis)
-    stakeholder_perspectives = _build_stakeholder_perspectives(normalized, analysis)
     report_mode = _select_report_mode(analysis, audience, depth_label)
     min_verification_rate = _select_min_verification_rate(analysis, audience)
     contradiction_sensitivity = _select_contradiction_sensitivity(analysis, audience)
@@ -98,7 +95,6 @@ def build_workflow_profile(query: str) -> ResearchWorkflowProfile:
         # Beast workflow additions
         query_type=analysis.query_type,
         adversarial_queries=tuple(adversarial_queries),
-        stakeholder_perspectives=tuple(stakeholder_perspectives),
         requires_verification=requires_verification,
         report_mode=report_mode,
         min_verification_rate=min_verification_rate,
@@ -517,38 +513,6 @@ def _build_adversarial_queries(query: str, analysis: TopicAnalysis) -> list[str]
         ])
     
     return _dedupe_preserve_order(adversarial)
-
-
-def _build_stakeholder_perspectives(query: str, analysis: TopicAnalysis) -> list[str]:
-    """Identify stakeholder perspectives to consider."""
-    lowered = query.lower()
-    perspectives = []
-    
-    # Policy/regulatory topics
-    if any(token in lowered for token in ("policy", "regulation", "law", "government", "compliance")):
-        perspectives.extend(["regulator", "practitioner", "affected_party", "advocate", "critic"])
-    
-    # Engineering/technical topics
-    elif any(token in lowered for token in ("engineer", "build", "implement", "architecture", "system", "software")):
-        perspectives.extend(["builder", "operator", "security_auditor", "end_user", "maintainer"])
-    
-    # Medical/health topics
-    elif any(token in lowered for token in ("medical", "health", "clinical", "patient", "treatment", "therapy")):
-        perspectives.extend(["clinician", "patient", "researcher", "regulator", "caregiver"])
-    
-    # Business/strategy topics
-    elif any(token in lowered for token in ("business", "strategy", "market", "invest", "company", "startup")):
-        perspectives.extend(["executive", "investor", "employee", "customer", "competitor"])
-    
-    # Education/learning topics
-    elif any(token in lowered for token in ("learn", "education", "teach", "student", "course", "training")):
-        perspectives.extend(["learner", "instructor", "employer", "institution", "researcher"])
-    
-    # Default perspectives
-    else:
-        perspectives.extend(["proponent", "skeptic", "practitioner", "theorist"])
-    
-    return perspectives[:5]
 
 
 def _select_report_mode(analysis: TopicAnalysis, audience: str, depth_label: str) -> str:

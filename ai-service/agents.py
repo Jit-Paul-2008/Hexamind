@@ -1,4 +1,7 @@
+import json
+import os
 from dataclasses import dataclass
+from typing import List
 
 
 @dataclass(frozen=True)
@@ -13,115 +16,28 @@ class AgentConfig:
     processing_order: int
 
 
-AGENTS: tuple[AgentConfig, ...] = (
-    AgentConfig(
-        id="orchestrator",
-        codename="Orchestrator",
-        role="Task Decomposition and Planning",
-        purpose="Decomposes the research query into specialized expert tasks for the Aurora diamond team.",
-        accent_color="#6366f1",
-        glow_color="rgba(99, 102, 241, 0.28)",
-        shape="sphere",
-        processing_order=0,
-    ),
-    AgentConfig(
-        id="historian",
-        codename="Historian",
-        role="Historical Evolution and Contextual Grounding",
-        purpose="Traces the historical development, timelines, and pedagogical evolution of the research topic.",
-        accent_color="#a78bfa",
-        glow_color="rgba(167, 139, 250, 0.28)",
-        shape="tetrahedron",
-        processing_order=1,
-    ),
-    AgentConfig(
-        id="researcher",
-        codename="Researcher",
-        role="Evidence Gathering and Structured Analysis",
-        purpose="Synthesizes sources into a comprehensive, well-structured research report.",
-        accent_color="#10b981",
-        glow_color="rgba(16, 185, 129, 0.28)",
-        shape="tetrahedron",
-        processing_order=1,
-    ),
-    AgentConfig(
-        id="critic",
-        codename="Critic",
-        role="Bias Detection and Quality Assurance",
-        purpose="Reviews the research report for bias, gaps, and unsupported claims.",
-        accent_color="#f59e0b",
-        glow_color="rgba(245, 158, 11, 0.28)",
-        shape="icosahedron",
-        processing_order=2,
-    ),
-    AgentConfig(
-        id="advocate",
-        codename="Advocate",
-        role="Opportunity Thesis and Value Realization",
-        purpose="Builds the strongest evidence-based upside case and execution path.",
-        accent_color="#818cf8",
-        glow_color="rgba(99, 102, 241, 0.28)",
-        shape="dodecahedron",
-        processing_order=3,
-    ),
-    AgentConfig(
-        id="skeptic",
-        codename="Skeptic",
-        role="Risk Decomposition and Failure Analysis",
-        purpose="Challenges assumptions, identifies failure modes, and quantifies downside exposure.",
-        accent_color="#f87171",
-        glow_color="rgba(239, 68, 68, 0.28)",
-        shape="icosahedron",
-        processing_order=4,
-    ),
-    AgentConfig(
-        id="synthesiser",
-        codename="Synthesiser",
-        role="Tradeoff Integration and Decision Framing",
-        purpose="Integrates competing perspectives into a decision-ready recommendation.",
-        accent_color="#34d399",
-        glow_color="rgba(16, 185, 129, 0.28)",
-        shape="dodecahedron",
-        processing_order=5,
-    ),
-    AgentConfig(
-        id="oracle",
-        codename="Oracle",
-        role="Scenario Forecasting and Operating Outlook",
-        purpose="Forecasts near-term outcomes with scenario ranges, triggers, and confidence levels.",
-        accent_color="#fbbf24",
-        glow_color="rgba(245, 158, 11, 0.28)",
-        shape="box",
-        processing_order=6,
-    ),
-    AgentConfig(
-        id="verifier",
-        codename="Verifier",
-        role="Evidence Audit and Claim Verification",
-        purpose="Audits source claims, triangulates evidence, and flags unsupported statements.",
-        accent_color="#60a5fa",
-        glow_color="rgba(59, 130, 246, 0.28)",
-        shape="sphere",
-        processing_order=7,
-    ),
-    AgentConfig(
-        id="auditor",
-        codename="Auditor",
-        role="Critical Assessment and Gap Analysis",
-        purpose="Identifies gaps, contradictions, and educator challenges in the research evidence.",
-        accent_color="#f87171",
-        glow_color="rgba(248, 113, 113, 0.28)",
-        shape="icosahedron",
-        processing_order=8,
-    ),
-    AgentConfig(
-        id="analyst",
-        codename="Analyst",
-        role="Implementation Strategy and Practical Outcomes",
-        purpose="Evaluates implementation pathways, practical mechanisms, and measurable outcomes.",
-        accent_color="#38bdf8",
-        glow_color="rgba(56, 189, 248, 0.28)",
-        shape="box",
-        processing_order=9,
-    ),
-)
+def _load_agents() -> List[AgentConfig]:
+    """Load agents from the shared public/agents.json file to ensure a singular source of truth."""
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "public", "agents.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return [
+                AgentConfig(
+                    id=a["id"],
+                    codename=a["name"],
+                    role=a["role"],
+                    purpose=a["purpose"],
+                    accent_color=a["accent_color"],
+                    glow_color=a["glow_color"],
+                    shape=a["shape"],
+                    processing_order=a["processing_order"],
+                )
+                for a in data
+            ]
+    except Exception as e:
+        # Fallback for local development or missing file
+        return []
+
+
+AGENTS: tuple[AgentConfig, ...] = tuple(_load_agents())

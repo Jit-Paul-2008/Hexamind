@@ -231,9 +231,7 @@ def stream_pipeline(session_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Unknown pipeline session")
     return EventSourceResponse(
         pipeline_service.stream_events(session_id, tenant_id),
-        ping=5,
-        ping_header_name="X-Accel-Buffering",
-        ping_header_value="no"
+        ping=15
     )
 
 

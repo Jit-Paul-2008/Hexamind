@@ -4,39 +4,44 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PipelineEvent, PipelineEventType } from '@/types';
 
 // List of available agents in the Aurora pipeline
-const AURORA_AGENTS = [
+// List of core agents in the Aurora Diamond pipeline
+const INITIAL_AGENTS = [
   { id: 'orchestrator', name: 'Orchestrator' },
   { id: 'historian', name: 'Historian' },
   { id: 'researcher', name: 'Researcher' },
-  { id: 'critic', name: 'Critic' },
-  { id: 'advocate', name: 'Advocate' },
-  { id: 'skeptic', name: 'Skeptic' },
-  { id: 'synthesiser', name: 'Synthesiser' },
-  { id: 'oracle', name: 'Oracle' },
-  { id: 'verifier', name: 'Verifier' },
+  { id: 'drafter', name: 'Drafter' },
   { id: 'auditor', name: 'Auditor' },
   { id: 'analyst', name: 'Analyst' },
+  { id: 'synthesiser', name: 'Synthesiser' },
 ];
 
 export default function ResearchConsole() {
   const [apiBase, setApiBase] = useState(process.env.NEXT_PUBLIC_API_URL || '');
   const [query, setQuery] = useState('');
+  const [agents, setAgents] = useState(INITIAL_AGENTS);
   
   // Dynamic API discovery for public users
   useEffect(() => {
     const discoverApi = async () => {
       try {
-        // Try to load dynamic config (updated by the local persistence script)
-        const res = await fetch('/Hexamind/config.json');
-        if (res.ok) {
-          const cfg = await res.json();
+        // 1. Discover API Endpoint
+        const configRes = await fetch('/Hexamind/config.json');
+        if (configRes.ok) {
+          const cfg = await configRes.json();
           if (cfg.apiUrl) {
             console.log("🛰️ Aurora API Discovered:", cfg.apiUrl);
             setApiBase(cfg.apiUrl);
           }
         }
+        
+        // 2. Discover Agent Roles (Singular Source of Truth)
+        const agentRes = await fetch('/Hexamind/agents.json');
+        if (agentRes.ok) {
+          const agentData = await agentRes.json();
+          setAgents(agentData.map((a: any) => ({ id: a.id, name: a.name })));
+        }
       } catch (e) {
-        // Fallback to build-time env if no config.json exists
+        console.warn("Discovery failed, using defaults:", e);
       }
     };
     discoverApi();
@@ -163,7 +168,7 @@ export default function ResearchConsole() {
            {/* Background connecting line */}
            <div className="absolute top-1/2 left-20 right-20 h-[0.5px] bg-[#E5E5E7] -z-10"></div>
            
-           {AURORA_AGENTS.map((agent, i) => {
+           {agents.map((agent, i) => {
              const isActive = activeAgentId === agent.id;
              const isDone = !!agentLogs[agent.id] && !isActive && status !== 'idle';
              return (
@@ -183,7 +188,7 @@ export default function ResearchConsole() {
 
       {/* 3. Agent Mission Control (Horizontal Scroller for 'Keep Clean' look) */}
       <div className="w-full flex space-x-4 overflow-x-auto pb-6 px-2 scrollbar-thin">
-        {AURORA_AGENTS.map((agent) => {
+        {agents.map((agent) => {
           const isActive = activeAgentId === agent.id;
           const logs = agentLogs[agent.id] || [];
           return (
