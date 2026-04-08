@@ -25,8 +25,10 @@
 - `README.md`: Technical Whitepaper.
 - `TASK.md`: Execution history (v1.0 -> v8.0).
 - `WALKTHROUGH.md`: Final feature demonstration.
+- `TAXONOMY_ARCHITECTURE_BLUEPRINT.md`: Roadmap for v8.5 transition.
 - `PROJECT_STATE.md`: This document.
 
-## 5. Pending / Future Scope
-- **Interactive UI**: Migration from CLI `run_interactive` to the Retro-Pastel Web Dashboard.
-- **MoE Routing**: Expansion to Mixtral-style local experts if VRAM is increased.
+## 5. Session End (2026-04-08)
+- **Current Milestone**: Industrial ADS v8.0 Stabilized.
+- **Tomorrow's Goal**: Transition to **Taxonomy-First Architecture (v8.5)** for hierarchical report cohesion.
+- **Pending Implementation**: Refactoring `Orchestrator` for nested JSON tree generation and `run_interactive` for tree visualization.
