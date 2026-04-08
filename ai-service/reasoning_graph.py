@@ -37,16 +37,21 @@ class HierarchicalNode:
 class AuroraGraph:
     """The central orchestration engine for Hexamind Aurora."""
     
-    def __init__(self, query: str, aga_mode: bool = False, math_mode: bool = False):
+    def __init__(self, query: str, aga_mode: bool = False, math_mode: bool = False, task_tree: Optional[List[HierarchicalNode]] = None):
         self.query = query
         self.aga_mode = aga_mode
         self.math_mode = math_mode
-        self.task_tree: List[HierarchicalNode] = []
+        self.task_tree: List[HierarchicalNode] = task_tree or []
         self.context: Dict[str, Any] = {"query": query}
         self.provider = get_provider()
         self.researcher = InternetResearcher()
         self.initial_draft: str = ""
 
+
+    async def generate_proposal(self) -> List[HierarchicalNode]:
+        """Generate a proposed research plan for external review."""
+        await self._plan_phase()
+        return self.task_tree
 
     async def run(self):
         """Execute the hierarchical research graph and yield events."""
@@ -57,13 +62,17 @@ class AuroraGraph:
         yield self._event(PipelineEventType.AGENT_START, "orchestrator")
         print(f"🛰️  Orchestrator starting for query: {self.query}", flush=True)
         
-        # Initialize with a basic plan in case of catastrophic failure
-        self.task_tree = [
-            HierarchicalNode(id="researcher_1", topic=f"General research on {self.query}", role="researcher")
-        ]
-        
-        success = await self._plan_phase()
-        print(f"🛰️  Orchestrator finished. Success: {success}, Tasks: {len(self.task_tree)}", flush=True)
+        # Initialize with a basic plan if no tree was provided
+        if not self.task_tree:
+            self.task_tree = [
+                HierarchicalNode(id="researcher_1", topic=f"General research on {self.query}", role="researcher")
+            ]
+            
+            success = await self._plan_phase()
+            print(f"🛰️  Orchestrator finished. Success: {success}, Tasks: {len(self.task_tree)}", flush=True)
+        else:
+            print(f"🛰️  Using injected Strategic Roadmap: {len(self.task_tree)} manual tasks.", flush=True)
+            success = True
         
         if not success or not self.task_tree:
             yield self._event(PipelineEventType.PIPELINE_ERROR, "orchestrator", "Failed to generate research plan.")
@@ -105,16 +114,34 @@ class AuroraGraph:
             except Exception as e:
                 logger.error(f"Failed to read wiki memory: {e}")
 
-        # 2.45 FACT-ANCHOR EXTRACTION (Optional AGA Mode)
+        # 2.45 ATOMIC DISTILLATION SWARM (ADS) Phase
+        # PILLAR 11: Distill 100+ sources into high-fidelity Fact Ledger
+        print("🍯 [ADS] Launching Distillation Swarm for 100+ sources...", flush=True)
+        from worker_agents import DistillationWorker, AnchorWorker
+        distiller = DistillationWorker()
+        
+        distillation_tasks = []
+        for node_id, ctx in node_contexts.items():
+            # Parallelize distillation of snippets (max 20 per expert for speed)
+            snippets = [s.snippet for s in ctx.sources[:20]]
+            distillation_tasks.append(distiller.distill(node_id, snippets))
+            
+        distilled_results = await asyncio.gather(*distillation_tasks)
+        fact_ledger = []
+        for res in distilled_results:
+            fact_ledger.extend(res)
+            
+        print(f"🍯 [ADS] Distilled {len(fact_ledger)} atomic facts from raw evidence pool.", flush=True)
+
+        # 2.46 FACT-ANCHOR EXTRACTION
         anchors = None
-        if self.aga_mode:
-            print("⚓ Extracting Atomic Grounding Anchors...", flush=True)
-            from worker_agents import AnchorWorker
+        if self.aga_mode or True: # Always use anchors in v8.0 ADS
+            print("⚓ Synthesizing Strategic Grounding Anchors...", flush=True)
             anchor_config = get_agent_model_config("anchor_worker")
             anchor_provider = InferenceProvider(model_name=anchor_config.primary_ollama_model)
             anchor_worker = AnchorWorker(anchor_provider)
-            anchors = await anchor_worker.extract(self.query, list(node_contexts.values()), existing_wiki=existing_wiki)
-            print(f"⚓ Extracted {len(anchors)} Grounding Anchors.", flush=True)
+            anchors = await anchor_worker.extract(self.query, fact_ledger, existing_wiki=existing_wiki)
+            print(f"⚓ Extracted {len(anchors)} high-fidelity Grounding Anchors.", flush=True)
 
         # 2.48 MATH ENGINE SIMULATION (Optional Math Mode)
         if self.math_mode:

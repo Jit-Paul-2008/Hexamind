@@ -252,11 +252,10 @@ class InternetResearcher:
         self._searxng_base_url = os.getenv("HEXAMIND_SEARXNG_BASE_URL", "http://127.0.0.1:8080").strip().rstrip("/")
         self._search_provider = _research_provider(self._tavily_api_keys[0] if self._tavily_api_keys else "")
         # Increased defaults for deeper research
-        configured_max_sources = _env_int("HEXAMIND_RESEARCH_MAX_SOURCES", max(max_sources, 14))
-        self._max_sources = max(6, configured_max_sources)  # Minimum 6 for triangulation
-        self._max_sources_per_domain = max(2, _env_int("HEXAMIND_MAX_SOURCES_PER_DOMAIN", 3))
-        self._max_terms = max(5, _env_int("HEXAMIND_RESEARCH_MAX_TERMS", 8))  # More search terms
-        self._max_hits_per_term = max(5, _env_int("HEXAMIND_RESEARCH_MAX_HITS_PER_TERM", 10))
+        self._max_sources = max(20, _env_int("HEXAMIND_RESEARCH_MAX_SOURCES", 40))
+        self._max_sources_per_domain = max(4, _env_int("HEXAMIND_MAX_SOURCES_PER_DOMAIN", 4))
+        self._max_terms = max(10, _env_int("HEXAMIND_RESEARCH_MAX_TERMS", 10))
+        self._max_hits_per_term = max(15, _env_int("HEXAMIND_RESEARCH_MAX_HITS_PER_TERM", 15))
         self._tavily_max_calls = max(3, _env_int("HEXAMIND_TAVILY_MAX_CALLS", 5))  # More API calls
         self._fetch_concurrency = max(3, _env_int("HEXAMIND_RESEARCH_FETCH_CONCURRENCY", 8))
         self._min_relevance_score = max(0.0, _env_float("HEXAMIND_RESEARCH_MIN_RELEVANCE", 0.20))  # Lower threshold
@@ -595,28 +594,40 @@ class InternetResearcher:
             "language": "en-US",
             "safesearch": "0",
         }
+        
+        all_hits: list[SearchHit] = []
         try:
-            response = await self._request_with_retries(
-                client,
-                "GET",
-                f"{self._searxng_base_url}/search",
-                params=params,
-            )
-            body = response.json()
-        except Exception:
-            return []
-
-        hits: list[SearchHit] = []
-        for item in body.get("results", []):
-            if not isinstance(item, dict):
-                continue
-            title = _clean_text(str(item.get("title", "")))
-            url = _canonicalize_url(str(item.get("url", "")))
-            snippet = _clean_text(str(item.get("content", "")))
-            if not title or not url:
-                continue
-            hits.append(SearchHit(title=title, url=url, snippet=snippet))
-        return hits
+            # Phase 1: Deep Paging (Layered Research)
+            # We fetch multiple pages to hit the ~100 source target
+            for page in range(1, 3): # 2 pages per term x multiple terms = massive depth
+                params["pageno"] = str(page)
+                response = await self._request_with_retries(
+                    client,
+                    "GET",
+                    f"{self._searxng_base_url}/search",
+                    params=params,
+                )
+                if response.status_code != 200:
+                    break
+                
+                body = response.json()
+                page_results = body.get("results", [])
+                if not page_results:
+                    break
+                
+                for item in page_results:
+                    if not isinstance(item, dict):
+                        continue
+                    title = _clean_text(str(item.get("title", "")))
+                    url = _canonicalize_url(str(item.get("url", "")))
+                    snippet = _clean_text(str(item.get("content", "")))
+                    if not title or not url:
+                        continue
+                    all_hits.append(SearchHit(title=title, url=url, snippet=snippet))
+        except Exception as e:
+            logger.error(f"SearXNG JSON fetch error: {e}")
+            
+        return all_hits
 
     async def _fetch_searx_term_hits_html(
         self,

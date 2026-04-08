@@ -23,9 +23,40 @@ class ResearchWorker:
         self.researcher = InternetResearcher()
 
     async def gather_evidence(self, topic: str) -> Any:
-        """Prefetch research context over the network (run in parallel)."""
+        """Prefetch research context over the network (run in parallel).
+        PILLAR 11: Implementing Layered Search for maximum data retrieval.
+        """
+        # Pass 1: Initial broad search
         search_query = await self._generate_search_query(topic)
-        return await self.researcher.research(search_query)
+        initial_context = await self.researcher.research(search_query)
+        
+        # Pass 2: Niche Recursive Expansion (if first pass yielded enough context)
+        if initial_context.sources and len(initial_context.sources) > 3:
+            niche_query = await self._generate_niche_expansion_query(topic, initial_context)
+            print(f"📡 [LAYERED] Deep-diving into niche: {niche_query}", flush=True)
+            niche_context = await self.researcher.research(niche_query)
+            
+            # Merge sources (avoiding duplicates)
+            seen_urls = {s.url for s in initial_context.sources}
+            merged_sources = list(initial_context.sources)
+            for s in niche_context.sources:
+                if s.url not in seen_urls:
+                    merged_sources.append(s)
+                    seen_urls.add(s.url)
+            
+            initial_context.sources = tuple(merged_sources)
+            
+        return initial_context
+
+    async def _generate_niche_expansion_query(self, topic: str, context: Any) -> str:
+        """Extract a high-specificity sub-topic for the second research pass."""
+        prompt = (
+            f"Based on the initial research for '{topic}', identify ONE highly specific, "
+            f"niche technical detail or structural risk that requires deeper investigation.\n"
+            f"Context Snippets:\n" + "\n".join([s.snippet[:150] for s in context.sources[:5]]) + "\n"
+            "Output ONLY the search query."
+        )
+        return await self.provider.generate_text(prompt, max_tokens=20)
 
     async def run_analysis(self, topic: str, research_context: Any, context: Optional[str] = None, initial_draft: Optional[str] = None, anchors: List[Dict[str, str]] = None) -> Dict[str, Any]:
         """Execute the worker's inference as a JSON Editor."""
@@ -138,39 +169,66 @@ class ResearchWorker:
         )
 
 
-class AnchorWorker:
-    """Extracts Atomic Grounding Anchors from raw context."""
+class DistillationWorker:
+    """Parallel foraging worker for the Atomic Distillation Swarm (0.5B model).
+    Extracts high-density Fact Triplets from raw source snippets.
+    """
     def __init__(self, provider: Optional[InferenceProvider] = None):
         self.provider = provider if provider is not None else get_provider()
 
-    async def extract(self, topic: str, contexts: List[Any], existing_wiki: Optional[str] = None) -> List[Dict[str, str]]:
-        combined_evidence = ""
-        for ctx in contexts:
-            combined_evidence += f"\n--- Evidence for {ctx.query} ---\n"
-            combined_evidence += "\n".join([f"- {s.excerpt}" for s in ctx.sources[:5]])
+    async def distill(self, topic: str, snippets: List[str]) -> List[str]:
+        """Distill 10-15 raw snippets into a list of atomic, verifiable facts."""
+        combined = "\n".join([f"- {s}" for s in snippets])
+        prompt = (
+            f"Extract exactly 5-8 Atomic Facts (Subject -> Link -> Metric/Data) from these sources regarding: {topic}\n\n"
+            f"{combined}\n\n"
+            "Requirements:\n"
+            "1. Output ONLY a bulleted list of facts.\n"
+            "2. Each fact must be a single, standalone sentence.\n"
+            "3. Focus on numbers, dates, and proper nouns."
+        )
+        try:
+            result = await self.provider.generate_text(
+                prompt,
+                system_prompt="You are an Atomic Distiller. Output ONLY bullet points.",
+                max_tokens=250
+            )
+            return [line.strip("- ").strip() for line in result.split("\n") if line.strip()]
+        except Exception as e:
+            logger.error(f"Distillation failed: {e}")
+            return []
+
+
+class AnchorWorker:
+    """Synthesizes the Distilled Ledger into high-fidelity Grounding Anchors."""
+    def __init__(self, provider: Optional[InferenceProvider] = None):
+        self.provider = provider if provider is not None else get_provider()
+
+    async def extract(self, topic: str, fact_ledger: List[str], existing_wiki: Optional[str] = None) -> List[Dict[str, str]]:
+        combined_facts = "\n".join([f"- {f}" for f in fact_ledger])
 
         if existing_wiki:
-            combined_evidence = f"EXISTING WIKI CONTINUITY:\n{existing_wiki}\n\nNEW EVIDENCE:\n{combined_evidence}"
+            combined_facts = f"EXISTING WIKI CONTINUITY:\n{existing_wiki}\n\nNEW DISTILLED FACTS:\n{combined_facts}"
 
         prompt = (
-            f"Extract exactly 8-10 Atomic Grounding Anchors (hard facts, numbers, dates, critical quotes) from the following evidence regarding: {topic}\n\n"
-            f"{combined_evidence}\n\n"
+            f"Synthesize the following list of raw distilled facts into 8-10 'Atomic Grounding Anchors' for the topic: {topic}\n\n"
+            f"{combined_facts}\n\n"
             "Requirements:\n"
             "1. Output ONLY a valid JSON array.\n"
             "2. Format: [{\"id\": \"A1\", \"fact\": \"<the exact stat/fact>\"}]\n"
-            "3. DO NOT output conversational filler."
+            "3. Deduplicate and prioritize high-impact metrics."
         )
 
         try:
             result_str = await self.provider.generate_text(
                 prompt,
-                system_prompt="You are an Anchor Extractor. Output ONLY JSON.",
+                system_prompt="You are an Anchor Synthesizer. Output ONLY JSON.",
                 max_tokens=500
             )
             clean_json = re.sub(r"```json\s*|\s*```", "", result_str.strip())
             return json.loads(clean_json)
         except Exception as e:
-            logger.error(f"Anchor extraction failed: {e}")
+            logger.error(f"Anchor synthesis failed: {e}")
             return []
 
 
