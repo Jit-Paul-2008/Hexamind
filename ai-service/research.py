@@ -311,15 +311,23 @@ class InternetResearcher:
 
         workflow_profile = build_workflow_profile(sanitized_query)
         
-        # Adaptive search depth based on topic complexity
+        # PILLAR 5 & 12: Adaptive search depth and authority weighting
         complexity_multiplier = 1.0 + (workflow_profile.complexity_score * 0.5)
         effective_max_sources = int(max(self._max_sources, workflow_profile.max_sources) * complexity_multiplier)
         
         search_passes = self._build_search_passes(sanitized_query, workflow_profile)
         search_terms = self._build_search_terms(sanitized_query, workflow_profile, search_passes)
         
+        # PILLAR 5: Inject Authority sub-queries (at least 30% of terms)
+        authority_terms = []
+        for term in search_terms[:max(1, len(search_terms) // 3)]:
+            authority_terms.append(f"{term} filetype:pdf")
+            authority_terms.append(f"{term} site:.gov OR site:.edu")
+        
+        effective_search_terms = _dedupe_preserve_order(list(search_terms) + authority_terms)
+        
         # Phase 1: Primary search
-        hits = await self._search_hits(sanitized_query, search_terms, workflow_profile, search_passes)
+        hits = await self._search_hits(sanitized_query, effective_search_terms, workflow_profile, search_passes)
         candidates = await self._build_candidates(sanitized_query, hits, workflow_profile)
         
         # Phase 2: Fallback expansion if primary search underperforms
@@ -1548,18 +1556,38 @@ def _top_query_terms(query: str, max_terms: int) -> list[str]:
 
 
 def _hit_relevance(query: str, term: str, title: str, snippet: str, url: str) -> float:
+    """Calculates factual relevance score with PILLAR 12 (Source Authority) weighting."""
     q_terms = set(_top_query_terms(query, 12))
     t_terms = set(_top_query_terms(term, 8))
     combined_terms = q_terms.union(t_terms)
+    
     haystack = f"{title} {snippet} {url}".lower()
+    
     if not combined_terms:
         return 0.0
 
     overlap = sum(1 for token in combined_terms if token in haystack)
     overlap_score = overlap / max(1, len(combined_terms))
+    
+    # Exact phrase bonus
     exact_phrase_bonus = 0.18 if query.lower() in haystack else 0.0
-    authority_bonus = 0.10 if _classify_authority(url) in {"primary", "high"} else 0.0
-    return min(1.0, overlap_score + exact_phrase_bonus + authority_bonus)
+    
+    # PILLAR 12: Source Authority weighting
+    url_l = url.lower()
+    authority_bonus = 0.0
+    if any(pattern in url_l for pattern in (".gov", ".edu", "sec.gov", "arxiv.org", "nature.com", "science.org")):
+        authority_bonus = 0.45 # Tier 1: Highest Authority
+    elif any(pattern in url_l for pattern in ("forrester.com", "gartner.com", "mckinsey.com", "bloomberg.com")):
+        authority_bonus = 0.30 # Tier 2: Institutional Research
+    elif any(pattern in url_l for pattern in ("cnet.com", "9to5mac.com", "theverge.com", "wsj.com")):
+        authority_bonus = 0.15 # Tier 3: Reputable Tech News
+    elif any(pattern in url_l for pattern in ("reddit.com", "forum", "substack")):
+        authority_bonus = -0.10 # Tier 4: Sentiment (low factual weighting)
+
+    # PDF Bonus (Deep Provenance)
+    pdf_bonus = 0.10 if url_l.endswith(".pdf") else 0.0
+
+    return min(1.0, overlap_score + exact_phrase_bonus + authority_bonus + pdf_bonus)
 
 
 def _prune_context_to_triplets(text: str) -> str:
@@ -2422,3 +2450,7 @@ def _research_provider(tavily_api_key: str) -> str:
     # Prefer SearxNG for local-style stacks (docker-compose, start_v1_nocredit_local.sh);
     # _search_hits falls back to DuckDuckGo when SearxNG yields no usable hits.
     return "tavily" if tavily_api_key else "searxng"
+def _dedupe_preserve_order(items: list[str]) -> list[str]:
+    """Helper to deduplicate a list while maintaining insertion order."""
+    seen = set()
+    return [x for x in items if not (x in seen or seen.add(x))]

@@ -9,6 +9,10 @@ logger = logging.getLogger(__name__)
 class InferenceProvider:
     """Unified interface for Local (Ollama) and Remote (GCP/OpenRouter) AI."""
     
+    # Static counters for persistent session tracking
+    TOTAL_TOKENS_OUT = 0
+    TOTAL_TOKENS_IN = 0
+    API_CALL_COUNT = 0
     def __init__(self, model_name: str, base_url: Optional[str] = None, api_key: Optional[str] = None):
         self.model_name = model_name
         # Use native Ollama API by default
@@ -19,14 +23,19 @@ class InferenceProvider:
         self.api_key = api_key or os.getenv("HEXAMIND_AUTH_TOKEN", "")
 
     async def generate_text(self, prompt: str, system_prompt: Optional[str] = None, stream: bool = False, max_tokens: int = 1500) -> str:
-        """Single-shot generation via Native Ollama API."""
+        """Single-shot generation via Native Ollama API with Token Tracking."""
+        InferenceProvider.API_CALL_COUNT += 1
+        InferenceProvider.TOTAL_TOKENS_IN += int(len(prompt.split()) * 1.35)
+        if system_prompt:
+            InferenceProvider.TOTAL_TOKENS_IN += int(len(system_prompt.split()) * 1.35)
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
         try:
-            async with httpx.AsyncClient(timeout=1200.0) as client:
+            async with httpx.AsyncClient(timeout=2400.0) as client:
                 response = await client.post(
                     f"{self.base_url}",
                     json={
@@ -51,6 +60,9 @@ class InferenceProvider:
                 content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
                 # Cleanup dangling tags if cutoff occurs
                 content = content.replace('<think>', '').replace('</think>', '').strip()
+                
+                # Increment output tokens
+                InferenceProvider.TOTAL_TOKENS_OUT += int(len(content.split()) * 1.45)
                 return content
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
@@ -74,7 +86,7 @@ class InferenceProvider:
         messages.append({"role": "user", "content": prompt})
 
         try:
-            async with httpx.AsyncClient(timeout=1200.0) as client:
+            async with httpx.AsyncClient(timeout=2400.0) as client:
                 async with client.stream(
                     "POST",
                     f"{self.base_url}",

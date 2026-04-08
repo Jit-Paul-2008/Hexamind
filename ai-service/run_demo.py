@@ -69,31 +69,51 @@ async def run_live_trial():
             final_report = payload["fullContent"]
 
 
-    # 5. SAVE TO WIKI
+    # 5. SAVE TO WIKI (Dual Report Separation)
     def titleize(q: str) -> str:
         import re
-        # Strip common question words
         q = re.sub(r'^(is|what|how|why|does|do|can|will|should)\s+', '', q, flags=re.IGNORECASE)
-        # Title Case and join underscores
         words = [w.capitalize() for w in re.findall(r'\w+', q)]
         return "_".join(words[:5]) or "General_Research"
 
     output_dir = Path(__file__).resolve().parent.parent / "data" / "wiki"
     output_dir.mkdir(parents=True, exist_ok=True)
-    
     wiki_title = titleize(query)
-    output_path = output_dir / f"{wiki_title}.md"
     
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(f"# {wiki_title.replace('_', ' ')}\n")
-        f.write(f"**Research Context**: {query}\n")
-        from datetime import datetime
-        f.write(f"**Last Updated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write("-" * 50 + "\n\n")
-        f.write(final_report)
-    
-    print("-" * 50)
-    print(f"✅ Research Complete. Persistent Wiki Page saved: {output_path}")
+    # Check for Dual Report headers
+    if "## Technical report" in final_report and "## Strategic Executive Summary" in final_report:
+        parts = final_report.split("## Strategic Executive Summary")
+        tech_part = parts[0]
+        strat_part = "## Strategic Executive Summary" + parts[1]
+        
+        # Save Technical Intelligence
+        tech_path = output_dir / f"{wiki_title}_TECHNICAL.md"
+        with open(tech_path, "w", encoding="utf-8") as f:
+            f.write(f"# Technical Intelligence: {wiki_title.replace('_', ' ')}\n")
+            f.write(tech_part)
+        
+        # Save Strategic Executive Summary
+        strat_path = output_dir / f"{wiki_title}_STRATEGIC.md"
+        with open(strat_path, "w", encoding="utf-8") as f:
+            f.write(f"# Strategic Executive Summary: {wiki_title.replace('_', ' ')}\n")
+            f.write(strat_part)
+            
+        print("-" * 50)
+        print(f"✅ Dual Reports saved successfully:")
+        print(f"   1. Technical: {tech_path}")
+        print(f"   2. Strategic: {strat_path}")
+    else:
+        # Fallback to single file
+        output_path = output_dir / f"{wiki_title}.md"
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(f"# {wiki_title.replace('_', ' ')}\n")
+            f.write(f"**Research Context**: {query}\n")
+            from datetime import datetime
+            f.write(f"**Last Updated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write("-" * 50 + "\n\n")
+            f.write(final_report)
+        print("-" * 50)
+        print(f"✅ Research Complete. Persistent Wiki Page saved: {output_path}")
 
 if __name__ == "__main__":
     asyncio.run(run_live_trial())

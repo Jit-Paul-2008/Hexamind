@@ -141,6 +141,17 @@ class AuroraGraph:
         drafter_provider = InferenceProvider(model_name=drafter_config.primary_ollama_model)
         drafter = DraftingWorker(drafter_provider)
         self.initial_draft = await drafter.draft(self.query, list(node_contexts.values()), existing_wiki=existing_wiki, anchors=anchors)
+        
+        # PILLAR 11: Iterative Depth Scaling
+        # If the draft is suspiciously short (< 300 chars) for a complex topic, perform one recursive deep-dive
+        if len(self.initial_draft) < 300 and not self.math_mode:
+            print("🔍 [DEPTH SCALING] Draft too thin. Spawning recursive deep-dive...", flush=True)
+            yield self._event(PipelineEventType.AGENT_START, "researcher", "Re-searching for more granular evidence...")
+            deep_context = await workers["researcher_1" if "researcher_1" in workers else self.task_tree[0].id].gather_evidence(f"extremely specific details and niche data on {self.query}")
+            node_contexts[self.task_tree[0].id] = deep_context
+            self.initial_draft = await drafter.draft(self.query, list(node_contexts.values()), existing_wiki=existing_wiki, anchors=anchors)
+            print("🔍 [DEPTH SCALING] Recursive pass complete.", flush=True)
+
         yield self._event(PipelineEventType.AGENT_DONE, "drafter", self.initial_draft)
 
         # 3. HIERARCHICAL EXECUTION (Workers Inference as Editors)
@@ -159,6 +170,7 @@ class AuroraGraph:
                     # Pass the anchors to the Auditor or any worker that uses them
                     result = await worker.run_analysis(node.topic, context, self.query, self.initial_draft, anchors=anchors)
                     node.diffs = result["diffs"]
+                    node.analysis = result.get("analysis", "Review complete.")
                     node.sources = result["sources"]
                     node.status = NodeStatus.COMPLETED
                     yield self._event(PipelineEventType.AGENT_DONE, node.id, f"Editorial review complete. {len(node.diffs)} corrections identified.")
@@ -175,6 +187,25 @@ class AuroraGraph:
         for node in self.task_tree:
             async for event_item in run_worker_task(node):
                 yield event_item
+
+        # PHASE 3: CONFLICT RESOLUTION (Dynamic Swarm Adaptation)
+        contradictory_nodes = [n for n in self.task_tree if n.status == NodeStatus.COMPLETED and "contradiction" in (n.analysis or "").lower()]
+        if contradictory_nodes:
+            print(f"⚖️  Conflict Detected. Spawning Resolver node...", flush=True)
+            yield self._event(PipelineEventType.AGENT_START, "resolver", "Adjudicating contradictory expert findings...")
+            
+            resolver_topic = "Reconcile the following expert contradictions: " + " | ".join([f"[{n.id}] {n.analysis}" for n in contradictory_nodes])
+            resolver_worker = ResearchWorker("auditor") # Use Auditor persona for adjudication
+            
+            # The resolver acts as an editor on the accumulated context
+            result = await resolver_worker.run_analysis(resolver_topic, node_contexts[self.task_tree[0].id], self.query, self.initial_draft, anchors=anchors)
+            
+            # Integrate resolver findings
+            resolver_node = HierarchicalNode(id="resolver", topic=resolver_topic, role="auditor", status=NodeStatus.COMPLETED, analysis=result.get("analysis", ""))
+            resolver_node.diffs = result["diffs"]
+            self.task_tree.append(resolver_node)
+            
+            yield self._event(PipelineEventType.AGENT_DONE, "resolver", "Contradictions resolved and integrated into final synthesis.")
 
         # 4. FINAL ASSEMBLY & DUAL SYNTHESIS
         print("🏗️ Assembling final report and integrating tradeoffs...", flush=True)
@@ -223,19 +254,45 @@ class AuroraGraph:
         }
 
     async def _plan_phase(self) -> bool:
-        """Orchestrator: Bypasses model call and uses Diamond Experts (v6.0)."""
-        # DIAMOND EXPERT ARCHITECTURE (v6.0)
-        # We bypass the model-driven planning to save the 20-minute CPU timeout.
-        # This manually authors the 4 specialist experts that ensure a high-fidelity report.
-        self.task_tree = [
-            HierarchicalNode(id="historian", topic=f"The historical evolution and pedagogy of {self.query}", role="historian"),
-            HierarchicalNode(id="researcher", topic=f"Current evidence and case studies on {self.query}", role="researcher"),
-            HierarchicalNode(id="auditor", topic=f"Critical assessment, gaps, and educator challenges for {self.query}", role="auditor"),
-            HierarchicalNode(id="analyst", topic=f"Implementation strategies and practical outcomes for {self.query}", role="analyst")
-        ]
+        """Orchestrator: Generates a dynamic research plan tailored to the specific query."""
+        print(f"🛰️  Orchestrator: Analyzing query complexity and defining expert swarm...", flush=True)
         
-        logger.info(f"Diamond Experts initialized. Bypassing planner.")
-        return True
+        prompt = (
+            f"You are the Lead Strategist. Decompose the following research query into 4-6 specialized expert tasks.\n"
+            f"Query: {self.query}\n\n"
+            "Requirements:\n"
+            "1. Output ONLY a JSON array of objects.\n"
+            "2. Format: [{\"id\": \"expert_id\", \"topic\": \"specific sub-topic to research\", \"role\": \"historian|researcher|auditor|analyst\"}]\n"
+            "3. Roles must be one of: historian, researcher, auditor, analyst.\n"
+            "4. Match experts to the niche requirements of the query (e.g., use a 'Legal Analyst' for regulation, 'Technical Auditor' for code)."
+        )
+
+        try:
+            orch_config = get_agent_model_config("orchestrator")
+            orch_provider = InferenceProvider(model_name=orch_config.primary_ollama_model)
+            response = await orch_provider.generate_text(prompt, system_prompt="You are a High-Precision Logic Orchestrator. Output ONLY JSON.", max_tokens=500)
+            
+            import re
+            clean_json = re.sub(r"```json\s*|\s*```", "", response.strip())
+            task_data = json.loads(clean_json)
+            
+            self.task_tree = [
+                HierarchicalNode(id=t["id"], topic=t["topic"], role=t["role"])
+                for t in task_data
+            ]
+            logger.info(f"Dynamic Swarm initialized with {len(self.task_tree)} specialized experts.")
+            return True
+        except Exception as e:
+            logger.error(f"Dynamic planning failed: {e}. Falling back to Diamond Experts.")
+            # FALLBACK TO DIAMOND EXPERTS (v6.0)
+            self.task_tree = [
+                HierarchicalNode(id="historian", topic=f"Historical evolution of {self.query}", role="historian"),
+                HierarchicalNode(id="researcher", topic=f"Current evidence on {self.query}", role="researcher"),
+                HierarchicalNode(id="rival_analyst", topic=f"Competitive benchmarking for {self.query}", role="analyst"),
+                HierarchicalNode(id="auditor", topic=f"Critical risks of {self.query}", role="auditor"),
+                HierarchicalNode(id="analyst", topic=f"Future outcomes and TEI of {self.query}", role="analyst")
+            ]
+            return True
 
 
 
@@ -249,17 +306,35 @@ class AuroraGraph:
             for node in self.task_tree if node.status == NodeStatus.COMPLETED
         ])
         
+        # PILLAR 16: Metrics Integration
+        metrics_summary = (
+            f"### Session Metrics (API Equivalence):\n"
+            f"- **Inbound Tokens**: {InferenceProvider.TOTAL_TOKENS_IN:,}\n"
+            f"- **Outbound Tokens**: {InferenceProvider.TOTAL_TOKENS_OUT:,}\n"
+            f"- **Total Multi-Agent API Calls**: {InferenceProvider.API_CALL_COUNT}\n"
+            f"- **Estimated Model-as-a-Service Equivalent Cost**: ${((InferenceProvider.TOTAL_TOKENS_IN/1000000)*0.15 + (InferenceProvider.TOTAL_TOKENS_OUT/1000000)*0.60):.4f}"
+        )
+
         prompt = (
-            "You are the Editor-in-Chief. Synthesize the final multi-agent research report.\n\n"
+            "You are the Editor-in-Chief and Strategic Partner at a top consulting firm. Synthesize the final multi-agent research report.\n\n"
             f"Original Query: {self.query}\n\n"
-            f"Gathered Evidence:\n{worker_outputs}\n\n"
+            f"Gathered Evidence & Expert Insights:\n{worker_outputs}\n\n"
             "CRITICAL: Produce TWO reports in this exact order and only with these top-level headings:\n"
             "1. '## Technical report': Must contain a concise executive summary, methods, evidence-backed findings, research quality stats, and source inventory.\n"
-            "2. '## Report on Topic': Must be polished, human-readable, structured with clear subheadings, and focused on the user's query.\n\n"
-            "Style Guide:\n"
+            f"   - **MANDATORY**: Include the following session metrics in this section:\n{metrics_summary}\n"
+            "2. '## Strategic Executive Summary': Must be polished, human-readable, structured with clear subheadings, and focused on the user's query.\n\n"
+            "Style Guide & PILLAR 1 (Multidimensional Reasoning):\n"
+            "- For every major conclusion, you MUST TRIANGULATE between:\n"
+            "  - ECONOMIC IMPACT: What is the TCO, ROI, or market value cost/benefit?\n"
+            "  - PSYCHOLOGICAL ANCHOR: What human desire (status, safety, fear) drives this?\n"
+            "  - STRUCTURAL RISK: What regulatory or network-effect barriers exist?\n"
+            "- PILLAR 8 (Paradox Resolution): You MUST explicitly address any contradictions between expert rationales. "
+            "If the Auditor reports risk but the Researcher reports success, bridge the discrepancy with a 'Reconciling the Discrepancy' section.\n"
+            "- PILLAR 15 (Visual Logic): You MUST emit at least one MERMAID.JS diagram (flowchart or erDiagram) "
+            "representing the core ecosystem or strategic funnel of the research topic.\n"
             "- Use concrete claims and [Sx] citations.\n"
             "- No conversational filler or meta-commentary.\n"
-            "- Ground every insight in the provided evidence."
+            "- Use authoritative, McKinsey-style terminology."
         )
 
         synth_config = get_agent_model_config("synthesiser")

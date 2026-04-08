@@ -27,19 +27,25 @@ We tried using generic OpenAI-compatible API wrappers.
 *   **The Success**: We scrapped the bridge and moved to the **Native Ollama API**, achieving 100% stable local connectivity.
 
 ### Phase 3: The Invention of ADD (April 2026) - A Research Breakthrough
-Realizing that we couldn't brute-force 14B generation on legacy hardware, we engineered a proprietary solution: the **ADD (Asymmetric Distillation & Drafting)** architecture. This was a critical internal breakthrough that allowed Hexamind to survive the "Hardware Wall."
+Realizing that we couldn't brute-force 14B generation on legacy hardware, we engineered a proprietary solution: the **ADD (Asymmetric Distillation & Drafting)** architecture. This allows Hexamind to survive the "Hardware Wall."
+
+### Phase 4: Project Aurora 2.0 (The Strategic Swarm)
+We realized that speed alone wasn't enough; we needed the **depth** of Gemini Deep Research. We implemented the **15 Strategic Pillars**, transitioning from a fixed expert list to a **Dynamic Swarm Topology**. The engine now adapts its own graph in real-time based on the complexity of the query.
 
 ```mermaid
 graph TD
-    A[User Query] --> B[Orchestrator 7B]
-    B --> C[Parallel Web Research]
-    C --> D[Context Pruning to Triplets]
-    D --> E[Speculative Draft 0.5B]
-    E --> F[Historian 0.5B Editor]
-    E --> G[Auditor 0.5B Editor]
-    E --> H[Analyst 0.5B Editor]
-    F & G & H --> I[Automated JSON Assembler]
-    I --> J[Final Research Report]
+    A[User Query] --> B[Dynamic Orchestrator 7B]
+    B --> C{Expert Swarm Selection}
+    C --> D[Niche Expert 1]
+    C --> E[Niche Expert 2]
+    C --> F[Niche Expert 3]
+    D & E & F --> G[Conflict Detection]
+    G -- Contradiction Found --> H[Resolver Node]
+    G -- Consistent --> I[Strategic Narrative Draft]
+    H --> I
+    I --> J[Dual Report Synthesis]
+    J --> K[Strategic Executive Summary]
+    J --> L[Technical Intelligence Report]
 ```
 
 ---
@@ -58,10 +64,12 @@ Our signature optimization shifts computation from **CPU-heavy generation** to *
 ## 🏗️ Technical Stack & Methodology
 
 - **Invention: ADD Architecture**: Proprietary speculative drafting flow.
+- **Strategic Swarm (v7.5)**: 15-Pillar logic (Behavioral Economics, TEI Modeling, Paradox Resolution).
+- **Dynamic Orchestration**: Real-time expert task decomposition using Qwen2.5-7B.
 - **Frontend**: Next.js 16 + React 19 (Retro Pastel Aesthetic).
 - **Backend**: FastAPI Industrial Orchestrator.
 - **Inference**: Native Ollama API (Tuned for 42GB/Xeon setups).
-- **Search**: SearXNG Parallel I/O.
+- **Session Metrics**: Built-in Token/API Usage mapping for local-to-cloud cost equivalence.
 - **Philosophy**: Inspired by **Andrej Karpathy's "LLM Wiki"**—treating AI output as a living, structure-first knowledge base.
 
 ---
@@ -91,9 +99,10 @@ Our signature optimization shifts computation from **CPU-heavy generation** to *
 
 ---
 
-## 📍 Proven Optimizations
+## 📍 Strategic Infrastructure
+- **15-Pillar Strategic Logic**: Cognitive frameworks (Maslow, TCO, ROI) applied to all research.
 - **MLA (Multi-Head Latent Attention)** ready.
-- **Mixture of Experts (MoE)** routing based on task difficulty.
+- **Dynamic Swarm Adaptation**: Spawns resolver nodes for contradictory expert findings.
 - **PRM (Process Reward Models)** concept for verification.
 
 *Hexamind: Not because it's easy, but because the hardware said it was impossible.*

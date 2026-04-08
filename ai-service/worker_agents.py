@@ -31,22 +31,36 @@ class ResearchWorker:
         """Execute the worker's inference as a JSON Editor."""
         logger.info(f"Worker [{self.role}] starting editorial review on topic: {topic}")
         
-        # 1. Specialized Analysis (JSON Diff)
-        json_diff_str = await self._analyze(topic, research_context.sources, context, initial_draft, anchors)
+        # 1. Specialized Analysis (JSON Diff + Rationale)
+        raw_output = await self._analyze(topic, research_context.sources, context, initial_draft, anchors)
         
-        # 2. Parse JSON safely
+        # 2. Parse JSON safely and extract rationale
+        diffs = []
+        analysis_summary = "No significant changes identified."
+        
         try:
             # Strip any markdown code blocks if the model included them
-            clean_json = re.sub(r"```json\s*|\s*```", "", json_diff_str.strip())
-            diffs = json.loads(clean_json)
+            clean_output = re.sub(r"```json\s*|\s*```", "", raw_output.strip())
+            
+            # Check if output is a wrapper object { "diffs": [], "rationale": "" } or just an array
+            parsed = json.loads(clean_output)
+            if isinstance(parsed, dict):
+                diffs = parsed.get("diffs", [])
+                analysis_summary = parsed.get("rationale", "Corrections applied based on new evidence.")
+            else:
+                diffs = parsed
+                analysis_summary = f"Editorial pass completed by {self.role.capitalize()} persona."
         except Exception:
-            logger.error(f"Worker [{self.role}] failed to produce valid JSON: {json_diff_str}")
-            diffs = []
+            logger.error(f"Worker [{self.role}] failed to produce valid JSON: {raw_output}")
+            # Fallback: if it's not JSON, treat it as the analysis summary itself if it has content
+            if len(raw_output.strip()) > 20:
+                analysis_summary = raw_output.strip()
             
         return {
             "role": self.role,
             "topic": topic,
             "diffs": diffs,
+            "analysis": analysis_summary,
             "sources": [s.url for s in research_context.sources[:3]]
         }
 
@@ -58,9 +72,9 @@ class ResearchWorker:
         is_iit_specific = any(token in normalized_topic for token in iit_keywords)
 
         prompts = {
-            WorkerRole.RESEARCHER: f"Find current facts, statistical paradoxes, outcomes, and recent case studies about {topic}",
+            WorkerRole.RESEARCHER: f"Find current facts, statistical paradoxes, outcomes, and Reddit/forum sentiment regarding {topic}",
             WorkerRole.HISTORIAN: f"Find historical evolution, policy shifts, and developmental timeline for {topic}",
-            WorkerRole.AUDITOR: f"Find critical assessments, failures, social downsides, and dissenting views on {topic}",
+            WorkerRole.AUDITOR: f"Find critical assessments, user complaints, social downsides, and dissenting views on {topic}",
             WorkerRole.ANALYST: f"Find implementation strategies, future projections, and mechanistic outcomes for {topic}"
         }
 
@@ -74,11 +88,25 @@ class ResearchWorker:
         source_text = "\n".join([f"- {s.title}: {s.excerpt}" for s in sources[:5]])
         anchors_str = "\n".join([f"[{a['id']}] {a['fact']}" for a in (anchors or [])])
         
+        # PILLAR 10: Persona Lexicons & PILLAR 4: Behavioral Frameworks integration
         system_prompts = {
-            WorkerRole.RESEARCHER: "You are a Fact-Checking Specialist Editor.",
-            WorkerRole.HISTORIAN: "You are a Historian Editor.",
-            WorkerRole.AUDITOR: "You are a Boolean Verification Auditor. Identify un-anchored or contradictory claims and delete them.",
-            WorkerRole.ANALYST: "You are a Technical Analyst Editor."
+            WorkerRole.RESEARCHER: (
+                "You are a Fact-Checking Specialist Editor. PILLAR 2: You MUST prioritize hard data, "
+                "scalars, market percentages, and unit statistics. Every claim must be grounded in a number if possible."
+            ),
+            WorkerRole.HISTORIAN: (
+                "You are a Senior Historian. Frame developments through institutional evolution. "
+                "PILLAR 14: You MUST specifically seek and highlight GEOGRAPHIC DISPARITIES and regional adoption variances (e.g., US vs EU vs Asia)."
+            ),
+            WorkerRole.AUDITOR: (
+                "You are a Structural Risk Officer. PILLAR 3: Your task is Red-Teaming. Identify un-anchored claims, "
+                "systemic fragilities, innovation deficits, and regulatory contradictions."
+            ),
+            WorkerRole.ANALYST: (
+                "You are a Senior Behavioral Economist (McKinsey/BCG style). "
+                "PILLAR 13: You MUST apply 'Total Economic Impact' (TEI) modeling. Create a 'Composite Organization' "
+                "of 1,000 employees and quantify the fiscal impact (ROI/TCO) based on the evidence."
+            )
         }
         
         if self.role == WorkerRole.AUDITOR:
@@ -87,9 +115,9 @@ class ResearchWorker:
                 f"Draft to Edit:\n{initial_draft or 'No draft provided.'}\n\n"
                 f"Provided Anchors (Truth Grounding):\n{anchors_str}\n\n"
                 "Task: Find any sentence in the draft that makes a factual claim NOT present in the Provided Anchors, or contradicts them.\n"
-                "Output a JSON array of corrections to DELETE those unverified claims.\n"
-                "Format: [{\"original_text_snippet\": \"unverified claim text...\", \"replacement_text\": \"\"}]\n"
-                "If everything is perfectly grounded, return []."
+                "Output as JSON object with 'diffs' array and 'rationale' string summary.\n"
+                "Format: {\"diffs\": [{\"original_text_snippet\": \"...\", \"replacement_text\": \"\"}], \"rationale\": \"summary of grounding failures\"}\n"
+                "If everything is perfectly grounded, return {\"diffs\": [], \"rationale\": \"All claims verified against anchors.\"}."
             )
         else:
             prompt = (
@@ -97,15 +125,16 @@ class ResearchWorker:
                 f"Draft to Edit:\n{initial_draft or 'No draft provided.'}\n\n"
                 f"New Evidence to integrate:\n{source_text}\n\n"
                 "Task: Identify errors or missing facts in the draft based ONLY on the new evidence.\n"
-                "Output ONLY a valid JSON array of corrections.\n"
-                "Format: [{\"original_text_snippet\": \"text to replace\", \"replacement_text\": \"new detailed text\"}]\n"
-                "If no changes are needed, return an empty array []."
+                "For ANALYSTS: You MUST also identify a relevant Mental Model (e.g. Sunk Cost, Network Effect) to explain the data.\n"
+                "Output as JSON object with 'diffs' array and 'rationale' string summary.\n"
+                "Format: {\"diffs\": [{\"original_text_snippet\": \"...\", \"replacement_text\": \"...\"}], \"rationale\": \"McKinsey-style summary of economic/behavioral impact\"}\n"
+                "If no changes are needed, return empty diffs but provide the rationale."
             )
         
         return await self.provider.generate_text(
             prompt,
-            system_prompt=system_prompts.get(self.role, "You are an Editor. Output ONLY JSON."),
-            max_tokens=150
+            system_prompt=system_prompts.get(self.role, "You are an Expert Strategist. Output ONLY JSON."),
+            max_tokens=300 # Increased for rationale
         )
 
 
@@ -152,34 +181,35 @@ class DraftingWorker:
         self.provider = provider if provider is not None else get_provider()
 
     async def draft(self, query: str, contexts: List[Any], existing_wiki: Optional[str] = None, anchors: List[Dict[str, str]] = None) -> str:
-        """Generate a full Markdown draft, stringently constrained by Anchors."""
+        """Generate a high-fidelity Strategic Narrative, strictly constrained by Anchors."""
         anchors_str = "\n".join([f"[{a['id']}] {a['fact']}" for a in (anchors or [])])
 
         if existing_wiki:
             prompt = (
-                f"You are a Deterministic Fact Compiler. You are given an existing Wiki Page and a new set of Atomic Grounding Anchors for the query: {query}\n\n"
+                f"You are a Senior Strategic Synthesiser. Update the following Wiki Page for the query: {query}\n\n"
                 f"EXISTING WIKI CONTENT:\n{existing_wiki}\n\n"
                 f"MANDATORY NEW ANCHORS TO INTEGRATE:\n{anchors_str}\n\n"
                 "Your Task:\n"
-                "1. Update the existing Wiki Page to incorporate the new Anchor facts.\n"
-                "2. AGA RULE: Every new sentence you write MUST contain an inline citation to an anchor (e.g., 'Growth was 5% [A1]').\n"
-                "3. Do not formulate unsupported claims.\n"
-                "4. Output the COMPLETE updated Markdown."
+                "1. Update the document with a focus on THEMATIC FLOW and strategic insight.\n"
+                "2. PILLAR 4: Use professional lexicons (McKinsey/BCG style).\n"
+                "3. AGA RULE: Every new sentence MUST contain an inline citation to an anchor (e.g., [A1]).\n"
+                "4. Do not just append; weave the new data into the existing logic.\n"
+                "5. Output the COMPLETE updated Markdown."
             )
         else:
             prompt = (
-                f"You are a Deterministic Fact Compiler building a Wiki page for the query: {query}\n\n"
+                f"You are a Senior Strategic Synthesiser building a high-fidelity intelligence report for: {query}\n\n"
                 f"MANDATORY ANCHORS:\n{anchors_str}\n\n"
-                "Wiki Layout Requirements:\n"
-                "1. Lead with 'Definition & Context'.\n"
-                "2. Use H2/H3 headings.\n"
-                "3. AGA RULE: Every sentence MUST contain an inline citation to an anchor (e.g., 'The population is 1.4B [A2]').\n"
-                "4. If you have no anchors for a section, DO NOT WRITE IT.\n"
-                "5. NEVER use conversational filler."
+                "Report Requirements:\n"
+                "1. Lead with a 'Strategic Executive Summary'.\n"
+                "2. Use H2/H3 headings inspired by Business Intelligence frameworks.\n"
+                "3. AGA RULE: Every sentence MUST contain an inline citation to an anchor (e.g., [A2]).\n"
+                "4. PILLAR 1: Ensure sections address Economic impact and Psychological drivers.\n"
+                "5. NEVER use conversational filler. Maintain an 'Air of Authority'."
             )
         
         return await self.provider.generate_text(
             prompt,
-            system_prompt="You are a Deterministic Fact Compiler. You only assemble given anchors. Output ONLY clean Markdown.",
-            max_tokens=2000
+            system_prompt="You are a High-Precision Strategic Synthesiser. Output ONLY clean, authoritative Markdown.",
+            max_tokens=2500
         )
