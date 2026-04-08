@@ -176,25 +176,30 @@ class AuroraGraph:
             async for event_item in run_worker_task(node):
                 yield event_item
 
-        # 4. FINAL ASSEMBLY (Assembler Logic)
-        print("🏗️ Assembling final report from edits...", flush=True)
-        yield self._event(PipelineEventType.AGENT_START, "assembler")
+        # 4. FINAL ASSEMBLY & DUAL SYNTHESIS
+        print("🏗️ Assembling final report and integrating tradeoffs...", flush=True)
+        yield self._event(PipelineEventType.AGENT_START, "synthesiser", "Synthesizing technical assessment and user-facing report...")
         
-        final_report = self.initial_draft
-        total_edits = 0
+        # We first apply the diffs to ensure the synthesiser gets the most accurate technical data
+        assembled_context = self.initial_draft
         for node in self.task_tree:
             if node.status == NodeStatus.COMPLETED and node.diffs:
                 for diff in node.diffs:
                     original = diff.get("original_text_snippet", "")
                     replacement = diff.get("replacement_text", "")
-                    if original and replacement and original in final_report:
-                        final_report = final_report.replace(original, replacement)
-                        total_edits += 1
+                    if original and replacement and original in assembled_context:
+                        assembled_context = assembled_context.replace(original, replacement)
         
-        print(f"✅ Assembly complete. Applied {total_edits} corrections.", flush=True)
-        yield self._event(PipelineEventType.AGENT_DONE, "assembler", final_report)
+        # update context for synthesiser
+        self.initial_draft = assembled_context
         
-        yield self._event(PipelineEventType.PIPELINE_DONE, "output", final_report)
+        # Call the high-precision synthesiser for the dual output
+        final_dual_report = await self._finalize_phase()
+        
+        print(f"✅ Synthesis complete. Emitting dual-structured report.", flush=True)
+        yield self._event(PipelineEventType.AGENT_DONE, "synthesiser", "Technical and Research reports successfully synthesized.")
+        
+        yield self._event(PipelineEventType.PIPELINE_DONE, "output", final_dual_report)
 
     async def _emit_heartbeat(self, agent_id: str):
         """Sends a periodic signal to console to show active thinking."""
