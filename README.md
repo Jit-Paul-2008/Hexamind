@@ -8,14 +8,7 @@
 
 ---
 
-## 1. Visualizing the Industrial Reasoning Core
-
-![The Aurora Core Concept](/home/Jit-Paul-2008/.gemini/antigravity/brain/06e26c3d-9c65-4a52-b822-1c3b84d8170a/aurora_core_concept_1775674936660.png)
-*Figure 1: Conceptual representation of the Aurora Reasoning Core. The central "Asymmetric Distillation" hub (ADD) manages high-bandwidth data synapses connecting specialized expert nodes.*
-
----
-
-## 2. Theoretical Framework: ADD Optimization
+## 1. Theoretical Framework: ADD Optimization
 
 The core efficiency of Aurora is derived from shifting the computational load from high-latency autoregressive generation to low-latency speculative drafting. The system optimization is formally defined as:
 
@@ -85,9 +78,6 @@ sequenceDiagram
     O->>S: Final Intelligence Assembly
     S-->>User: Dual Report
 ```
-
-![The Strategic Swarm](/home/Jit-Paul-2008/.gemini/antigravity/brain/06e26c3d-9c65-4a52-b822-1c3b84d8170a/strategic_swarm_expert_visualization_1775674953217.png)
-*Figure 2: The Strategic Swarm Visualization. Holographic expert nodes (Historian, Auditor, Analyst) projecting a unified global knowledge graph for real-time strategic synthesis.*
 
 ---
 
