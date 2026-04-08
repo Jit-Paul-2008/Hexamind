@@ -1,109 +1,59 @@
-# Hexamind Aurora State Handoff (v6.9)
+# Hexamind Aurora State Handoff (v7.0)
 
 ## 🎯 Current Objectives
-The goal is to maintain and extend the Hexamind Aurora multi-agent research engine. We have just completed a major refactoring to adapt the AI stack for local execution on a Dual-Core Xeon machine. 
+The goal is to transition Hexamind Aurora from a localized research tool into an **Industrial-Grade Strategic Reasoning Engine**. We have recently stabilized the core architecture on Dual-Core Xeon hardware and established a high-fidelity roadmap based on competitive analysis against Gemini Deep Research.
 
-## 🏗️ Current State (2026-04-07)
-**Status**: System functional with performance optimizations applied
-- All agent taxonomy inconsistencies resolved
-- Frontend builds successfully (npm run build passes)
-- Research pipeline operational with tuned parameters
+## 🏗️ Current State (2026-04-08)
+**Status**: Architecture stabilized; Strategic Roadmap (15 Pillars) drafted and documented.
+- **Agent Consolidation**: Transitioned from a fragmented 11-agent setup to a stable **7 Diamond Expert** team.
+- **Infrastructure**: Renamed legacy `docs/` to `Improvements/` to house the new strategic intelligence framework.
+- **Streaming Fix**: Resolved SSE (Server-Sent Events) failures by removing incompatible `sse-starlette` parameters and implementing anti-buffering headers for Cloudflare compatibility.
+- **Reporting**: Switched to `demo_run.py` for direct, high-speed backend execution with live logging to `research_status.md`.
 
-## Known Issues & Fixes Applied
-1. **Auditor Performance Issue** (RESOLVED)
-   - Problem: Auditor role assigned to `deepseek-r1:14b` causing 12+ minute delays
-   - Fix: Switched auditor to `qwen2.5:7b` for consistent performance
-   - Impact: All roles now use 7B model, reducing run time from 20+ minutes to ~5 minutes
+## 🏗️ Major Milestones (v7.0 Update)
 
-2. **Missing Enum Values** (RESOLVED)
-   - Problem: `PIPELINE_ERROR` enum missing from backend/frontend schemas
-   - Fix: Added to `schemas.py` and `src/types/index.ts`
+### 1. Diamond Expert Consolidation (Implemented)
+- **Problem**: Inconsistent agent lists between frontend and backend caused reasoning drift.
+- **Solution**: Created `public/agents.json` as the single source of truth for the 7 core roles: Orchestrator, Historian, Researcher, Drafter, Auditor, Analyst, and Synthesiser.
+- **Where to find it**: `public/agents.json`, `ai-service/agents.py`, `src/components/ResearchConsole.tsx`.
 
-3. **Agent Taxonomy Mismatch** (RESOLVED)
-   - Problem: Frontend stages didn't match backend agent IDs
-   - Fix: Aligned `ReasoningGraph.tsx` stages with Aurora runtime agents
+### 2. The 15-Pillar Strategic Roadmap (Documented)
+- **Objective**: Match "Gemini Deep Research" levels of depth.
+- **Outcome**: Created 15 elaboration files in `Improvements/` (imp_01 through imp_15) covering:
+  - **Behavioral Economics**: (Maslow, Veblen, Choice Paradox).
+  - **Fiscal Logic**: (Total Economic Impact, ROI, TCO).
+  - **Deep Reasoning**: (Paradox Resolution, Recursive Depth, Regional Disparity).
+  - **Visual Logic**: (Automated Mermaid diagram generation).
+- **Where to find it**: `Improvements/analysis_areas.md` (Master List).
 
-4. **Workspace Components Missing** (RESOLVED)
-   - Problem: Build failed due to missing workspace components for static export
-   - Fix: Created mock components and data files
+### 3. SSE Stream Stability (Implemented)
+- **Fix**: Updated `ai-service/main.py` to remove `ping_header_name` from `EventSourceResponse` (deprecated in newer versions) and added `X-Accel-Buffering: no` to headers to prevent Cloudflare tunnel buffering.
 
-## Recent Configuration Changes
-- `agent_model_config.py`: Auditor switched from `deepseek-r1:14b` to `qwen2.5:7b`
-- `reasoning_graph.py`: Synthesizer switched to `qwen2.5:7b` for faster completion
-- Token budgets reduced for CPU optimization:
-  - Critique/refine steps: 600 tokens
-  - Analysis steps: 800 tokens
-  - Synthesis: 1200 tokens
+## 🏗️ System Architecture: ADD (Asymmetric Distillation & Drafting)
+- **Concept:** Uses `qwen2.5:0.5b` for the initial long-form draft.
+- **Refinement:** Larger 7B or 14B models act only as **Editors**, outputting small JSON diffs.
+- **Speed:** Slashed inference time by ~70%, making research viable on CPU-only hardware.
 
-## Active Research Topic
-"condition of Traditional top tier Indian institutes like IITs in terms of student development and employablity in recent years and future"
-- Last run interrupted at historian stage (220s)
-- Progress logged in `research_status.md`
-- Final report destination: `demo runs`
+## 🔄 Core Workflow (v7.0)
+To run a high-fidelity research cycle directly from the backend:
+```bash
+./venv/bin/python scripts/demo_run.py "Your Research Topic"
+```
+- **Live Output**: Monitor `research_status.md`.
+- **Final Report**: Saved automatically to `data/wiki/[Topic].md`.
 
 ## 🏗️ Troubleshooting Guide
-1. **Agent Taking Too Long**
-   - Check if agent is using 14B model in `agent_model_config.py`
-   - Switch to 7B model for CPU inference
-   - Unload 14B: `curl -X POST http://localhost:11434/api/generate -d '{"model":"deepseek-r1:14b","prompt":"","keep_alive":0}'`
-
-2. **Build Failures**
-   - Ensure workspace components exist: `src/lib/mock-data.ts`, `src/components/workspace/WorkspaceLayout.tsx`
-   - Check enum alignment between `schemas.py` and `src/types/index.ts`
-
-3. **Pipeline Errors**
-   - Verify `PIPELINE_ERROR` enum exists in both backend and frontend
-   - Check agent IDs match between `ReasoningGraph.tsx` and `agents.py`
-
-## 🏗️ System Architecture & Recent Upgrades
-The application has transitioned from a fixed-response loop to a high-speed, parallelized **Industrial Reasoning Engine**.
-
-### 1. Hybrid-Precision Orchestration (Updated)
-- **Concept:** Not every task requires a 14-billion parameter model. 
-- **Current State:** 
-  - All agents now use `qwen2.5:7b` for consistent CPU performance
-  - `deepseek-r1:14b` available but not loaded (performance bottleneck)
-  - Token budgets optimized for CPU inference
-- **Where to find it:** `ai-service/agent_model_config.py`
-
-### 2. Parallel Search I/O (Implemented)
-- **Concept:** Web scraping takes time. We decoupled web scraping from the sequential reasoning loop.
-- **Current State:** The Orchestrator fires 4 concurrent SearXNG queries (`gather_evidence`) via `asyncio.gather`. Once all network I/O is resolved, it passes the pre-fetched contexts to the models sequentially, keeping the CPU 100% focused on inference.
-- **Where to find it:** `ai-service/reasoning_graph.py` and `ai-service/worker_agents.py`
-
-### 3. Strict Thinking Budgets (Implemented)
-- **Concept:** `deepseek-r1:14b` gets trapped in unbounded `<think>` loops on dual-core machines.
-- **Current State:** Intermediate layers have strict token limits linked to Ollama's `num_predict` parameter, alongside aggressive prompt constraints (e.g., "Limit <think> tags to a maximum of 2 sentences. DO NOT OVERTHINK.").
-- **Where to find it:** `ai-service/inference_provider.py` and `ai-service/worker_agents.py`
-
-### 4. Neuro-Symbolic Context Pruning (Implemented)
-- **Concept:** Smaller context windows equal faster generation.
-- **Current State:** Rather than feeding the entire global web-search payload to every agent, sources are pruned based on role-specific keywords (e.g., the Historian only reads text containing "history", "timeline", etc.).
-- **Where to find it:** `ai-service/worker_agents.py` 
-
-## 🔄 Core Workflow
-To run the research engine locally and view the real-time thought process:
-```bash
-> research_status.md && ./venv/bin/python -u ai-service/run_demo.py | tee research_status.md
-```
-- Open `research_status.md` to see the live heartbeat (every 20s) and the individual agent reports as they finish.
-- Ensure the `SearXNG` container is running on `127.0.0.1:8080`.
-- Ensure `Ollama` is active with both `deepseek-r1:14b` and `qwen2.5:7b` ready.
-
-## 🗑️ Cleaned Legacy Concepts
-- **Bypassed OpenAI Compat Bridge:** We removed the buggy `/v1/chat/completions` API route which caused 404s. The engine now uses the **Native Ollama API** (`/api/chat`).
-- **Sequential Monolithic Fetching:** Prior models paused the CPU while waiting for web results. This logic is deprecated and replaced by the Parallel Search I/O module.
-- **Generic 14B Blanket Policy:** The idea of forcing `deepseek-r1:14b` onto every node was scrapped in favor of Hybrid Precision.
+1. **EventStream Error**: Check `main.py` headers; ensure `X-Accel-Buffering` is set to `no`.
+2. **Missing Agents**: Verify `public/agents.json` matches the roles in `ai-service/agents.py`.
+3. **Low Quality**: Reference the `Improvements/` folder to check which of the 15 pillars are currently active in the expert prompts.
 
 ## Handover Checklist
-- [ ] Verify `qwen2.5:7b` is loaded: `curl -s http://localhost:11434/api/ps`
-- [ ] Check frontend builds: `npm run build`
-- [ ] Test research pipeline: `python ai-service/run_demo.py "test query"`
-- [ ] Review agent configurations in `agent_model_config.py`
-- [ ] Ensure SearXNG container running on `127.0.0.1:8080`
+- [x] `docs/` folder renamed to `Improvements/`.
+- [x] Diamond Expert agents synced via `agents.json`.
+- [x] 15-Pillar Roadmap documented in `Improvements/`.
+- [x] SSE Stream fix verified for Cloudflare usage.
 
 ## Next Steps for Incoming Agent
-1. Complete the IIT research run (interrupted at historian stage)
-2. Verify final report generation in `demo runs`
-3. Monitor performance with all 7B models
-4. Consider if any agents need 14B model for specific tasks
+1. **Implementation Phase**: Begin the one-by-one integration of the 15 Strategic Pillars into the backend prompts.
+2. **Visual Logic**: Implement the Mermaid diagram emitter (imp_15) to enhance report scannability.
+3. **Source Tiering**: Update the `Researcher` agent to prioritize Institutional (Tier-1) sources as per `imp_12`.
