@@ -285,12 +285,17 @@ class PipelineService:
             async with self._stream_semaphore:
                 self._active_streams += 1
                 try:
-                    async for event in graph.run():
-                        yield event
+                    async for sse_message in graph.run():
+                        yield sse_message
+
+                        payload_raw = sse_message.get("data", "") if isinstance(sse_message, dict) else ""
+                        if not payload_raw:
+                            continue
+
+                        data = PipelineEvent.model_validate_json(payload_raw)
                         
                         # Store the final report when the pipeline finishes
-                        if event["event"] == PipelineEventType.PIPELINE_DONE.value:
-                            data = PipelineEvent.model_validate_json(event["data"])
+                        if data.type == PipelineEventType.PIPELINE_DONE:
                             self._final_reports[session_id] = data.fullContent
                             
                             # Generate a simplified quality report for the new engine

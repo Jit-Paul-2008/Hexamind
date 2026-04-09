@@ -96,6 +96,11 @@ Experience absolute control over the research trajectory. Before any compute is 
 - **Hot-Editing**: Add, remove, or redefine experts via CLI commands (`add`, `edit`, `remove`).
 - **Confirmation Gate**: Research only begins when the user triggers the final "Begin" signal.
 
+### Runtime API Config (Deployment)
+- Canonical frontend runtime config path: `/Hexamind/config.json`.
+- Legacy fallback path `/config.json` is still read for compatibility, but should mirror canonical values.
+- For fully local live deployments, set `apiUrl` to `http://localhost:8000`.
+
 ---
 
 ## 5. The 15-Pillar Strategic Logic

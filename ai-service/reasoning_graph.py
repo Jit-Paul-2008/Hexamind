@@ -57,14 +57,14 @@ class AuroraGraph:
         self.researcher = InternetResearcher()
         self.initial_draft: str = ""
 
-    def _event(self, event_type: PipelineEventType, agent_id: str, content: str = "") -> str:
-        """Helper to format SSE events."""
-        event_obj = {
-            "type": event_type.value,
-            "agentId": agent_id,
-            "fullContent": content
-        }
-        return json.dumps({"data": json.dumps(event_obj)})
+    def _event(self, event_type: PipelineEventType, agent_id: str, content: str = "") -> dict[str, str]:
+        """Return a standard SSE message event with typed JSON payload."""
+        event_obj = PipelineEvent(
+            type=event_type,
+            agentId=agent_id,
+            fullContent=content,
+        )
+        return {"data": event_obj.model_dump_json()}
 
     async def generate_proposal(self) -> List[TaxonomyNode]:
         """Generate a proposed research plan for external review."""
@@ -104,7 +104,7 @@ class AuroraGraph:
                 # Structure Guard: Ensure minimum fields exist
                 node_id = node_data.get("id", f"node_{random.randint(1000, 9999)}")
                 topic = node_data.get("topic", "Target Investigation")
-                role = node_data.get("role", "researcher")
+                role = str(node_data.get("role", "researcher")).strip().lower()
                 
                 # Sanitize roles to allowed set
                 allowed_roles = {"researcher", "historian", "auditor", "analyst"}
@@ -125,19 +125,32 @@ class AuroraGraph:
 
             root_node = parse_recursive(task_data)
             
-            # Taxonomy Pruning: Deduplicate identical topics in siblings and ancestry
-            def prune_duplicate_nodes(node: TaxonomyNode, seen_topics: set):
+            # Taxonomy Pruning: remove exact sibling duplicates and only prune ancestry duplicates
+            # when both topic and role repeat (preserves multi-lens analysis quality).
+            def _norm_topic(topic: str) -> str:
+                return re.sub(r"\s+", " ", topic.strip().lower())
+
+            def prune_duplicate_nodes(node: TaxonomyNode, ancestry_signatures: set[tuple[str, str]]):
+                sibling_signatures: set[tuple[str, str]] = set()
                 unique_children = []
                 for child in node.children:
-                    topic_lower = child.topic.lower().strip()
-                    # Check if topic is redundant with current lineage or already in this siblings list
-                    if topic_lower not in seen_topics:
-                        unique_children.append(child)
-                        # Descend with updated seen set
-                        prune_duplicate_nodes(child, seen_topics | {topic_lower})
+                    signature = (_norm_topic(child.topic), child.role.strip().lower())
+
+                    # Hard dedupe exact sibling repeats.
+                    if signature in sibling_signatures:
+                        continue
+                    sibling_signatures.add(signature)
+
+                    # Selective ancestry dedupe: remove only if topic+role already occurred in lineage.
+                    if signature in ancestry_signatures:
+                        continue
+
+                    unique_children.append(child)
+                    prune_duplicate_nodes(child, ancestry_signatures | {signature})
                 node.children = unique_children
 
-            prune_duplicate_nodes(root_node, {root_node.topic.lower().strip()})
+            root_signature = (_norm_topic(root_node.topic), root_node.role.strip().lower())
+            prune_duplicate_nodes(root_node, {root_signature})
             self.task_tree = [root_node]
             logger.info("Taxonomic Architecture initialized and pruned.")
             return True
@@ -207,7 +220,7 @@ class AuroraGraph:
         update_research_status("🏗️  Final Synthesis: Compiling Sequential Taxonomy into Strategic Report...")
         def compile_report(node: TaxonomyNode, indent_level: int = 1) -> str:
             # Clean node analysis of any existing headers that might cause level explosions
-            clean_analysis = re.sub(r'^#+\s+', '', node.analysis, flags=re.MULTILINE).strip()
+            clean_analysis = re.sub(r'^#+\s+', '', node.analysis or "", flags=re.MULTILINE).strip()
             hashes = "#" * (indent_level + 1)
             report_segment = f"{hashes} {node.topic}\n\n{clean_analysis}\n\n"
             for child in node.children:

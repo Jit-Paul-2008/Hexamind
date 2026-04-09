@@ -1,8 +1,24 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PipelineEvent, PipelineEventType, TaxonomyNode } from '@/types';
 import ReportPlanner from './ReportPlanner';
+
+interface RuntimeConfig {
+  apiUrl?: string;
+}
+
+interface AgentDescriptor {
+  id: string;
+  name: string;
+}
+
+const toErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+};
 
 // List of available agents in the Aurora pipeline
 // List of core agents in the Aurora Diamond pipeline
@@ -25,21 +41,26 @@ export default function ResearchConsole() {
   useEffect(() => {
     const discoverApi = async () => {
       try {
-        // 1. Discover API Endpoint
-        const configRes = await fetch('/Hexamind/config.json');
-        if (configRes.ok) {
-          const cfg = await configRes.json();
+        // 1. Discover API Endpoint from canonical path, then legacy fallback.
+        const configPaths = ['/Hexamind/config.json', '/config.json'];
+        for (const path of configPaths) {
+          const configRes = await fetch(path);
+          if (!configRes.ok) {
+            continue;
+          }
+          const cfg = (await configRes.json()) as RuntimeConfig;
           if (cfg.apiUrl) {
-            console.log("🛰️ Aurora API Discovered:", cfg.apiUrl);
+            console.log("🛰️ Aurora API Discovered:", cfg.apiUrl, `(${path})`);
             setApiBase(cfg.apiUrl);
+            break;
           }
         }
         
         // 2. Discover Agent Roles (Singular Source of Truth)
         const agentRes = await fetch('/Hexamind/agents.json');
         if (agentRes.ok) {
-          const agentData = await agentRes.json();
-          setAgents(agentData.map((a: any) => ({ id: a.id, name: a.name })));
+          const agentData = (await agentRes.json()) as AgentDescriptor[];
+          setAgents(agentData.map((a) => ({ id: a.id, name: a.name })));
         }
       } catch (e) {
         console.warn("Discovery failed, using defaults:", e);
@@ -78,8 +99,8 @@ export default function ResearchConsole() {
       if (!res.ok) throw new Error('Failed to generate research plan.');
       const data = await res.json();
       setProposedTaxonomy(data.taxonomy);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(toErrorMessage(err));
       setStatus('error');
     }
   };
@@ -113,11 +134,11 @@ export default function ResearchConsole() {
 
       eventSource.onmessage = (event) => {
         try {
-          const parsed = JSON.parse(event.data);
-          const data = JSON.parse(parsed.data) as PipelineEvent;
+          const data = JSON.parse(event.data) as PipelineEvent;
+          const eventType = data.type;
           const agentId = data.agentId || 'orchestrator';
 
-          if (parsed.event === PipelineEventType.AGENT_START) {
+          if (eventType === PipelineEventType.AGENT_START) {
             setActiveAgentId(agentId);
           }
 
@@ -129,14 +150,14 @@ export default function ResearchConsole() {
             }));
           }
 
-          if (parsed.event === PipelineEventType.PIPELINE_DONE) {
+          if (eventType === PipelineEventType.PIPELINE_DONE) {
             setFinalReport(data.fullContent || '');
             setStatus('completed');
             setActiveAgentId(null);
             eventSource.close();
           }
 
-          if (parsed.event === PipelineEventType.PIPELINE_ERROR) {
+          if (eventType === PipelineEventType.PIPELINE_ERROR || eventType === PipelineEventType.ERROR) {
             setError(data.error || 'Research interrupted.');
             setStatus('error');
             setActiveAgentId(null);
@@ -152,8 +173,8 @@ export default function ResearchConsole() {
         setStatus('error');
         eventSource.close();
       };
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(toErrorMessage(err));
       setStatus('error');
     }
   };
@@ -180,7 +201,7 @@ export default function ResearchConsole() {
             ) : (
               <button 
                 onClick={proposePlan}
-                disabled={!query.trim() || status === 'researching' || status === 'planning'}
+                disabled={!query.trim() || status === 'planning'}
                 className="bg-[#1D1D1F] text-white text-[12px] font-bold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-30 transition-all uppercase tracking-wider"
               >
                 Start
@@ -196,7 +217,7 @@ export default function ResearchConsole() {
            {/* Background connecting line */}
            <div className="absolute top-1/2 left-20 right-20 h-[0.5px] bg-[#E5E5E7] -z-10"></div>
            
-           {agents.map((agent, i) => {
+           {agents.map((agent) => {
              const isActive = activeAgentId === agent.id;
              const isDone = !!agentLogs[agent.id] && !isActive && status !== 'idle';
              return (

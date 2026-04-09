@@ -1,11 +1,32 @@
 import React from 'react';
 import {
-  LineChart, Line, BarChart, Bar, AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  BarChart, Bar, AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 
+type ChartDatum = Record<string, string | number>;
+
+interface ChartDataPayload {
+  title?: string;
+  chartType?: 'radar' | 'bar' | 'area';
+  xAxis?: string;
+  data: ChartDatum[];
+}
+
 interface ChartProps {
-  data: any;
+  data: ChartDataPayload;
+}
+
+interface TooltipEntry {
+  color: string;
+  name: string;
+  value: string | number;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipEntry[];
+  label?: string | number;
 }
 
 export default function DynamicChart({ data }: ChartProps) {
@@ -19,16 +40,16 @@ export default function DynamicChart({ data }: ChartProps) {
   // Choose chart based on requested type, default to area for "Supercomputer" feel
   const chartType = data.chartType || 'area';
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-slate-900/80 backdrop-blur-md border border-white/10 p-4 rounded-xl shadow-2xl">
           <p className="text-slate-300 font-bold mb-2">{`${label}`}</p>
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry, index: number) => (
             <div key={index} className="flex items-center space-x-2 text-sm my-1">
               <span className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></span>
               <span className="text-slate-200">{entry.name}:</span>
-              <span className="font-mono text-white font-semibold">{entry.value.toLocaleString()}</span>
+              <span className="font-mono text-white font-semibold">{String(entry.value)}</span>
             </div>
           ))}
         </div>

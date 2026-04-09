@@ -12,7 +12,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:frontend": "vitest run tests/unit/pipelineClient.test.ts",
-    "test:backend": "python3 -m unittest discover -s ai-service/tests -p 'test_*.py'",
+    "test:backend": "HEXAMIND_WEB_RESEARCH=0 ./venv/bin/python -m unittest discover -s ai-service/tests -p 'test_*.py'",
     "test:e2e": "node --test tests/e2e/pipeline_contract.test.mjs",
     "bench:run": "python3 scripts/run_benchmarks.py --suite extended",
     "bench:competitive": "./.venv/bin/python scripts/run_competitive_research.py --global-baselines --limit 20",
