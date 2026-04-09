@@ -37,7 +37,6 @@ class HuggingFaceInferenceProvider:
         self.available = bool(self.api_key)
         self.timeout_seconds = timeout_seconds
         self.base_url = "https://api-inference.huggingface.co/models"
-        self._request_cache: dict[str, str] = {}  # Simple cache for identical requests
     
     async def generate(
         self,

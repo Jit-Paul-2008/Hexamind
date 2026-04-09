@@ -53,7 +53,7 @@ class StudentOptimizer:
             "model_provider": "local_ollama",
             "search_provider": "duckduckgo", 
             "cache_strategy": "aggressive",
-            "batch_processing": False,
+            "batch_processing": True,  # Enable batch processing for resource efficiency
             "rate_limiting": {
                 "requests_per_minute": 5,
                 "requests_per_hour": 50,

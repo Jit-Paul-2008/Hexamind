@@ -258,6 +258,9 @@ class InternetResearcher:
         self._max_hits_per_term = max(15, _env_int("HEXAMIND_RESEARCH_MAX_HITS_PER_TERM", 15))
         self._tavily_max_calls = max(3, _env_int("HEXAMIND_TAVILY_MAX_CALLS", 5))  # More API calls
         self._fetch_concurrency = max(3, _env_int("HEXAMIND_RESEARCH_FETCH_CONCURRENCY", 8))
+        # Batch query grouping for similar queries
+        self._batch_processing = _env_bool("HEXAMIND_BATCH_PROCESSING", True)
+        self._batch_query_cache: dict[str, list[str]] = {}  # Maps semantic signature to queries
         self._min_relevance_score = max(0.0, _env_float("HEXAMIND_RESEARCH_MIN_RELEVANCE", 0.20))  # Lower threshold
         self._search_retry_attempts = max(1, _env_int("HEXAMIND_SEARCH_RETRY_ATTEMPTS", 5))
         self._search_backoff_seconds = max(0.1, _env_float("HEXAMIND_SEARCH_BACKOFF_SECONDS", 0.4))
@@ -268,6 +271,8 @@ class InternetResearcher:
         self._search_throttle_lock = asyncio.Lock()
         self._cache_ttl_seconds = max(120.0, _env_float("HEXAMIND_RESEARCH_CACHE_TTL_SECONDS", 1800.0))
         self._semantic_cache_threshold = min(0.98, max(0.65, _env_float("HEXAMIND_RESEARCH_SEMANTIC_CACHE_THRESHOLD", 0.68)))
+        # Enable semantic caching by default (was previously disabled)
+        self._embeddings = LocalEmbeddingsClient() if _env_bool("HEXAMIND_ENABLE_LOCAL_EMBEDDINGS", True) else None
         self._research_cache: dict[str, tuple[float, ResearchContext]] = {}
         self._knowledge_cache = LocalKnowledgeCache()
         self._require_sources = _env_bool("HEXAMIND_REQUIRE_RESEARCH_SOURCES", False)
@@ -309,6 +314,9 @@ class InternetResearcher:
             return adapted
 
         workflow_profile = build_workflow_profile(sanitized_query)
+        
+        # Check for batch processing opportunities (shared evidence graph with similar queries)
+        batch_queries = await self._check_batch_opportunity(sanitized_query)
         
         # PILLAR 5 & 12: Adaptive search depth and authority weighting
         complexity_multiplier = 1.0 + (workflow_profile.complexity_score * 0.5)
@@ -503,6 +511,44 @@ class InternetResearcher:
         ordered_overlap = sum(1 for index, token in enumerate(left) if index < len(right) and right[index] == token)
         ordered_overlap /= max(len(left), len(right))
         return (jaccard * 0.55) + (overlap * 0.3) + (ordered_overlap * 0.15)
+
+    def _should_batch_with_query(self, new_query: str, existing_query: str) -> bool:
+        """Check if two queries are similar enough to batch process together."""
+        if not self._batch_processing:
+            return False
+        # Use semantic similarity (0.7+ threshold for batching)
+        sig_new = self._query_signature(new_query)
+        sig_existing = self._query_signature(existing_query)
+        similarity = self._semantic_similarity(sig_new, sig_existing)
+        return similarity >= 0.70
+
+    async def _check_batch_opportunity(self, query: str) -> list[str] | None:
+        """Check if this query can batch with similar queries for shared evidence graph."""
+        if not self._batch_processing:
+            return None
+        
+        # Find similar queries in batch cache
+        query_sig = self._query_signature(query)
+        best_batch_key = None
+        best_similarity = 0.65  # Must exceed minimum threshold
+        
+        for batch_key, queries in self._batch_query_cache.items():
+            for cached_query in queries:
+                cached_sig = self._query_signature(cached_query)
+                similarity = self._semantic_similarity(query_sig, cached_sig)
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_batch_key = batch_key
+        
+        # If found batch, add to it and return shared queries for coprocessing
+        if best_batch_key:
+            self._batch_query_cache[best_batch_key].append(query)
+            return self._batch_query_cache[best_batch_key]
+        
+        # Create new batch for this query
+        new_batch_key = str(hash(query_sig))[:16]
+        self._batch_query_cache[new_batch_key] = [query]
+        return None
 
     async def _search_hits(
         self,

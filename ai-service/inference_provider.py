@@ -11,10 +11,15 @@ def get_optimal_thread_count() -> int:
     """Detects CPU cores and returns a balanced thread count for Ollama."""
     try:
         cores = os.cpu_count() or 2
-        # Use 50% of cores, minimum 2
-        return max(2, cores // 2)
+        # Use 50% of cores for hyperthreading balance, allow down to 1 on single-core systems
+        optimal = max(1, cores // 2)
+        # On 2-core systems, use 1 thread to avoid context switch thrashing
+        if cores == 2:
+            return 1
+        # On 4+ core systems, use at least 2 threads
+        return max(2, optimal)
     except Exception:
-        return 2
+        return 1
 
 class InferenceProvider:
     """Unified interface for Local (Ollama) and Remote (GCP/OpenRouter) AI."""

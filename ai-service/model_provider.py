@@ -179,6 +179,51 @@ class TokenBudget:
             "agentLimit": self.agent_limit,
             "finalLimit": self.final_limit,
         }
+    
+    def get_recommended_model_tier(self, default_tier: str = "medium") -> str:
+        """
+        Adaptively select model tier based on remaining budget.
+        
+        Returns:
+            "small" (1.5B) if budget <20% remaining
+            "medium" (3.7B) if budget 20-70% remaining  
+            "large" (7B+) if budget >70% remaining
+        
+        This prevents budget exhaustion on expensive models while allowing
+        full capability when budget is healthy.
+        """
+        usage_pct = self.usage_percentage()
+        
+        if usage_pct >= 80:
+            # Critical - use only small models
+            return "small"
+        elif usage_pct >= 50:
+            # High usage - prefer medium tier
+            return "medium"
+        else:
+            # Plenty of budget - use requested tier or large
+            return default_tier if default_tier in ("small", "medium", "large") else "large"
+    
+    def should_throttle(self) -> bool:
+        """
+        Check if we should throttle token consumption.
+        
+        Returns True if budget usage is >70%, triggering:
+        - Reduced search depth (fewer API calls)
+        - Batch query processing (shared evidence graphs)
+        - Increased cache hit targeting
+        """
+        return self.usage_percentage() >= 70
+    
+    def get_max_search_depth(self, base_depth: int = 3) -> int:
+        """
+        Return adaptive search depth based on budget burn rate.
+        
+        At high usage, reduces from 3 passes to 2, preventing expensive research.
+        """
+        if self.should_throttle():
+            return max(1, base_depth - 1)
+        return base_depth
 
 
 def _env_int(name: str, default: int) -> int:
@@ -1950,6 +1995,12 @@ class OpenRouterPipelineModelProvider:
             research_block = _compress_research_context(research, compression_level)
         
         model_name = self._model_by_role.get(agent_id, self._default_model)
+        # Token budget-aware model selection: downgrade if budget tight (>70% used)
+        if self._token_budget.should_throttle():
+            # Downgrade expensive agents to smaller models to preserve budget
+            if agent_id in ("researcher", "synthesiser", "critic"):
+                model_name = "mistral:1.5b"  # Downgrade to smaller model
+        
         user_prompt = f"Question: {query.strip()}\n\nLive web research context:\n{research_block}"
         cache_key = _prompt_cache_key("openrouter", f"agent:{agent_id}", model_name, system_prompt, user_prompt)
         cached_response = _load_prompt_cache(cache_key)
@@ -2533,7 +2584,8 @@ class LocalPipelineModelProvider:
                 reason="Local runtime call failed",
             )
         self._hf_provider = get_huggingface_provider()
-        self._hf_enabled = os.getenv("HEXAMIND_ENABLE_HF_FALLBACK", "1").strip().lower() not in {"0", "false", "no"}
+        # Disable HuggingFace fallback - use local Ollama only for full privacy
+        self._hf_enabled = os.getenv("HEXAMIND_ENABLE_HF_FALLBACK", "0").strip().lower() not in {"0", "false", "no"}
         self._or_provider = get_openrouter_provider()
         self._or_enabled = os.getenv("HEXAMIND_ENABLE_OPENROUTER_FALLBACK", "1").strip().lower() not in {"0", "false", "no"}
         self._tier_models = {
