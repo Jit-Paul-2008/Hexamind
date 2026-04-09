@@ -11,13 +11,19 @@ from reasoning_graph import AuroraGraph, TaxonomyNode, NodeStatus
 from schemas import PipelineEventType
 
 def print_tree(nodes: List[TaxonomyNode], indent: str = "", flattened_map: List[TaxonomyNode] = None):
-    """Recursively print the taxonomy tree with indentation."""
+    """Recursive display of the strategic taxonomy."""
     for node in nodes:
         idx = len(flattened_map) + 1
         flattened_map.append(node)
-        print(f"{indent}[{idx}] {node.role.upper():12} | {node.topic}")
-        if node.children:
-            print_tree(node.children, indent + "    ", flattened_map)
+        
+        # Handle both TaxonomyNode objects and raw dict fallbacks
+        role = getattr(node, 'role', 'researcher') if not isinstance(node, dict) else node.get('role', 'researcher')
+        topic = getattr(node, 'topic', 'Unnamed Topic') if not isinstance(node, dict) else node.get('topic', 'Unnamed Topic')
+        children = getattr(node, 'children', []) if not isinstance(node, dict) else node.get('children', [])
+
+        print(f"{indent}[{idx}] {role.upper():12} | {topic}")
+        if children:
+            print_tree(children, indent + "    ", flattened_map)
 
 async def main():
     if len(sys.argv) < 2:
@@ -110,12 +116,18 @@ async def main():
     
     final_graph = AuroraGraph(query=query, task_tree=proposal_tree)
     
-    async for event_data in final_graph.run():
+    async for raw_event in final_graph.run():
         import json
-        evt = json.loads(event_data["data"])
-        e_type = evt["type"]
-        agent_id = evt["agentId"]
-        content = evt.get("fullContent", "")
+        # Since the graph yields SSE-style JSON strings
+        try:
+            full_event = json.loads(raw_event)
+            evt = json.loads(full_event["data"])
+            e_type = evt["type"]
+            agent_id = evt["agentId"]
+            content = evt.get("fullContent", "")
+        except Exception as e:
+            print(f"⚠️  Parsing error: {e}")
+            continue
 
         if e_type == "agent_start":
             print(f"🧠 [{agent_id.upper()}] starting...")

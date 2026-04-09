@@ -15,6 +15,12 @@ from schemas import PipelineEvent, PipelineEventType
 
 logger = logging.getLogger(__name__)
 
+def update_research_status(content: str, mode: str = "a"):
+    """Helper to maintain the live dashboard."""
+    status_path = Path(__file__).resolve().parent.parent / "research_status.md"
+    with open(status_path, mode, encoding="utf-8") as f:
+        f.write(content + "\n")
+
 class NodeStatus(Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -115,23 +121,28 @@ class AuroraGraph:
         logger.info(f"Starting Aurora v8.5+ Sequential Discovery for: {self.query}")
         
         # 1. PLAN
+        update_research_status(f"🚀 [AURORA v8.5] Initiating Sequential Discovery...\nTarget: {self.query}\n{'-'*50}\n", mode="w")
         yield self._event(PipelineEventType.AGENT_START, "orchestrator")
         if not self.task_tree:
             await self._plan_phase()
+        update_research_status(f"✅ Taxonomy Optimized. {len(self.task_tree)} Root Chapters established.\n")
         yield self._event(PipelineEventType.AGENT_DONE, "orchestrator", "Taxonomy constructed.")
 
         # 2. GLOBAL BASELINE
         print("🌍 Establishing Global Baseline Anchors...", flush=True)
+        update_research_status("🌍 Establishing Global Baseline Anchors...")
         baseline_worker = ResearchWorker("researcher")
         baseline_context = await baseline_worker.gather_evidence(self.query)
         distiller = DistillationWorker()
         distilled_facts = await distiller.distill("Global Overview", [s.snippet for s in baseline_context.sources[:15]])
         anchor_worker = AnchorWorker()
         global_anchors = await anchor_worker.extract(self.query, distilled_facts)
+        update_research_status(f"⚓ Synthesized {len(global_anchors)} Global Context Anchors.\n")
 
         # 3. RECURSIVE DISCOVERY
         async def execute_node_recursive(node: TaxonomyNode, parent_analysis: str = ""):
             print(f"🔍 [DISCOVERY] Entering: {node.topic}", flush=True)
+            update_research_status(f"🔍 [DISCOVERY] Investigating: {node.topic} ({node.role.upper()})...")
             yield self._event(PipelineEventType.AGENT_START, node.id)
             
             agent_config = get_agent_model_config(node.role)
@@ -143,6 +154,8 @@ class AuroraGraph:
             
             node.analysis = result.get("analysis", "")
             node.status = NodeStatus.COMPLETED
+            
+            update_research_status(f"✅ Node Complete: {node.topic}\n📄 Summary: {node.analysis[:200]}...\n")
             yield self._event(PipelineEventType.AGENT_DONE, node.id, f"Completed: {node.topic}")
 
             for child in node.children:
@@ -155,6 +168,7 @@ class AuroraGraph:
 
         # 4. SYNTHESIS
         print("🏗️  Master Synthesis starting...", flush=True)
+        update_research_status("🏗️  Final Synthesis: Compiling Sequential Taxonomy into Strategic Report...")
         def compile_report(node: TaxonomyNode, indent_level: int = 1) -> str:
             hashes = "#" * (indent_level + 1)
             report_segment = f"{hashes} {node.topic}\n\n{node.analysis}\n\n"

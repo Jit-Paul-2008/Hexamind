@@ -32,7 +32,7 @@ AGENT_MODEL_SPECIALIZATION = {
     
     "synthesiser": AgentModelConfig(
         agent_id="synthesiser",
-        primary_ollama_model="deepseek-r1:14b",
+        primary_ollama_model="qwen2.5:0.5b",
         fallback_hf_model="tiiuae/falcon-7b-instruct",
         temperature=0.75,
         max_tokens=800,
@@ -69,7 +69,7 @@ AGENT_MODEL_SPECIALIZATION = {
 
     "drafter": AgentModelConfig(
         agent_id="drafter",
-        primary_ollama_model="qwen2.5:7b",
+        primary_ollama_model="qwen2.5:0.5b",
         fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
         temperature=0.4,
         max_tokens=2000,
@@ -78,7 +78,7 @@ AGENT_MODEL_SPECIALIZATION = {
 
     "orchestrator": AgentModelConfig(
         agent_id="orchestrator",
-        primary_ollama_model="qwen2.5:7b",
+        primary_ollama_model="qwen2.5:0.5b",
         fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
         temperature=0.5,
         max_tokens=200,
