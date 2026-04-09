@@ -351,20 +351,28 @@ def _normalize_anchor_payload(payload: Any) -> List[Dict[str, str]]:
                 continue
             anchor_id = str(item.get("id") or f"A{idx}").strip()
             normalized.append({"id": anchor_id, "fact": fact})
-            idx += 1
-            continue
-
-        # Graceful fallback for plain string items.
-        if isinstance(item, str):
-            fact = item.strip()
-            if fact:
-                normalized.append({"id": f"A{idx}", "fact": fact})
-                idx += 1
-
-    return normalized
-
-
-def _anchors_to_text(anchors: Any) -> str:
-    """Render anchors robustly regardless of source shape."""
-    safe_anchors = _normalize_anchor_payload(anchors)
-    return "\n".join([f"[{a['id']}] {a['fact']}" for a in safe_anchors])
+            try:
+                # Strip any markdown code blocks if the model included them
+                clean_output = re.sub(r"```json\s*|\s*```", "", raw_output.strip())
+                parsed = json.loads(clean_output)
+                if isinstance(parsed, dict):
+                    diffs = parsed.get("diffs", [])
+                    analysis_summary = parsed.get("rationale", "Corrections applied based on new evidence.")
+                else:
+                    diffs = parsed
+                    analysis_summary = f"Editorial pass completed by {self.role.capitalize()} persona."
+                # If auditor/editor and diffs is empty, set rationale to 'Analysis verified against anchors.'
+                if self.role == WorkerRole.AUDITOR and not diffs:
+                    analysis_summary = "Analysis verified against anchors."
+            except Exception:
+                logger.error(f"Worker [{self.role}] failed to produce valid JSON: {raw_output}")
+                # Fallback: if it's not JSON, treat it as the analysis summary itself if it has content
+                if len(raw_output.strip()) > 20:
+                    analysis_summary = raw_output.strip()
+            return {
+                "role": self.role,
+                "topic": topic,
+                "diffs": diffs,
+                "analysis": analysis_summary,
+                "sources": [s.url for s in research_context.sources[:3]]
+            }

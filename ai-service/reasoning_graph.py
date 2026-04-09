@@ -342,12 +342,21 @@ class AuroraGraph:
             words = [w.capitalize() for w in re.findall(r'\w+', q_clean)]
             return "_".join(words[:5]) or "General_Research"
 
+        # Only write to wiki if the output is not JSON (diffs array)
+        def is_probably_json(text: str) -> bool:
+            t = text.strip()
+            return t.startswith('{') or t.startswith('[')
+
         wiki_dir = Path(__file__).resolve().parent.parent / "data" / "wiki"
         wiki_dir.mkdir(parents=True, exist_ok=True)
         title = titleize(self.query)
         file_path = wiki_dir / f"{title}.md"
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(final_report)
-        print(f"💾 Report saved to: {file_path}", flush=True)
+        # Only write if not JSON
+        if not is_probably_json(final_report):
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(final_report)
+            print(f"💾 Report saved to: {file_path}", flush=True)
+        else:
+            print(f"⚠️  Skipped writing non-Markdown output to wiki: {file_path}", flush=True)
 
         yield self._event(PipelineEventType.PIPELINE_DONE, "output", final_report)

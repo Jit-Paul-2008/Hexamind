@@ -1,4 +1,49 @@
 🚀 [AURORA v8.5] Initiating Sequential Discovery...
-Target: Why do some batteries degrade faster in EV fleets?
+Target: What are the claimed reasons for U.S. involvement in the Iran-Israel conflict?
 --------------------------------------------------
 
+✅ Taxonomy Optimized. 6 Root Chapters established.
+
+🌍 Establishing Global Baseline Anchors...
+⚓ Synthesized 13 Global Context Anchors.
+
+🔍 [DISCOVERY] Investigating: Scope and framing of What are the claimed reasons for U.S. involvement in the Iran-Israel conflict? (RESEARCHER)...
+✅ Node Complete: Scope and framing of What are the claimed reasons for U.S. involvement in the Iran-Israel conflict?
+📄 Summary: ```json
+{
+  "diffs": [
+    {
+      "original_text_snippet": "Scope and framing of What are the claimed reasons for U.S. involvement in the Iran-Israel conflict?",
+      "replacement_text": "Current ev...
+
+🔍 [DISCOVERY] Investigating: Current evidence and landscape for What are the claimed reasons for U.S. involvement in the Iran-Israel conflict? (RESEARCHER)...
+✅ Node Complete: Current evidence and landscape for What are the claimed reasons for U.S. involvement in the Iran-Israel conflict?
+📄 Summary: The new evidence shifts the narrative by providing a broader historical and policy context, allowing for a more comprehensive understanding of why the United States has been involved in the Iran-Israe...
+
+🔍 [DISCOVERY] Investigating: Historical and policy context for What are the claimed reasons for U.S. involvement in the Iran-Israel conflict? (HISTORIAN)...
+✅ Node Complete: Historical and policy context for What are the claimed reasons for U.S. involvement in the Iran-Israel conflict?
+📄 Summary: The new evidence shifts the focus from a generational shift to broader historical and policy contexts, providing a more comprehensive understanding of why the United States has been involved in the Ir...
+
+🔍 [DISCOVERY] Investigating: Key dimensions and subtopics in What are the claimed reasons for U.S. involvement in the Iran-Israel conflict? (RESEARCHER)...
+✅ Node Complete: Key dimensions and subtopics in What are the claimed reasons for U.S. involvement in the Iran-Israel conflict?
+📄 Summary: ```json
+{
+  "diffs": [
+    {
+      "original_text_snippet": "Current evidence and landscape for What are the claimed reasons for U.S. involvement in the Iran-Israel conflict?",
+      "replacement_text...
+
+🔍 [DISCOVERY] Investigating: Constraints and risks in What are the claimed reasons for U.S. involvement in the Iran-Israel conflict? (AUDITOR)...
+✅ Node Complete: Constraints and risks in What are the claimed reasons for U.S. involvement in the Iran-Israel conflict?
+📄 Summary: The draft does not present any claim that contradicts the provided Anchors or Parent Context....
+
+🔍 [DISCOVERY] Investigating: Implementation pathways for What are the claimed reasons for U.S. involvement in the Iran-Israel conflict? (ANALYST)...
+✅ Node Complete: Implementation pathways for What are the claimed reasons for U.S. involvement in the Iran-Israel conflict?
+📄 Summary: ```json
+{
+  "diffs": [
+    {
+      "original_text_snippet": "A systematic review of experimentally tested implementation strategies...",
+      "replacement_text": "...: Conclusion, review, 129, method...
+
+🏗️  Final Synthesis: Compiling Sequential Taxonomy into Strategic Report...
