@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { PipelineEvent, PipelineEventType } from '@/types';
+import { PipelineEvent, PipelineEventType, TaxonomyNode } from '@/types';
+import ReportPlanner from './ReportPlanner';
 
 // List of available agents in the Aurora pipeline
 // List of core agents in the Aurora Diamond pipeline
@@ -46,11 +47,12 @@ export default function ResearchConsole() {
     };
     discoverApi();
   }, []);
-  const [status, setStatus] = useState<'idle' | 'researching' | 'completed' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'planning' | 'researching' | 'completed' | 'error'>('idle');
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [agentLogs, setAgentLogs] = useState<Record<string, string[]>>({});
   const [finalReport, setFinalReport] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [proposedTaxonomy, setProposedTaxonomy] = useState<TaxonomyNode[] | null>(null);
 
   // Auto-scroll logic for terminal streams
   const logRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -61,7 +63,28 @@ export default function ResearchConsole() {
     });
   }, [agentLogs]);
 
-  const startResearch = async () => {
+  const proposePlan = async () => {
+    if (!query.trim()) return;
+    setStatus('planning');
+    setError(null);
+    setProposedTaxonomy(null);
+
+    try {
+      const res = await fetch(`${apiBase}/api/pipeline/propose`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      });
+      if (!res.ok) throw new Error('Failed to generate research plan.');
+      const data = await res.json();
+      setProposedTaxonomy(data.taxonomy);
+    } catch (err: any) {
+      setError(err.message);
+      setStatus('error');
+    }
+  };
+
+  const startResearch = async (customTaxonomy?: TaxonomyNode[]) => {
     if (!query.trim()) return;
 
     // Reset local state
@@ -75,7 +98,12 @@ export default function ResearchConsole() {
       const startRes = await fetch(`${apiBase}/api/pipeline/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, agaMode: false, mathMode: false }),
+        body: JSON.stringify({ 
+          query, 
+          agaMode: false, 
+          mathMode: false,
+          taxonomy: customTaxonomy
+        }),
       });
 
       if (!startRes.ok) throw new Error(`Failed to start pipeline: ${startRes.statusText}`);
@@ -141,18 +169,18 @@ export default function ResearchConsole() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && startResearch()}
+            onKeyDown={(e) => e.key === 'Enter' && proposePlan()}
             placeholder="Describe your research inquiry..."
-            disabled={status === 'researching'}
+            disabled={status !== 'idle' && status !== 'error'}
             className="mac-input w-full py-4 px-6 text-lg outline-none font-medium placeholder:font-light"
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
-            {status === 'researching' ? (
+            {status === 'researching' || (status === 'planning' && !proposedTaxonomy) ? (
               <div className="busy-indicator"></div>
             ) : (
               <button 
-                onClick={startResearch}
-                disabled={!query.trim()}
+                onClick={proposePlan}
+                disabled={!query.trim() || status === 'researching' || status === 'planning'}
                 className="bg-[#1D1D1F] text-white text-[12px] font-bold px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-30 transition-all uppercase tracking-wider"
               >
                 Start
@@ -226,6 +254,23 @@ export default function ResearchConsole() {
           <div className="py-20 flex flex-col items-center opacity-10">
             <h2 className="serif text-5xl mb-4 italic">Waiting to synthesize...</h2>
             <div className="h-0.5 w-12 bg-[#1D1D1F]"></div>
+          </div>
+        )}
+
+        {status === 'planning' && proposedTaxonomy && (
+          <div className="py-10">
+            <ReportPlanner 
+              initialTaxonomy={proposedTaxonomy} 
+              onConfirm={(finalTaxonomy) => startResearch(finalTaxonomy)}
+              onCancel={() => setStatus('idle')}
+            />
+          </div>
+        )}
+
+        {status === 'planning' && !proposedTaxonomy && (
+          <div className="py-20 flex flex-col items-center">
+            <div className="busy-indicator !w-8 !h-8 mb-6"></div>
+            <h2 className="serif text-2xl italic text-[#86868B]">Orchestrating Strategic Roadmap...</h2>
           </div>
         )}
 

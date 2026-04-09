@@ -171,9 +171,9 @@ def get_provider() -> InferenceProvider:
             api_key=os.getenv("HEXAMIND_CLOUD_API_KEY")
         )
     
-    # Primary: DeepSeek-R1 (14B) for high-fidelity Dual Xeon research
-    # We use 14B because the hardware is sufficient (42GB RAM).
-    preferred_model = os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "deepseek-r1:14b")
+    # Primary: DeepSeek-R1 (7B) for balanced Dual Xeon research
+    # Shifting from 14B to 7B to optimize for 2CPU throughput.
+    preferred_model = os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "deepseek-r1:7b")
     
     return InferenceProvider(model_name=preferred_model)
 

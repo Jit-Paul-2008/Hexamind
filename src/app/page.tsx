@@ -25,7 +25,7 @@ export default function Home() {
         <div className="flex items-center space-x-6 text-[#86868B] text-[10px] uppercase font-bold tracking-widest">
           <span>Ollama v0.5</span>
           <span className="w-1 h-1 rounded-full bg-[#D2D2D7]"></span>
-          <span>Dual-Core 14B Native</span>
+          <span>2CPU 1.5B-7B Tiered</span>
           <span className="w-1 h-1 rounded-full bg-[#D2D2D7]"></span>
           <span>Stateful Persistence</span>
         </div>

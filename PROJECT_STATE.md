@@ -15,11 +15,12 @@
 
 ## 3. Hardware / Deployment Profile
 - **Target OS**: Linux (Aria/Xeon optimized).
-- **Memory Profile**: 42GB ECC RAM threshold.
-- **Model Routing**: 
-  - Forager/Drafter: Qwen-0.5B / Llama-3-1B.
-  - Expert/Analyst: Qwen2.5-7B-Instruct / Llama-3.1-8B.
-  - Synthesiser: Qwen2.5-7B (High-context).
+- **Target CPU**: 2-Core Xeon (Throughput Optimized).
+- **Model Routing (v8.5 Tiered-Ready)**: 
+  - **Orchestrator (1.5B)**: [MANDATORY] Fast taxonomy roadmap generation.
+  - **Workers (1.5B)**: Historian, Auditor, Analyst (Fast extraction/critique).
+  - **Reasoning/Drafter (7B)**: Researcher, Synthesiser, Drafter (High-fidelity).
+- **Human-in-the-Loop**: Mandatory UI-based Taxonomy Mutation via **Report Planner**.
 
 ## 4. Documentation Hierarchy
 - `README.md`: Technical Whitepaper.
@@ -31,8 +32,8 @@
 ## 5. Session End (2026-04-09)
 - **Current Milestone**: Hierarchical Taxonomy v8.5 Stabilized.
 - **Achievements**: 
-  - Refactored Orchestrator for recursive depth execution.
-  - Implemented `TaxonomyNode` with nested JSON planning.
-  - Upgraded `run_interactive.py` with CLI tree visualization and branching.
-  - Implemented sequential tree-walk synthesis for high-fidelity reports.
+  - Successfully migrated from 14B models to a high-throughput 1.5B/7B **Tiered Model Architecture**.
+  - Integrated a mandatory **Interactive Report Planning** stage to prevent hallucinations.
+  - Built a premium **Report Planner** UI for hierarchical roadmap mutation (Branch/Prune/Edit).
+  - Optimized for **2CPU Xeon** hardware with zero-latency local Ollama inference.
 - **Next Potential Milestone**: Multi-Modal Evidence Foraging (v9.0).

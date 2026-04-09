@@ -73,7 +73,7 @@ export default function ReasoningGraph({ activeAgent, status }: ReasoningGraphPr
       {status === 'completed' && (
         <div className="pt-4 border-t border-white/10 text-center animate-in fade-in slide-in-from-top-2 duration-700">
           <p className="text-[10px] text-emerald-500 font-mono uppercase tracking-widest">
-            Reasoning Cycle Complete (14B Optimised)
+            Reasoning Cycle Complete (2CPU Tiered)
           </p>
         </div>
       )}

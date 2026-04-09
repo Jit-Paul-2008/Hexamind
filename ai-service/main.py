@@ -37,6 +37,9 @@ from schemas import (
     SarvamTransformResponse,
     StartPipelineRequest,
     StartPipelineResponse,
+    ProposePlanRequest,
+    ProposePlanResponse,
+    TaxonomyNodeSchema
 )
 
 
@@ -211,15 +214,43 @@ def get_agents() -> list[Agent]:
     ]
 
 
+@app.post("/api/pipeline/propose", response_model=ProposePlanResponse)
+async def propose_pipeline_plan(payload: ProposePlanRequest) -> ProposePlanResponse:
+    """Stage 1: Generate a proposed research taxonomy for user review."""
+    from reasoning_graph import AuroraGraph
+    graph = AuroraGraph(payload.query.strip())
+    taxonomy = await graph.generate_proposal()
+    
+    def node_to_schema(node) -> TaxonomyNodeSchema:
+        return TaxonomyNodeSchema(
+            id=node.id,
+            topic=node.topic,
+            role=node.role,
+            children=[node_to_schema(c) for c in node.children]
+        )
+    
+    return ProposePlanResponse(
+        query=payload.query,
+        taxonomy=[node_to_schema(n) for n in taxonomy]
+    )
+
+
 @app.post("/api/pipeline/start", response_model=StartPipelineResponse)
 def start_pipeline(payload: StartPipelineRequest, request: Request) -> StartPipelineResponse:
     tenant_id = getattr(request.state, "tenant_id", "default")
+    
+    # Convert taxonomy schema to dict list for storage
+    taxonomy_data = None
+    if payload.taxonomy:
+        taxonomy_data = [t.model_dump() for t in payload.taxonomy]
+
     session_id = pipeline_service.start(
         payload.query.strip(),
         tenant_id=tenant_id,
         report_length=payload.reportLength,
         aga_mode=payload.agaMode,
         math_mode=payload.mathMode,
+        taxonomy=taxonomy_data
     )
     return StartPipelineResponse(sessionId=session_id)
 
@@ -389,9 +420,9 @@ def _local_base_url() -> str:
 
 def _required_local_models() -> list[str]:
     required = [
-        os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", "deepseek-r1:14b").strip() or "deepseek-r1:14b",
-        os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", "deepseek-r1:14b").strip() or "deepseek-r1:14b",
-        os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "deepseek-r1:14b").strip() or "deepseek-r1:14b",
+        os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", "deepseek-r1:1.5b").strip() or "deepseek-r1:1.5b",
+        os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", "deepseek-r1:1.5b").strip() or "deepseek-r1:1.5b",
+        os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "deepseek-r1:7b").strip() or "deepseek-r1:7b",
     ]
     deduped: list[str] = []
     for model in required:

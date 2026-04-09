@@ -48,6 +48,7 @@ class PipelineSession:
     report_length: str = "moderate"
     aga_mode: bool = False
     math_mode: bool = False
+    taxonomy: list[dict] | None = None
 
 
 class PipelineService:
@@ -81,7 +82,7 @@ class PipelineService:
         self._retrieval_failures = 0
         self._retrieval_quality_sum = 0.0
 
-    def start(self, query: str, tenant_id: str = "default", report_length: str = "moderate", aga_mode: bool = False, math_mode: bool = False) -> str:
+    def start(self, query: str, tenant_id: str = "default", report_length: str = "moderate", aga_mode: bool = False, math_mode: bool = False, taxonomy: list[dict] | None = None) -> str:
         query = redact_pii(query.strip())
         tenant_id = tenant_id.strip() or "default"
         report_length = self._normalize_report_length(report_length)
@@ -94,6 +95,7 @@ class PipelineService:
             report_length=report_length,
             aga_mode=aga_mode,
             math_mode=math_mode,
+            taxonomy=taxonomy
         )
         self._save_sessions()
         return session_id
@@ -257,7 +259,26 @@ class PipelineService:
 
     async def stream_events(self, session_id: str, tenant_id: str | None = None):
         session = self._get_session(session_id, tenant_id)
-        graph = AuroraGraph(session.query, aga_mode=session.aga_mode, math_mode=session.math_mode)
+        
+        # Convert stored taxonomy (list of dicts) back to TaxonomyNode objects if present
+        task_tree = None
+        if session.taxonomy:
+            from reasoning_graph import TaxonomyNode, NodeStatus
+            
+            def dict_to_node(d: dict, parent_id: str | None = None) -> TaxonomyNode:
+                node = TaxonomyNode(
+                    id=d["id"],
+                    topic=d["topic"],
+                    role=d["role"],
+                    parent_id=parent_id
+                )
+                if "children" in d and d["children"]:
+                    node.children = [dict_to_node(c, node.id) for c in d["children"]]
+                return node
+            
+            task_tree = [dict_to_node(n) for n in session.taxonomy]
+
+        graph = AuroraGraph(session.query, aga_mode=session.aga_mode, math_mode=session.math_mode, task_tree=task_tree)
 
         try:
             # We wrap the graph execution in the semaphore to manage concurrency
@@ -351,6 +372,7 @@ class PipelineService:
                     report_length=self._normalize_report_length(str(item.get("report_length", "moderate"))),
                     aga_mode=item.get("aga_mode", False),
                     math_mode=item.get("math_mode", False),
+                    taxonomy=item.get("taxonomy"),
                 )
             except (KeyError, TypeError, ValueError):
                 continue
@@ -368,6 +390,7 @@ class PipelineService:
                 "report_length": session.report_length,
                 "aga_mode": session.aga_mode,
                 "math_mode": session.math_mode,
+                "taxonomy": session.taxonomy,
             }
             for session_id, session in self._sessions.items()
         }

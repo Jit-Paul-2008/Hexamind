@@ -15,11 +15,24 @@ export interface PipelineEvent {
   error?: string;
 }
 
+export interface TaxonomyNode {
+  id: string;
+  topic: string;
+  role: string;
+  children: TaxonomyNode[];
+}
+
 export interface StartPipelineRequest {
   query: string;
   reportLength?: "brief" | "moderate" | "huge";
+  taxonomy?: TaxonomyNode[];
 }
 
 export interface StartPipelineResponse {
   sessionId: string;
+}
+
+export interface ProposePlanResponse {
+  query: string;
+  taxonomy: TaxonomyNode[];
 }

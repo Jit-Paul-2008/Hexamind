@@ -15,11 +15,28 @@ class Agent(BaseModel):
     processingOrder: int
 
 
+class TaxonomyNodeSchema(BaseModel):
+    id: str
+    topic: str
+    role: str
+    children: list[TaxonomyNodeSchema] = Field(default_factory=list)
+
+
 class StartPipelineRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     reportLength: str = Field(default="moderate", pattern="^(brief|moderate|huge)$")
     agaMode: bool = Field(default=False)
     mathMode: bool = Field(default=False)
+    taxonomy: list[TaxonomyNodeSchema] | None = Field(default=None)
+
+
+class ProposePlanRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2000)
+
+
+class ProposePlanResponse(BaseModel):
+    query: str
+    taxonomy: list[TaxonomyNodeSchema]
 
 
 

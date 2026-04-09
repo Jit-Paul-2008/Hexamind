@@ -17,13 +17,18 @@ class AgentModelConfig:
     system_prompt_suffix: str = ""
 
 
+import os
+
 # Agent-Model Specialization Matrix
-# Each agent gets the best model for its role
-# ALL HARMONIZED TO 14B FOR XEON POWER
+# Tiered for 2CPU: 1.5B for workers, 7B for core reasoning
+MODEL_SMALL = os.getenv("HEXAMIND_LOCAL_MODEL_SMALL", "deepseek-r1:1.5b")
+MODEL_MEDIUM = os.getenv("HEXAMIND_LOCAL_MODEL_MEDIUM", "deepseek-r1:1.5b")
+MODEL_LARGE = os.getenv("HEXAMIND_LOCAL_MODEL_LARGE", "deepseek-r1:7b")
+
 AGENT_MODEL_SPECIALIZATION = {
     "researcher": AgentModelConfig(
         agent_id="researcher",
-        primary_ollama_model="deepseek-r1:14b",
+        primary_ollama_model=MODEL_LARGE,
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
         temperature=0.4,
         max_tokens=400,
@@ -32,7 +37,7 @@ AGENT_MODEL_SPECIALIZATION = {
     
     "synthesiser": AgentModelConfig(
         agent_id="synthesiser",
-        primary_ollama_model="deepseek-r1:14b",
+        primary_ollama_model=MODEL_MEDIUM,
         fallback_hf_model="tiiuae/falcon-7b-instruct",
         temperature=0.75,
         max_tokens=800,
@@ -42,7 +47,7 @@ AGENT_MODEL_SPECIALIZATION = {
     # Aurora Diamond Expert roles (AuroraGraph / reasoning_graph.py)
     "historian": AgentModelConfig(
         agent_id="historian",
-        primary_ollama_model="deepseek-r1:14b",
+        primary_ollama_model=MODEL_SMALL,
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
         temperature=0.4,
         max_tokens=400,
@@ -51,7 +56,7 @@ AGENT_MODEL_SPECIALIZATION = {
 
     "auditor": AgentModelConfig(
         agent_id="auditor",
-        primary_ollama_model="deepseek-r1:14b",
+        primary_ollama_model=MODEL_SMALL,
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
         temperature=0.4,
         max_tokens=400,
@@ -60,7 +65,7 @@ AGENT_MODEL_SPECIALIZATION = {
 
     "analyst": AgentModelConfig(
         agent_id="analyst",
-        primary_ollama_model="deepseek-r1:14b",
+        primary_ollama_model=MODEL_SMALL,
         fallback_hf_model="teknium/OpenHermes-2.5-Mistral-7B",
         temperature=0.4,
         max_tokens=400,
@@ -69,7 +74,7 @@ AGENT_MODEL_SPECIALIZATION = {
 
     "drafter": AgentModelConfig(
         agent_id="drafter",
-        primary_ollama_model="deepseek-r1:14b",
+        primary_ollama_model=MODEL_LARGE,
         fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
         temperature=0.4,
         max_tokens=2000,
@@ -78,7 +83,7 @@ AGENT_MODEL_SPECIALIZATION = {
 
     "orchestrator": AgentModelConfig(
         agent_id="orchestrator",
-        primary_ollama_model="deepseek-r1:14b",
+        primary_ollama_model=MODEL_SMALL,
         fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
         temperature=0.5,
         max_tokens=200,
@@ -87,7 +92,7 @@ AGENT_MODEL_SPECIALIZATION = {
 
     "anchor_worker": AgentModelConfig(
         agent_id="anchor_worker",
-        primary_ollama_model="deepseek-r1:14b",
+        primary_ollama_model=MODEL_SMALL,
         fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
         temperature=0.1,
         max_tokens=500,

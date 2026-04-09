@@ -13,7 +13,7 @@
 Every tool has a soul, and Hexamind’s soul was forged in the fire of hardware constraints.
 
 ### The Struggle
-The journey began with a simple, yet "impossible" goal: **Bring Gemini-level deep research to the local workstation.** Early versions (v1.0 - v4.0) struggled with the **Context Paradox**. To reach high fidelity, we needed 100+ sources. But feeding 100 sources into a local 7B-14B model is a recipe for disaster—prompt overflows, endless inference loops, and "reasoning noise" that rendered reports useless.
+The journey began with a simple, yet "impossible" goal: **Bring Gemini-level deep research to the local workstation.** Early versions (v1.0 - v4.0) struggled with the **Context Paradox**. To reach high fidelity, we needed 100+ sources. But feeding 100 sources into a local 1.5B-7B model is a recipe for disaster—prompt overflows, endless inference loops, and "reasoning noise" that rendered reports useless.
 
 ### The Evolution
 We realized that the solution wasn't a bigger model; it was a **smarter swarm**. We moved away from the "One Model to Rule Them All" philosophy and engineered the **Atomic Distillation Swarm (ADS)**. By delegating the heavy lifting of fact-foraging to a army of lightweight 0.5B-1B "Drafters," we effectively decoupled *Extraction* from *Reasoning*.
@@ -36,7 +36,7 @@ graph TD
     subgraph Hexamind_ADS [Hexamind ADS: Signal Gain]
     S2[100+ Sources] --> DW["Distillation Swarm (0.5B)"]
     DW --> FL["High-Signal Fact Ledger"]
-    FL --> SR["Strategic Reasoning (7B-14B)"]
+    FL --> SR["Strategic Reasoning (1.5B-7B)"]
     SR --> OUT[High-Fidelity Report]
     end
 
@@ -118,10 +118,10 @@ Current benchmarks on **Dual Xeon** hardware with 42GB allocated memory:
 
 | Stage | Model Tier | Depth | Latency Product |
 | :--- | :--- | :--- | :--- |
-| **Orchestration** | 7B-Instruct | Planning | Low |
+| **Orchestration** | 1.5B-7B | Planning | Low |
 | **ADS Foraging** | 0.5B-1B | 100+ Sources | Ultra-High Parallel |
-| **Expert Analysis**| 7B-14B | Strategic | High-Precision |
-| **Synthesis** | 7B-14B | Executive | Consolidated |
+| **Expert Analysis**| 1.5B-7B | Strategic | High-Precision |
+| **Synthesis** | 1.5B-7B | Executive | Consolidated |
 
 ---
 
