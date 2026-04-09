@@ -45,7 +45,7 @@ class InferenceProvider:
                         "options": {
                             "temperature": 0.2,
                             "num_ctx": 4096,
-                            "num_thread": 2,
+                            "num_thread": 12,  # Optimized for Dual Xeon high-throughput research
                             "num_predict": max_tokens
                         }
                     }

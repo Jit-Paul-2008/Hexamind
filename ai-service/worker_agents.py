@@ -22,12 +22,13 @@ class ResearchWorker:
         self.provider = provider if provider is not None else get_provider()
         self.researcher = InternetResearcher()
 
-    async def gather_evidence(self, topic: str) -> Any:
-        """Prefetch research context over the network (run in parallel).
-        PILLAR 11: Implementing Layered Search for maximum data retrieval.
+    async def gather_evidence(self, topic: str, parent_context: Optional[str] = None) -> Any:
+        """Prefetch research context over the network (Sequential Discovery).
+        If parent_context is provided, refine the search based on parent findings.
         """
-        # Pass 1: Initial broad search
-        search_query = await self._generate_search_query(topic)
+        # Pass 1: Targeted search query generation
+        search_query = await self._generate_search_query(topic, parent_context)
+        print(f"📡 [DISCOVERY] Investigating: {topic} | Query: {search_query}", flush=True)
         initial_context = await self.researcher.research(search_query)
         
         # Pass 2: Niche Recursive Expansion (if first pass yielded enough context)
@@ -95,24 +96,26 @@ class ResearchWorker:
             "sources": [s.url for s in research_context.sources[:3]]
         }
 
-    async def _generate_search_query(self, topic: str) -> str:
-        """Tailor the search query based on the worker's role."""
-        normalized_topic = topic.lower()
-        # Only focus on IIT if the user explicitly mentioned it
-        iit_keywords = ["iit", "indian institute", "jee", "iitian"]
-        is_iit_specific = any(token in normalized_topic for token in iit_keywords)
+    async def _generate_search_query(self, topic: str, parent_context: Optional[str] = None) -> str:
+        """Tailor the search query based on the worker's role and discovery context."""
+        if parent_context:
+            prompt = (
+                f"You are a Research Architect. Generate a high-precision search query for the sub-topic: '{topic}'.\n"
+                f"PARENT CONTEXT (Chapter Findings):\n{parent_context[:1000]}\n\n"
+                "Requirements:\n"
+                "1. Focus the query on verifying or expanding upon specific details discovered in the parent context.\n"
+                "2. Output ONLY the search query string."
+            )
+            return await self.provider.generate_text(prompt, max_tokens=30)
 
+        # Fallback for root nodes (no parent context)
         prompts = {
             WorkerRole.RESEARCHER: f"Find current facts, statistical paradoxes, outcomes, and Reddit/forum sentiment regarding {topic}",
             WorkerRole.HISTORIAN: f"Find historical evolution, policy shifts, and developmental timeline for {topic}",
             WorkerRole.AUDITOR: f"Find critical assessments, user complaints, social downsides, and dissenting views on {topic}",
             WorkerRole.ANALYST: f"Find implementation strategies, future projections, and mechanistic outcomes for {topic}"
         }
-
-        query = prompts.get(self.role, topic)
-        if is_iit_specific:
-            query += " IIT India placement student outcomes case study"
-        return query
+        return prompts.get(self.role, topic)
 
     async def _analyze(self, topic: str, sources: List[Any], context: Optional[str] = None, initial_draft: Optional[str] = None, anchors: List[Dict[str, str]] = None) -> str:
         """Perform specialized synthesis with JSON Diff output for ADD architecture."""
