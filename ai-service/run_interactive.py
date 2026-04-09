@@ -43,8 +43,19 @@ async def main():
     # Initialize Graph
     graph = AuroraGraph(query=query)
 
+    # Environmental Telemetry
+    cores = os.cpu_count() or 1
+    
+    print("\n" + "="*50)
+    print("      HEXAMIND AURORA v8.5+: STRATEGIC CONSOLE")
+    print("="*50)
+    print(f"📡 CORE CAPACITY: {cores} Cores detected.")
+    print(f"🚀 INFERENCE    : Fast-Tier (0.5B Balanced)")
+    print(f"📊 DASHBOARD    : research_status.md [ACTIVE]")
+    print("-" * 50)
+
     # Stage 1: Strategic Planning
-    print("📡 Orchestrator constructing Strategic Taxonomy [Ollama 7B]...")
+    print(f"📡 Orchestrator constructing Strategic Taxonomy for: {query}")
     proposal_tree = await graph.generate_proposal()
 
     while True:

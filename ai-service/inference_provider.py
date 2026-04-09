@@ -1,10 +1,20 @@
 import os
 import json
 import httpx
+import re
 import logging
 from typing import Optional, List, Dict, Any, AsyncGenerator
 
 logger = logging.getLogger(__name__)
+
+def get_optimal_thread_count() -> int:
+    """Detects CPU cores and returns a balanced thread count for Ollama."""
+    try:
+        cores = os.cpu_count() or 2
+        # Use 50% of cores, minimum 2
+        return max(2, cores // 2)
+    except Exception:
+        return 2
 
 class InferenceProvider:
     """Unified interface for Local (Ollama) and Remote (GCP/OpenRouter) AI."""
@@ -45,8 +55,10 @@ class InferenceProvider:
                         "options": {
                             "temperature": 0.2,
                             "num_ctx": 4096,
-                            "num_thread": 2,  # Reverted for 2-core environment stability
-                            "num_predict": max_tokens
+                            "num_thread": get_optimal_thread_count(),
+                            "num_predict": max_tokens,
+                            "repetition_penalty": 1.1,
+                            "top_p": 0.9
                         }
                     }
                 )
@@ -56,7 +68,6 @@ class InferenceProvider:
                 content = data["message"]["content"]
                 
                 # Strip thinking bounds to keep context memory pure
-                import re
                 content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
                 # Cleanup dangling tags if cutoff occurs
                 content = content.replace('<think>', '').replace('</think>', '').strip()
@@ -97,8 +108,10 @@ class InferenceProvider:
                         "options": {
                             "temperature": 0.3,
                             "num_ctx": 4096,
-                            "num_thread": 2,  # Adjusted for 2-core hardware
-                            "num_predict": max_tokens
+                            "num_thread": get_optimal_thread_count(),
+                            "num_predict": max_tokens,
+                            "repetition_penalty": 1.1,
+                            "top_p": 0.9
                         }
                     }
                 ) as response:

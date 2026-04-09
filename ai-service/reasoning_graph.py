@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+import random
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from enum import Enum
@@ -16,10 +17,13 @@ from schemas import PipelineEvent, PipelineEventType
 logger = logging.getLogger(__name__)
 
 def update_research_status(content: str, mode: str = "a"):
-    """Helper to maintain the live dashboard."""
-    status_path = Path(__file__).resolve().parent.parent / "research_status.md"
-    with open(status_path, mode, encoding="utf-8") as f:
-        f.write(content + "\n")
+    """Helper to maintain the live dashboard with fault tolerance."""
+    try:
+        status_path = Path(__file__).resolve().parent.parent / "research_status.md"
+        with open(status_path, mode, encoding="utf-8") as f:
+            f.write(content + "\n")
+    except Exception as e:
+        logger.warning(f"Failed to update research_status.md: {e}")
 
 class NodeStatus(Enum):
     PENDING = "pending"
@@ -90,20 +94,45 @@ class AuroraGraph:
             task_data = json.loads(clean_json)
             
             def parse_recursive(node_data: Dict[str, Any], parent_id: Optional[str] = None) -> TaxonomyNode:
+                # Structure Guard: Ensure minimum fields exist
+                node_id = node_data.get("id", f"node_{random.randint(1000, 9999)}")
+                topic = node_data.get("topic", "Target Investigation")
+                role = node_data.get("role", "researcher")
+                
+                # Sanitize roles to allowed set
+                allowed_roles = {"researcher", "historian", "auditor", "analyst"}
+                if role not in allowed_roles:
+                    role = "researcher"
+
                 node = TaxonomyNode(
-                    id=node_data["id"],
-                    topic=node_data["topic"],
-                    role=node_data["role"],
+                    id=node_id,
+                    topic=topic,
+                    role=role,
                     parent_id=parent_id
                 )
-                if "children" in node_data:
+                if "children" in node_data and isinstance(node_data["children"], list):
                     for child_data in node_data["children"]:
-                        node.children.append(parse_recursive(child_data, node.id))
+                        if isinstance(child_data, dict):
+                            node.children.append(parse_recursive(child_data, node.id))
                 return node
 
             root_node = parse_recursive(task_data)
+            
+            # Taxonomy Pruning: Deduplicate identical topics in siblings and ancestry
+            def prune_duplicate_nodes(node: TaxonomyNode, seen_topics: set):
+                unique_children = []
+                for child in node.children:
+                    topic_lower = child.topic.lower().strip()
+                    # Check if topic is redundant with current lineage or already in this siblings list
+                    if topic_lower not in seen_topics:
+                        unique_children.append(child)
+                        # Descend with updated seen set
+                        prune_duplicate_nodes(child, seen_topics | {topic_lower})
+                node.children = unique_children
+
+            prune_duplicate_nodes(root_node, {root_node.topic.lower().strip()})
             self.task_tree = [root_node]
-            logger.info("Taxonomic Architecture initialized.")
+            logger.info("Taxonomic Architecture initialized and pruned.")
             return True
         except Exception as e:
             logger.error(f"Taxonomic planning failed: {e}. Falling back to Diamond Experts.")
@@ -170,25 +199,35 @@ class AuroraGraph:
         print("🏗️  Master Synthesis starting...", flush=True)
         update_research_status("🏗️  Final Synthesis: Compiling Sequential Taxonomy into Strategic Report...")
         def compile_report(node: TaxonomyNode, indent_level: int = 1) -> str:
+            # Clean node analysis of any existing headers that might cause level explosions
+            clean_analysis = re.sub(r'^#+\s+', '', node.analysis, flags=re.MULTILINE).strip()
             hashes = "#" * (indent_level + 1)
-            report_segment = f"{hashes} {node.topic}\n\n{node.analysis}\n\n"
+            report_segment = f"{hashes} {node.topic}\n\n{clean_analysis}\n\n"
             for child in node.children:
                 report_segment += compile_report(child, indent_level + 1)
             return report_segment
 
         body = "".join([compile_report(n) for n in self.task_tree])
-        synth_provider = InferenceProvider(model_name="qwen2.5:7b")
+        
+        # Use Config-driven Synthesiser (prevents hardcoded 7B stalls on 2 cores)
+        synth_config = get_agent_model_config("synthesiser")
+        synth_provider = InferenceProvider(model_name=synth_config.primary_ollama_model)
+        
         final_report = await synth_provider.generate_text(
             f"Synthesize the following Strategic Taxonomy for: {self.query}\n\n{body}\n\n"
-            "Task: Ensure a seamless 'discovery' flow. Output polished Markdown.",
-            system_prompt="You are a High-Precision Synthesis Agent.",
-            max_tokens=2000
+            "Task: You are the Lead Synthesis Architect. Your goal is to create a COHERENT, NON-REPETITIVE intelligence report.\n"
+            "1. Deduplicate information across all chapters.\n"
+            "2. Ensure smooth logical transitions between sections.\n"
+            "3. If multiple sections discuss the same thing, merge them into the most relevant heading.\n"
+            "4. Maintain a formal, high-fidelity business intelligence lexicon.\n"
+            "5. Output the COMPLETE polished Markdown report.",
+            system_prompt="You are a High-Precision Synthesis Agent. FLAWLESS deduplication is mandatory.",
+            max_tokens=2500
         )
         
         def titleize(q: str) -> str:
-            import re
-            q = re.sub(r'^(is|what|how|why|does|do|can|will|should)\s+', '', q, flags=re.IGNORECASE)
-            words = [w.capitalize() for w in re.findall(r'\w+', q)]
+            q_clean = re.sub(r'^(is|what|how|why|does|do|can|will|should)\s+', '', q, flags=re.IGNORECASE)
+            words = [w.capitalize() for w in re.findall(r'\w+', q_clean)]
             return "_".join(words[:5]) or "General_Research"
 
         wiki_dir = Path(__file__).resolve().parent.parent / "data" / "wiki"

@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+from dataclasses import replace
 from typing import List, Dict, Any, Optional
 from inference_provider import InferenceProvider, get_provider
 from research import InternetResearcher
@@ -26,8 +27,10 @@ class ResearchWorker:
         """Prefetch research context over the network (Sequential Discovery).
         If parent_context is provided, refine the search based on parent findings.
         """
-        # Pass 1: Targeted search query generation
+        # Pass 1: Targeted search query generation with Scrubbing
         search_query = await self._generate_search_query(topic, parent_context)
+        search_query = self._scrub_query(search_query)
+        
         print(f"📡 [DISCOVERY] Investigating: {topic} | Query: {search_query}", flush=True)
         initial_context = await self.researcher.research(search_query)
         
@@ -45,7 +48,7 @@ class ResearchWorker:
                     merged_sources.append(s)
                     seen_urls.add(s.url)
             
-            initial_context.sources = tuple(merged_sources)
+            initial_context = replace(initial_context, sources=tuple(merged_sources))
             
         return initial_context
 
@@ -96,17 +99,26 @@ class ResearchWorker:
             "sources": [s.url for s in research_context.sources[:3]]
         }
 
+    def _scrub_query(self, query: str) -> str:
+        """Removes conversational filler and model meta-talk from search queries."""
+        # Remove quotes, "Search for...", etc.
+        query = re.sub(r'["\']|search (for|query:?)|here is a query:?', '', query, flags=re.IGNORECASE)
+        # Remove common preamble
+        query = re.sub(r'^(query|search)\s+', '', query.strip(), flags=re.IGNORECASE)
+        return query.strip()
+
     async def _generate_search_query(self, topic: str, parent_context: Optional[str] = None) -> str:
         """Tailor the search query based on the worker's role and discovery context."""
         if parent_context:
             prompt = (
                 f"You are a Research Architect. Generate a high-precision search query for the sub-topic: '{topic}'.\n"
-                f"PARENT CONTEXT (Chapter Findings):\n{parent_context[:1000]}\n\n"
+                f"PARENT CONTEXT (Findings from previous nodes):\n{parent_context[:1200]}\n\n"
                 "Requirements:\n"
-                "1. Focus the query on verifying or expanding upon specific details discovered in the parent context.\n"
-                "2. Output ONLY the search query string."
+                "1. Focus the query on verifying or EXPLICITLY expanding upon specific details discovered in the parent context.\n"
+                "2. NO generic queries. Use technical keywords from the parent findings.\n"
+                "3. Output ONLY the search query string."
             )
-            return await self.provider.generate_text(prompt, max_tokens=30)
+            return await self.provider.generate_text(prompt, max_tokens=40)
 
         # Fallback for root nodes (no parent context)
         prompts = {
@@ -145,24 +157,26 @@ class ResearchWorker:
         
         if self.role == WorkerRole.AUDITOR:
             prompt = (
-                f"Review this draft research on: {topic}\n\n"
+                f"You are the Structural Auditor. Review this draft research for topic: '{topic}'\n\n"
+                f"PARENT CONTEXT (High-level findings from parent nodes):\n{context or 'N/A'}\n\n"
                 f"Draft to Edit:\n{initial_draft or 'No draft provided.'}\n\n"
                 f"Provided Anchors (Truth Grounding):\n{anchors_str}\n\n"
-                "Task: Find any sentence in the draft that makes a factual claim NOT present in the Provided Anchors, or contradicts them.\n"
+                "Task: Critical Red-Teaming. Find any claim in the draft NOT present in Anchors or that contradicts Parent Context.\n"
                 "Output as JSON object with 'diffs' array and 'rationale' string summary.\n"
-                "Format: {\"diffs\": [{\"original_text_snippet\": \"...\", \"replacement_text\": \"\"}], \"rationale\": \"summary of grounding failures\"}\n"
-                "If everything is perfectly grounded, return {\"diffs\": [], \"rationale\": \"All claims verified against anchors.\"}."
+                "Format: {\"diffs\": [{\"original_text_snippet\": \"...\", \"replacement_text\": \"\"}], \"rationale\": \"Identify specific grounding failures or contradictions.\"}\n"
+                "Crucial: Do NOT repeat the input text. If grounded, rationale='Analysis verified against anchors.' and diffs=[]"
             )
         else:
             prompt = (
-                f"Review this draft research on: {topic}\n\n"
+                f"You are the {self.role.capitalize()} Agent. Review this draft for: '{topic}'\n\n"
+                f"PARENT CONTEXT (Previous findings to build upon):\n{context or 'N/A'}\n\n"
                 f"Draft to Edit:\n{initial_draft or 'No draft provided.'}\n\n"
                 f"New Evidence to integrate:\n{source_text}\n\n"
-                "Task: Identify errors or missing facts in the draft based ONLY on the new evidence.\n"
-                "For ANALYSTS: You MUST also identify a relevant Mental Model (e.g. Sunk Cost, Network Effect) to explain the data.\n"
+                "Task: Refine the draft by integrating new facts from Evidence that aren't already covered. Use parent context for continuity.\n"
+                "For ANALYSTS: You MUST apply a technical Mental Model to the new data.\n"
                 "Output as JSON object with 'diffs' array and 'rationale' string summary.\n"
-                "Format: {\"diffs\": [{\"original_text_snippet\": \"...\", \"replacement_text\": \"...\"}], \"rationale\": \"McKinsey-style summary of economic/behavioral impact\"}\n"
-                "If no changes are needed, return empty diffs but provide the rationale."
+                "Format: {\"diffs\": [{\"original_text_snippet\": \"...\", \"replacement_text\": \"...\"}], \"rationale\": \"Short, insightful summary of how this new data shifts the narrative.\"}\n"
+                "Crucial: Rationale MUST ONLY contain NEW insights. DO NOT REPEAT PARENT CONTEXT OR DRAFT CONTENT. If no new data, keep diffs empty and rationale='No unique additions'."
             )
         
         return await self.provider.generate_text(
