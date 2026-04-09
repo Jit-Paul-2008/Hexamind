@@ -30,16 +30,6 @@
     "processing_order": 1
   },
   {
-    "id": "drafter",
-    "name": "Drafter",
-    "role": "Initial Synthesis and Drafting",
-    "purpose": "Assembles the initial research draft from gathered evidence and grounding anchors.",
-    "accent_color": "#8b5cf6",
-    "glow_color": "rgba(139, 92, 246, 0.28)",
-    "shape": "box",
-    "processing_order": 2
-  },
-  {
     "id": "auditor",
     "name": "Auditor",
     "role": "Critical Assessment and Gap Analysis",

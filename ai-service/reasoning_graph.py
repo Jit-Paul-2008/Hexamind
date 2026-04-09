@@ -57,6 +57,23 @@ class AuroraGraph:
         self.provider = get_provider()
         self.researcher = InternetResearcher()
         self.initial_draft: str = ""
+
+    def _outline_context(self) -> str:
+        """Render the current report outline for use as a soft guardrail in prompts."""
+        if not self.task_tree:
+            return f"1. Core scope and framing for {self.query}"
+
+        lines: list[str] = []
+
+        def walk(nodes: List[TaxonomyNode], prefix: str = "") -> None:
+            for index, node in enumerate(nodes, start=1):
+                label = f"{prefix}{index}" if prefix else str(index)
+                lines.append(f"{label}. {node.topic}")
+                if node.children:
+                    walk(node.children, f"{label}.")
+
+        walk(self.task_tree)
+        return "\n".join(lines)
     
     def _count_taxonomy_nodes(self, nodes: List[TaxonomyNode]) -> int:
         """Count total nodes in taxonomy tree (depth-first)."""
@@ -103,13 +120,14 @@ class AuroraGraph:
         print(f"🛰️  Orchestrator: Constructing Strategic Research Taxonomy...", flush=True)
         
         prompt = (
-            f"You are the Lead Strategist. Decompose the following research query into a hierarchical Strategic Taxonomy (3-5 Chapters, with sub-sections for complex topics).\n"
+            f"You are the Lead Strategist. Decompose the following research query into a hierarchical report outline with 6-10 main report points, plus sub-sections where helpful.\n"
             f"Query: {self.query}\n\n"
             "Requirements:\n"
-            "1. Output ONLY a JSON object representing the root of the tree.\n"
-            "2. Format: {\"id\": \"root_id\", \"topic\": \"topic\", \"role\": \"researcher\", \"children\": [{\"id\": \"child_id\", \"topic\": \"sub-topic\", \"role\": \"historian\"}]}\n"
-            "3. Roles must be: researcher, historian, auditor, analyst.\n"
-            "4. Match roles to sub-topics wisely. Keep depth to maximum 2-3 levels."
+            "1. Output ONLY a JSON object representing the root of the report outline.\n"
+            "2. Format: {\"id\": \"root_id\", \"topic\": \"main report frame\", \"role\": \"researcher\", \"children\": [{\"id\": \"child_id\", \"topic\": \"report point\", \"role\": \"historian\"}]}\n"
+            "3. Roles are internal guidance only: researcher, historian, auditor, analyst.\n"
+            "4. Prefer 6-10 top-level report points by default. Use sub-sections only when they add coverage or clarity.\n"
+            "5. Keep the outline broad enough to cover all meaningful aspects of the query, but do not force irrelevant branches."
         )
 
         try:
@@ -183,11 +201,14 @@ class AuroraGraph:
             return True
         except Exception as e:
             logger.error(f"Taxonomic planning failed: {e}. Falling back to Diamond Experts.")
+            topic = self.query.strip()
             self.task_tree = [
-                TaxonomyNode(id="historian", topic=f"Historical evolution of {self.query}", role="historian"),
-                TaxonomyNode(id="researcher", topic=f"Current evidence on {self.query}", role="researcher"),
-                TaxonomyNode(id="auditor", topic=f"Critical risks of {self.query}", role="auditor"),
-                TaxonomyNode(id="analyst", topic=f"Future outcomes of {self.query}", role="analyst")
+                TaxonomyNode(id="scope", topic=f"Scope and framing of {topic}", role="researcher"),
+                TaxonomyNode(id="evidence", topic=f"Current evidence and landscape for {topic}", role="researcher"),
+                TaxonomyNode(id="history", topic=f"Historical and policy context for {topic}", role="historian"),
+                TaxonomyNode(id="dimensions", topic=f"Key dimensions and subtopics in {topic}", role="researcher"),
+                TaxonomyNode(id="risks", topic=f"Constraints and risks in {topic}", role="auditor"),
+                TaxonomyNode(id="implementation", topic=f"Implementation pathways for {topic}", role="analyst"),
             ]
             return True
 
@@ -210,7 +231,8 @@ class AuroraGraph:
         print("🌍 Establishing Global Baseline Anchors...", flush=True)
         update_research_status("🌍 Establishing Global Baseline Anchors...")
         baseline_worker = ResearchWorker("researcher")
-        baseline_context = await baseline_worker.gather_evidence(self.query)
+        outline_context = self._outline_context()
+        baseline_context = await baseline_worker.gather_evidence(self.query, outline_context=outline_context)
         distiller = DistillationWorker()
         distilled_facts = await distiller.distill("Global Overview", [s.snippet for s in baseline_context.sources[:15]])
         anchor_worker = AnchorWorker()
@@ -227,8 +249,19 @@ class AuroraGraph:
             worker = ResearchWorker(node.role, InferenceProvider(model_name=agent_config.primary_ollama_model))
             
             # Context-Aware Foraging
-            evidence = await worker.gather_evidence(node.topic, parent_context=parent_analysis, max_sources=node.max_sources)
-            result = await worker.run_analysis(node.topic, evidence, context=parent_analysis, anchors=global_anchors)
+            evidence = await worker.gather_evidence(
+                node.topic,
+                parent_context=parent_analysis,
+                max_sources=node.max_sources,
+                outline_context=outline_context,
+            )
+            result = await worker.run_analysis(
+                node.topic,
+                evidence,
+                context=parent_analysis,
+                anchors=global_anchors,
+                outline_context=outline_context,
+            )
             
             node.analysis = result.get("analysis", "")
             node.status = NodeStatus.COMPLETED
@@ -264,6 +297,7 @@ class AuroraGraph:
         
         final_report = await synth_provider.generate_text(
             f"Synthesize the following Strategic Taxonomy for: {self.query}\n\n{body}\n\n"
+            f"Report Outline to follow (soft guardrail, not rigid):\n{outline_context}\n\n"
             "Task: You are the Lead Synthesis Architect. Your goal is to create a COHERENT, NON-REPETITIVE intelligence report.\n"
             "1. Deduplicate information across all chapters.\n"
             "2. Ensure smooth logical transitions between sections.\n"

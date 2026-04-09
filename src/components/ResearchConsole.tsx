@@ -13,6 +13,20 @@ interface AgentDescriptor {
   name: string;
 }
 
+interface QualityReport {
+  status?: 'pending' | 'ready';
+  overallScore?: number;
+  deliveryMode?: string;
+  notes?: string[];
+  metrics?: {
+    sourceCount?: number;
+    stepsTaken?: number;
+    citationCount?: number;
+    uniqueDomains?: number;
+    averageCredibility?: number;
+  };
+}
+
 const toErrorMessage = (error: unknown): string => {
   if (error instanceof Error) {
     return error.message;
@@ -26,16 +40,16 @@ const INITIAL_AGENTS = [
   { id: 'orchestrator', name: 'Orchestrator' },
   { id: 'historian', name: 'Historian' },
   { id: 'researcher', name: 'Researcher' },
-  { id: 'drafter', name: 'Drafter' },
   { id: 'auditor', name: 'Auditor' },
   { id: 'analyst', name: 'Analyst' },
   { id: 'synthesiser', name: 'Synthesiser' },
 ];
 
 export default function ResearchConsole() {
-  const [apiBase, setApiBase] = useState(process.env.NEXT_PUBLIC_API_URL || '');
+  const [apiBase, setApiBase] = useState(process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000');
   const [query, setQuery] = useState('');
   const [agents, setAgents] = useState(INITIAL_AGENTS);
+  const [activeTab, setActiveTab] = useState<'research' | 'technical'>('research');
   
   // Dynamic API discovery for public users
   useEffect(() => {
@@ -43,6 +57,7 @@ export default function ResearchConsole() {
       try {
         // 1. Discover API Endpoint from canonical path, then legacy fallback.
         const configPaths = ['/Hexamind/config.json', '/config.json'];
+        let discoveredApi: string | null = null;
         for (const path of configPaths) {
           const configRes = await fetch(path);
           if (!configRes.ok) {
@@ -51,9 +66,12 @@ export default function ResearchConsole() {
           const cfg = (await configRes.json()) as RuntimeConfig;
           if (cfg.apiUrl) {
             console.log("🛰️ Aurora API Discovered:", cfg.apiUrl, `(${path})`);
-            setApiBase(cfg.apiUrl);
+            discoveredApi = cfg.apiUrl;
             break;
           }
+        }
+        if (discoveredApi) {
+          setApiBase(discoveredApi);
         }
         
         // 2. Discover Agent Roles (Singular Source of Truth)
@@ -72,6 +90,7 @@ export default function ResearchConsole() {
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
   const [agentLogs, setAgentLogs] = useState<Record<string, string[]>>({});
   const [finalReport, setFinalReport] = useState<string>('');
+  const [technicalReport, setTechnicalReport] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [proposedTaxonomy, setProposedTaxonomy] = useState<TaxonomyNode[] | null>(null);
 
@@ -84,6 +103,56 @@ export default function ResearchConsole() {
     });
   }, [agentLogs]);
 
+  const apiUrl = (path: string): string => {
+    const base = apiBase.trim().replace(/\/$/, '');
+    if (!base) {
+      return path;
+    }
+    return `${base}${path}`;
+  };
+
+  const buildTechnicalReport = (quality: QualityReport | null, logs: Record<string, string[]>, currentSessionId: string | null): string => {
+    const lines: string[] = [];
+    lines.push('### Technical Output');
+    lines.push('');
+    lines.push(`- Session: ${currentSessionId || 'n/a'}`);
+    lines.push(`- Backend: ${apiBase}`);
+    lines.push(`- Quality Status: ${quality?.status || 'pending'}`);
+    if (typeof quality?.overallScore === 'number') {
+      lines.push(`- Confidence Score: ${quality.overallScore.toFixed(1)}`);
+    }
+    if (quality?.deliveryMode) {
+      lines.push(`- Delivery Mode: ${quality.deliveryMode}`);
+    }
+    lines.push('');
+    lines.push('### Metrics');
+    lines.push(`- Sources: ${quality?.metrics?.sourceCount ?? 0}`);
+    lines.push(`- Steps: ${quality?.metrics?.stepsTaken ?? 0}`);
+    if (typeof quality?.metrics?.citationCount === 'number') {
+      lines.push(`- Citations: ${quality.metrics.citationCount}`);
+    }
+    if (typeof quality?.metrics?.uniqueDomains === 'number') {
+      lines.push(`- Domains: ${quality.metrics.uniqueDomains}`);
+    }
+    if (typeof quality?.metrics?.averageCredibility === 'number') {
+      lines.push(`- Avg Credibility: ${quality.metrics.averageCredibility.toFixed(2)}`);
+    }
+    lines.push('');
+    if (quality?.notes?.length) {
+      lines.push('### Quality Notes');
+      for (const note of quality.notes) {
+        lines.push(`- ${note}`);
+      }
+      lines.push('');
+    }
+    lines.push('### Agent Execution Logs');
+    for (const agent of agents) {
+      const agentLines = logs[agent.id] || [];
+      lines.push(`- ${agent.name}: ${agentLines.length} updates`);
+    }
+    return lines.join('\n');
+  };
+
   const proposePlan = async () => {
     if (!query.trim()) return;
     setStatus('planning');
@@ -91,7 +160,7 @@ export default function ResearchConsole() {
     setProposedTaxonomy(null);
 
     try {
-      const res = await fetch(`${apiBase}/api/pipeline/propose`, {
+      const res = await fetch(apiUrl('/api/pipeline/propose'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query }),
@@ -111,12 +180,14 @@ export default function ResearchConsole() {
     // Reset local state
     setAgentLogs({});
     setFinalReport('');
+    setTechnicalReport('');
     setError(null);
     setStatus('researching');
     setActiveAgentId('orchestrator');
+    setActiveTab('research');
 
     try {
-      const startRes = await fetch(`${apiBase}/api/pipeline/start`, {
+      const startRes = await fetch(apiUrl('/api/pipeline/start'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -128,11 +199,13 @@ export default function ResearchConsole() {
       });
 
       if (!startRes.ok) throw new Error(`Failed to start pipeline: ${startRes.statusText}`);
-      const { sessionId } = await startRes.json();
+      const { sessionId: createdSessionId } = await startRes.json();
 
-      const eventSource = new EventSource(`${apiBase}/api/pipeline/${sessionId}/stream`);
+      let runtimeLogs: Record<string, string[]> = {};
 
-      eventSource.onmessage = (event) => {
+      const eventSource = new EventSource(apiUrl(`/api/pipeline/${createdSessionId}/stream`));
+
+      eventSource.onmessage = async (event) => {
         try {
           const data = JSON.parse(event.data) as PipelineEvent;
           const eventType = data.type;
@@ -144,6 +217,10 @@ export default function ResearchConsole() {
 
           const content = data.chunk || data.fullContent || '';
           if (content) {
+            runtimeLogs = {
+              ...runtimeLogs,
+              [agentId]: [...(runtimeLogs[agentId] || []), content.trim()]
+            };
             setAgentLogs(prev => ({
               ...prev,
               [agentId]: [...(prev[agentId] || []), content.trim()]
@@ -152,6 +229,17 @@ export default function ResearchConsole() {
 
           if (eventType === PipelineEventType.PIPELINE_DONE) {
             setFinalReport(data.fullContent || '');
+            try {
+              const qualityRes = await fetch(apiUrl(`/api/pipeline/${createdSessionId}/quality`));
+              if (qualityRes.ok) {
+                const quality = (await qualityRes.json()) as QualityReport;
+                  setTechnicalReport(buildTechnicalReport(quality, runtimeLogs, createdSessionId));
+              } else {
+                  setTechnicalReport(buildTechnicalReport(null, runtimeLogs, createdSessionId));
+              }
+            } catch {
+                setTechnicalReport(buildTechnicalReport(null, runtimeLogs, createdSessionId));
+            }
             setStatus('completed');
             setActiveAgentId(null);
             eventSource.close();
@@ -178,8 +266,6 @@ export default function ResearchConsole() {
       setStatus('error');
     }
   };
-
-  const [activeTab, setActiveTab] = useState<'research' | 'technical'>('research');
 
   return (
     <div className="w-full flex flex-col space-y-12 animate-in fade-in duration-500">
@@ -213,7 +299,7 @@ export default function ResearchConsole() {
 
       {/* 2. Flow Visualization */}
       <div className="w-full py-4 px-2 overflow-x-auto">
-        <div className="min-w-[800px] flex items-center justify-between px-10 relative">
+        <div className="min-w-200 flex items-center justify-between px-10 relative">
            {/* Background connecting line */}
            <div className="absolute top-1/2 left-20 right-20 h-[0.5px] bg-[#E5E5E7] -z-10"></div>
            
@@ -243,13 +329,13 @@ export default function ResearchConsole() {
           return (
             <div 
               key={agent.id} 
-              className={`agent-card min-w-[180px] max-w-[180px] p-3 h-32 flex flex-col shrink-0 ${isActive ? 'agent-card-active' : ''}`}
+              className={`agent-card min-w-45 max-w-45 p-3 h-32 flex flex-col shrink-0 ${isActive ? 'agent-card-active' : ''}`}
             >
               <div className="flex items-center justify-between mb-2">
                 <span className={`text-[9px] font-black uppercase tracking-widest ${isActive ? 'text-[#0066CC]' : 'text-[#86868B]'}`}>
                   {agent.name}
                 </span>
-                {isActive && <div className="busy-indicator !m-0 !w-1.5 !h-1.5"></div>}
+                {isActive && <div className="busy-indicator m-0! w-1.5! h-1.5!"></div>}
               </div>
               <div 
                 ref={el => { logRefs.current[agent.id] = el; }}
@@ -281,6 +367,8 @@ export default function ResearchConsole() {
         {status === 'planning' && proposedTaxonomy && (
           <div className="py-10">
             <ReportPlanner 
+              key={query}
+              query={query}
               initialTaxonomy={proposedTaxonomy} 
               onConfirm={(finalTaxonomy) => startResearch(finalTaxonomy)}
               onCancel={() => setStatus('idle')}
@@ -290,7 +378,7 @@ export default function ResearchConsole() {
 
         {status === 'planning' && !proposedTaxonomy && (
           <div className="py-20 flex flex-col items-center">
-            <div className="busy-indicator !w-8 !h-8 mb-6"></div>
+            <div className="busy-indicator w-8! h-8! mb-6"></div>
             <h2 className="serif text-2xl italic text-[#86868B]">Orchestrating Strategic Roadmap...</h2>
           </div>
         )}
@@ -303,25 +391,22 @@ export default function ResearchConsole() {
 
         {finalReport && (
           <div className="animate-in fade-in slide-in-from-top-6 duration-1000 max-w-2xl mx-auto">
-            {/* Tabbed Switcher (macOS style) */}
-            {finalReport.includes('## Technical report') && (
-              <div className="flex justify-center mb-10">
-                <div className="bg-[#F2F2F7] p-1 rounded-lg flex space-x-1">
-                  <button 
-                    onClick={() => setActiveTab('research')}
-                    className={`px-4 py-1.5 text-[12px] font-bold rounded-md transition-all ${activeTab === 'research' ? 'bg-white shadow-sm text-[#1D1D1F]' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
-                  >
-                    Research Report
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('technical')}
-                    className={`px-4 py-1.5 text-[12px] font-bold rounded-md transition-all ${activeTab === 'technical' ? 'bg-white shadow-sm text-[#1D1D1F]' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
-                  >
-                    Technical Assessment
-                  </button>
-                </div>
+            <div className="flex justify-center mb-10">
+              <div className="bg-[#F2F2F7] p-1 rounded-lg flex space-x-1">
+                <button 
+                  onClick={() => setActiveTab('research')}
+                  className={`px-4 py-1.5 text-[12px] font-bold rounded-md transition-all ${activeTab === 'research' ? 'bg-white shadow-sm text-[#1D1D1F]' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
+                >
+                  Real Output
+                </button>
+                <button 
+                  onClick={() => setActiveTab('technical')}
+                  className={`px-4 py-1.5 text-[12px] font-bold rounded-md transition-all ${activeTab === 'technical' ? 'bg-white shadow-sm text-[#1D1D1F]' : 'text-[#86868B] hover:text-[#1D1D1F]'}`}
+                >
+                  Technical Output
+                </button>
               </div>
-            )}
+            </div>
 
             <article className="space-y-8">
               <div className="flex items-center space-x-4 mb-4">
@@ -331,21 +416,9 @@ export default function ResearchConsole() {
                 <div className="h-px flex-1 bg-[#F2F2F7]"></div>
               </div>
 
-              {(() => {
-                const parts = finalReport.split(/## (?:Technical report|Report on Topic)/i);
-                let content = finalReport;
-                
-                if (parts.length >= 3) {
-                  // Index 1 is technical, index 2 is research
-                  content = activeTab === 'technical' ? parts[1] : parts[2];
-                }
-
-                return (
-                  <div className={`leading-relaxed text-[#1D1D1F] whitespace-pre-wrap ${activeTab === 'research' ? 'serif text-lg md:text-xl first-letter:text-6xl first-letter:float-left first-letter:mr-4 first-letter:font-black' : 'font-mono text-[13px] text-[#424245]'}`}>
-                    {content.trim()}
-                  </div>
-                );
-              })()}
+              <div className={`leading-relaxed text-[#1D1D1F] whitespace-pre-wrap ${activeTab === 'research' ? 'serif text-lg md:text-xl first-letter:text-6xl first-letter:float-left first-letter:mr-4 first-letter:font-black' : 'font-mono text-[13px] text-[#424245]'}`}>
+                {(activeTab === 'technical' ? technicalReport : finalReport).trim()}
+              </div>
             </article>
           </div>
         )}

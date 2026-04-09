@@ -1,7 +1,4 @@
 🚀 [AURORA v8.5] Initiating Sequential Discovery...
-Target: How should we ship the MVP?
+Target: How can India improve semiconductor talent pipeline in 5 years?
 --------------------------------------------------
 
-✅ Taxonomy Optimized. 4 Root Chapters established.
-
-🌍 Establishing Global Baseline Anchors...

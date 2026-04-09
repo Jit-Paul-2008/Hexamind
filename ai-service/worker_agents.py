@@ -23,12 +23,18 @@ class ResearchWorker:
         self.provider = provider if provider is not None else get_provider()
         self.researcher = InternetResearcher()
 
-    async def gather_evidence(self, topic: str, parent_context: Optional[str] = None, max_sources: Optional[int] = None) -> Any:
+    async def gather_evidence(
+        self,
+        topic: str,
+        parent_context: Optional[str] = None,
+        max_sources: Optional[int] = None,
+        outline_context: Optional[str] = None,
+    ) -> Any:
         """Prefetch research context over the network (Sequential Discovery).
         If parent_context is provided, refine the search based on parent findings.
         """
         # Pass 1: Targeted search query generation with Scrubbing
-        search_query = await self._generate_search_query(topic, parent_context)
+        search_query = await self._generate_search_query(topic, parent_context, outline_context)
         search_query = self._scrub_query(search_query)
         
         print(f"📡 [DISCOVERY] Investigating: {topic} | Query: {search_query}", flush=True)
@@ -36,7 +42,7 @@ class ResearchWorker:
         
         # Pass 2: Niche Recursive Expansion (if first pass yielded enough context)
         if initial_context.sources and len(initial_context.sources) > 3:
-            niche_query = await self._generate_niche_expansion_query(topic, initial_context)
+            niche_query = await self._generate_niche_expansion_query(topic, initial_context, outline_context)
             print(f"📡 [LAYERED] Deep-diving into niche: {niche_query}", flush=True)
             niche_context = await self.researcher.research(niche_query)
             
@@ -58,22 +64,31 @@ class ResearchWorker:
             
         return initial_context
 
-    async def _generate_niche_expansion_query(self, topic: str, context: Any) -> str:
+    async def _generate_niche_expansion_query(self, topic: str, context: Any, outline_context: Optional[str] = None) -> str:
         """Extract a high-specificity sub-topic for the second research pass."""
         prompt = (
             f"Based on the initial research for '{topic}', identify ONE highly specific, "
             f"niche technical detail or structural risk that requires deeper investigation.\n"
+            f"REPORT OUTLINE CONTEXT (stay on-frame):\n{outline_context or 'N/A'}\n\n"
             f"Context Snippets:\n" + "\n".join([s.snippet[:150] for s in context.sources[:5]]) + "\n"
             "Output ONLY the search query."
         )
         return await self.provider.generate_text(prompt, max_tokens=20)
 
-    async def run_analysis(self, topic: str, research_context: Any, context: Optional[str] = None, initial_draft: Optional[str] = None, anchors: List[Dict[str, str]] = None) -> Dict[str, Any]:
+    async def run_analysis(
+        self,
+        topic: str,
+        research_context: Any,
+        context: Optional[str] = None,
+        initial_draft: Optional[str] = None,
+        anchors: List[Dict[str, str]] = None,
+        outline_context: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Execute the worker's inference as a JSON Editor."""
         logger.info(f"Worker [{self.role}] starting editorial review on topic: {topic}")
         
         # 1. Specialized Analysis (JSON Diff + Rationale)
-        raw_output = await self._analyze(topic, research_context.sources, context, initial_draft, anchors)
+        raw_output = await self._analyze(topic, research_context.sources, context, initial_draft, anchors, outline_context)
         
         # 2. Parse JSON safely and extract rationale
         diffs = []
@@ -113,11 +128,17 @@ class ResearchWorker:
         query = re.sub(r'^(query|search)\s+', '', query.strip(), flags=re.IGNORECASE)
         return query.strip()
 
-    async def _generate_search_query(self, topic: str, parent_context: Optional[str] = None) -> str:
+    async def _generate_search_query(
+        self,
+        topic: str,
+        parent_context: Optional[str] = None,
+        outline_context: Optional[str] = None,
+    ) -> str:
         """Tailor the search query based on the worker's role and discovery context."""
         if parent_context:
             prompt = (
                 f"You are a Research Architect. Generate a high-precision search query for the sub-topic: '{topic}'.\n"
+                f"REPORT OUTLINE CONTEXT (use this as a guardrail, not a strict cage):\n{outline_context or 'N/A'}\n\n"
                 f"PARENT CONTEXT (Findings from previous nodes):\n{parent_context[:1200]}\n\n"
                 "Requirements:\n"
                 "1. Focus the query on verifying or EXPLICITLY expanding upon specific details discovered in the parent context.\n"
@@ -128,17 +149,25 @@ class ResearchWorker:
 
         # Fallback for root nodes (no parent context)
         prompts = {
-            WorkerRole.RESEARCHER: f"Find current facts, statistical paradoxes, outcomes, and Reddit/forum sentiment regarding {topic}",
-            WorkerRole.HISTORIAN: f"Find historical evolution, policy shifts, and developmental timeline for {topic}",
-            WorkerRole.AUDITOR: f"Find critical assessments, user complaints, social downsides, and dissenting views on {topic}",
-            WorkerRole.ANALYST: f"Find implementation strategies, future projections, and mechanistic outcomes for {topic}"
+            WorkerRole.RESEARCHER: f"Find current facts, evidence, and concrete metrics regarding {topic}. Outline frame: {outline_context or 'N/A'}",
+            WorkerRole.HISTORIAN: f"Find historical evolution, policy shifts, and developmental timeline for {topic}. Outline frame: {outline_context or 'N/A'}",
+            WorkerRole.AUDITOR: f"Find critical assessments, user complaints, social downsides, and dissenting views on {topic}. Outline frame: {outline_context or 'N/A'}",
+            WorkerRole.ANALYST: f"Find implementation strategies, future projections, and mechanistic outcomes for {topic}. Outline frame: {outline_context or 'N/A'}"
         }
         return prompts.get(self.role, topic)
 
-    async def _analyze(self, topic: str, sources: List[Any], context: Optional[str] = None, initial_draft: Optional[str] = None, anchors: List[Dict[str, str]] = None) -> str:
+    async def _analyze(
+        self,
+        topic: str,
+        sources: List[Any],
+        context: Optional[str] = None,
+        initial_draft: Optional[str] = None,
+        anchors: List[Dict[str, str]] = None,
+        outline_context: Optional[str] = None,
+    ) -> str:
         """Perform specialized synthesis with JSON Diff output for ADD architecture."""
         source_text = "\n".join([f"- {s.title}: {s.excerpt}" for s in sources[:5]])
-        anchors_str = "\n".join([f"[{a['id']}] {a['fact']}" for a in (anchors or [])])
+        anchors_str = _anchors_to_text(anchors)
         
         # PILLAR 10: Persona Lexicons & PILLAR 4: Behavioral Frameworks integration
         system_prompts = {
@@ -164,6 +193,7 @@ class ResearchWorker:
         if self.role == WorkerRole.AUDITOR:
             prompt = (
                 f"You are the Structural Auditor. Review this draft research for topic: '{topic}'\n\n"
+                f"REPORT OUTLINE CONTEXT (stay on topic, but do not become overly rigid):\n{outline_context or 'N/A'}\n\n"
                 f"PARENT CONTEXT (High-level findings from parent nodes):\n{context or 'N/A'}\n\n"
                 f"Draft to Edit:\n{initial_draft or 'No draft provided.'}\n\n"
                 f"Provided Anchors (Truth Grounding):\n{anchors_str}\n\n"
@@ -175,6 +205,7 @@ class ResearchWorker:
         else:
             prompt = (
                 f"You are the {self.role.capitalize()} Agent. Review this draft for: '{topic}'\n\n"
+                f"REPORT OUTLINE CONTEXT (use as the section frame; expand fully but avoid drift):\n{outline_context or 'N/A'}\n\n"
                 f"PARENT CONTEXT (Previous findings to build upon):\n{context or 'N/A'}\n\n"
                 f"Draft to Edit:\n{initial_draft or 'No draft provided.'}\n\n"
                 f"New Evidence to integrate:\n{source_text}\n\n"
@@ -249,7 +280,8 @@ class AnchorWorker:
                 max_tokens=500
             )
             clean_json = re.sub(r"```json\s*|\s*```", "", result_str.strip())
-            return json.loads(clean_json)
+            parsed = json.loads(clean_json)
+            return _normalize_anchor_payload(parsed)
         except Exception as e:
             logger.error(f"Anchor synthesis failed: {e}")
             return []
@@ -263,7 +295,7 @@ class DraftingWorker:
 
     async def draft(self, query: str, contexts: List[Any], existing_wiki: Optional[str] = None, anchors: List[Dict[str, str]] = None) -> str:
         """Generate a high-fidelity Strategic Narrative, strictly constrained by Anchors."""
-        anchors_str = "\n".join([f"[{a['id']}] {a['fact']}" for a in (anchors or [])])
+        anchors_str = _anchors_to_text(anchors)
 
         if existing_wiki:
             prompt = (
@@ -294,3 +326,45 @@ class DraftingWorker:
             system_prompt="You are a High-Precision Strategic Synthesiser. Output ONLY clean, authoritative Markdown.",
             max_tokens=2500
         )
+
+
+def _normalize_anchor_payload(payload: Any) -> List[Dict[str, str]]:
+    """Normalize model JSON into [{'id': 'A1', 'fact': '...'}] to avoid runtime type errors."""
+    if isinstance(payload, dict):
+        # Some models return wrapper objects like {'anchors': [...]}.
+        for key in ("anchors", "items", "data"):
+            if key in payload and isinstance(payload[key], list):
+                payload = payload[key]
+                break
+        else:
+            payload = [payload]
+
+    if not isinstance(payload, list):
+        return []
+
+    normalized: List[Dict[str, str]] = []
+    idx = 1
+    for item in payload:
+        if isinstance(item, dict):
+            fact = str(item.get("fact") or item.get("text") or "").strip()
+            if not fact:
+                continue
+            anchor_id = str(item.get("id") or f"A{idx}").strip()
+            normalized.append({"id": anchor_id, "fact": fact})
+            idx += 1
+            continue
+
+        # Graceful fallback for plain string items.
+        if isinstance(item, str):
+            fact = item.strip()
+            if fact:
+                normalized.append({"id": f"A{idx}", "fact": fact})
+                idx += 1
+
+    return normalized
+
+
+def _anchors_to_text(anchors: Any) -> str:
+    """Render anchors robustly regardless of source shape."""
+    safe_anchors = _normalize_anchor_payload(anchors)
+    return "\n".join([f"[{a['id']}] {a['fact']}" for a in safe_anchors])
