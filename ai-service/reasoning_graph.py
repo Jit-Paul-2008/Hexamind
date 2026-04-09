@@ -42,6 +42,7 @@ class TaxonomyNode:
     sources: List[str] = field(default_factory=list)
     children: List['TaxonomyNode'] = field(default_factory=list)
     parent_id: Optional[str] = None
+    max_sources: int = 20  # Strategic source allocation per node (set by _allocate_sources_per_node)
 
 
 class AuroraGraph:
@@ -56,6 +57,32 @@ class AuroraGraph:
         self.provider = get_provider()
         self.researcher = InternetResearcher()
         self.initial_draft: str = ""
+    
+    def _count_taxonomy_nodes(self, nodes: List[TaxonomyNode]) -> int:
+        """Count total nodes in taxonomy tree (depth-first)."""
+        count = 0
+        for node in nodes:
+            count += 1 + self._count_taxonomy_nodes(node.children)
+        return count
+    
+    def _allocate_sources_per_node(self, nodes: List[TaxonomyNode], total_sources: int = 40):
+        """
+        Strategically allocate source budget across taxonomy nodes.
+        Root nodes research broadly (full budget), children are per-category capped.
+        """
+        def assign_node_budget(node: TaxonomyNode, depth: int = 0):
+            # Root nodes: get full budget for global baseline coverage
+            if depth == 0:
+                node.max_sources = total_sources
+            # Child nodes: smaller budget to ensure diversity across branches
+            else:
+                node.max_sources = max(8, total_sources // max(1, (depth + 1)))
+            
+            for child in node.children:
+                assign_node_budget(child, depth + 1)
+        
+        for root_node in nodes:
+            assign_node_budget(root_node)
 
     def _event(self, event_type: PipelineEventType, agent_id: str, content: str = "") -> dict[str, str]:
         """Return a standard SSE message event with typed JSON payload."""
@@ -174,6 +201,8 @@ class AuroraGraph:
         yield self._event(PipelineEventType.AGENT_START, "orchestrator")
         if not self.task_tree:
             await self._plan_phase()
+        # Allocate source budget per node for strategic coverage (broad vs deep)
+        self._allocate_sources_per_node(self.task_tree)
         update_research_status(f"✅ Taxonomy Optimized. {len(self.task_tree)} Root Chapters established.\n")
         yield self._event(PipelineEventType.AGENT_DONE, "orchestrator", "Taxonomy constructed.")
 
@@ -198,7 +227,7 @@ class AuroraGraph:
             worker = ResearchWorker(node.role, InferenceProvider(model_name=agent_config.primary_ollama_model))
             
             # Context-Aware Foraging
-            evidence = await worker.gather_evidence(node.topic, parent_context=parent_analysis)
+            evidence = await worker.gather_evidence(node.topic, parent_context=parent_analysis, max_sources=node.max_sources)
             result = await worker.run_analysis(node.topic, evidence, context=parent_analysis, anchors=global_anchors)
             
             node.analysis = result.get("analysis", "")

@@ -23,7 +23,7 @@ class ResearchWorker:
         self.provider = provider if provider is not None else get_provider()
         self.researcher = InternetResearcher()
 
-    async def gather_evidence(self, topic: str, parent_context: Optional[str] = None) -> Any:
+    async def gather_evidence(self, topic: str, parent_context: Optional[str] = None, max_sources: Optional[int] = None) -> Any:
         """Prefetch research context over the network (Sequential Discovery).
         If parent_context is provided, refine the search based on parent findings.
         """
@@ -49,6 +49,12 @@ class ResearchWorker:
                     seen_urls.add(s.url)
             
             initial_context = replace(initial_context, sources=tuple(merged_sources))
+        
+        # Cap sources per node for strategic allocation across taxonomy branches
+        if max_sources and len(initial_context.sources) > max_sources:
+            capped_sources = list(initial_context.sources)[:max_sources]
+            initial_context = replace(initial_context, sources=tuple(capped_sources))
+            print(f"📌 [RESOURCE ALLOCATION] Capped {topic} to {max_sources} sources (was {len(initial_context.sources)})")
             
         return initial_context
 
