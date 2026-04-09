@@ -51,13 +51,17 @@ graph TD
 Our architecture is built on two fundamental mathematical principles that ensure accuracy and efficiency.
 
 ### A. The Law of Large Swarms (Error Reduction)
-The probability of a factual error $\epsilon_{total}$ in our final report is reduced exponentially by the size of the swarm consensus ($n$):
-$$ \epsilon_{total} \approx \prod_{i=1}^n \epsilon_{expert_i} $$
+The probability of a factual error $ \epsilon_{total} $ in our final report is reduced exponentially by the size of the swarm consensus ($n$):
+$$
+\epsilon_{total} \approx \prod_{i=1}^n \epsilon_{expert_i}
+$$
 In simple terms: *If one model misses a fact, the other nine will catch it. Errors cancel each other out.*
 
-### B. Distillation Density ($\rho$)
+### B. Distillation Density ($ \rho $)
 We solve the memory wall through high-density compression. We calculate the information density ratio as:
-$$ \rho = \frac{\text{Atomic Signal (KB)}}{\text{Raw Data (MB)}} $$
+$$
+\rho = \frac{\text{Atomic Signal (KB)}}{\text{Raw Data (MB)}}
+$$
 Our pipeline achieves a **5000:1 ratio**, transforming gigabytes of raw web noise into a "Truth Ledger" that fits comfortably in a standard 7B context window.
 
 ---
@@ -66,7 +70,9 @@ Our pipeline achieves a **5000:1 ratio**, transforming gigabytes of raw web nois
 
 To achieve "Gemini-Level" search depth while running on local Xeon/ECC-RAM hardware, Aurora v8.0 utilizes a multi-stage distillation pipeline:
 
-$$ \mathcal{O}_{ADS} = \int_{S \in \mathcal{P}} \psi(S, \theta_{0.5B}) \rightarrow \mathcal{L} \xrightarrow{\text{reasoning}} \mathcal{R}_{\theta_{7B}} $$
+$$
+\mathcal{O}_{ADS} = \int_{S \in \mathcal{P}} \psi(S, \theta_{0.5B}) \rightarrow \mathcal{L} \xrightarrow{\text{reasoning}} \mathcal{R}_{\theta_{7B}}
+$$
 
 Where:
 - $\mathcal{P}$ is the Evidence Pool (100+ sources fetched via **Deep Paging**).
