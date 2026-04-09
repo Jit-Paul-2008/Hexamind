@@ -88,9 +88,16 @@ class AuroraGraph:
         try:
             orch_config = get_agent_model_config("orchestrator")
             orch_provider = InferenceProvider(model_name=orch_config.primary_ollama_model)
-            response = await orch_provider.generate_text(prompt, system_prompt="You are a High-Precision Taxonomy Architect. Output ONLY JSON.", max_tokens=1000)
+            response = await orch_provider.generate_text(prompt, system_prompt="You are a High-Precision Taxonomy Architect. Output ONLY JSON.", max_tokens=1500)
             
-            clean_json = re.sub(r"```json\s*|\s*```", "", response.strip())
+            # More aggressive JSON extraction: find the first { and last }
+            match = re.search(r'(\{.*\})', response, re.DOTALL)
+            if match:
+                clean_json = match.group(1)
+            else:
+                # Fallback to the old method if the regex fails
+                clean_json = re.sub(r"```json\s*|\s*```", "", response.strip())
+            
             task_data = json.loads(clean_json)
             
             def parse_recursive(node_data: Dict[str, Any], parent_id: Optional[str] = None) -> TaxonomyNode:

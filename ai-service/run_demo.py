@@ -37,36 +37,38 @@ async def run_live_trial():
         with open(status_file, "a", encoding="utf-8") as f:
             f.write(msg + "\n")
 
-    async for event in graph.run():
-        event_type = event["event"]
-        data = event["data"]
-        
-        # Simple console feedback
-        if event_type == "agent_start":
-            import json
-            payload = json.loads(data)
-            log_status(f"🧠 [BRAIN] Stage: {payload['agentId'].upper()} initialized...")
-        
-        if event_type == "agent_done":
-            import json
-            payload = json.loads(data)
-            log_status(f"✅ [BRAIN] Stage: {payload['agentId'].upper()} completed.")
-            log_status(f"📄 [REPORT] {payload['agentId'].upper()} Findings:\n{payload['fullContent']}\n")
-            log_status("-" * 50)
-        
-        if event_type == "pipeline_error":
-            import json
-            payload = json.loads(data)
-            log_status("-" * 50)
-            log_status(f"❌ [CRITICAL ERROR] Stage: {payload['agentId'].upper()} failed.")
-            log_status(f"Reason: {payload['fullContent']}")
-            log_status("-" * 50)
-            return
+    async for event_str in graph.run():
+        import json
+        try:
+            # The event is wrapped in an SSE-like format: {"data": "{\"type\": ..., \"data\": ...}"}
+            outer_event = json.loads(event_str)
+            inner_data_str = outer_event["data"]
+            event = json.loads(inner_data_str)
+            
+            event_type = event["type"]
+            agent_id = event.get("agentId", "unknown")
+            full_content = event.get("fullContent", "")
+            
+            # Simple console feedback
+            if event_type == "agent_start":
+                log_status(f"🧠 [BRAIN] Stage: {agent_id.upper()} initialized...")
+            
+            if event_type == "agent_done":
+                log_status(f"✅ [BRAIN] Stage: {agent_id.upper()} completed.")
+                log_status(f"📄 [REPORT] {agent_id.upper()} Findings:\n{full_content[:500]}...\n")
+                log_status("-" * 50)
+            
+            if event_type == "pipeline_error":
+                log_status("-" * 50)
+                log_status(f"❌ [CRITICAL ERROR] Stage: {agent_id.upper()} failed.")
+                log_status(f"Reason: {full_content}")
+                log_status("-" * 50)
+                return
 
-        if event_type == "pipeline_done":
-            import json
-            payload = json.loads(data)
-            final_report = payload["fullContent"]
+            if event_type == "pipeline_done":
+                final_report = full_content
+        except Exception as e:
+            log_status(f"⚠️  [EVENT PARSE ERROR] {e} | Raw: {event_str[:200]}")
 
 
     # 5. SAVE TO WIKI (Dual Report Separation)

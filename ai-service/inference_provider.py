@@ -67,9 +67,11 @@ class InferenceProvider:
                 # Native Ollama response format: data["message"]["content"]
                 content = data["message"]["content"]
                 
-                # Strip thinking bounds to keep context memory pure
+                # Robustly strip thinking bounds (handles partial or multiple <think> tags)
                 content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
-                # Cleanup dangling tags if cutoff occurs
+                content = re.sub(r'<think>.*', '', content, flags=re.DOTALL) # Catch cutoff thinking
+                
+                # Cleanup dangling tags and normalize whitespace
                 content = content.replace('<think>', '').replace('</think>', '').strip()
                 
                 # Increment output tokens
