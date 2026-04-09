@@ -5,6 +5,8 @@ import re
 import logging
 from typing import Optional, List, Dict, Any, AsyncGenerator
 
+from usage_tracking import record_llm_call_started, record_llm_completion_tokens
+
 logger = logging.getLogger(__name__)
 
 def get_optimal_thread_count() -> int:
@@ -40,9 +42,13 @@ class InferenceProvider:
     async def generate_text(self, prompt: str, system_prompt: Optional[str] = None, stream: bool = False, max_tokens: int = 1500) -> str:
         """Single-shot generation via Native Ollama API with Token Tracking."""
         InferenceProvider.API_CALL_COUNT += 1
-        InferenceProvider.TOTAL_TOKENS_IN += int(len(prompt.split()) * 1.35)
+        prompt_tokens_estimated = int(len(prompt.split()) * 1.35)
+        InferenceProvider.TOTAL_TOKENS_IN += prompt_tokens_estimated
         if system_prompt:
+            prompt_tokens_estimated += int(len(system_prompt.split()) * 1.35)
             InferenceProvider.TOTAL_TOKENS_IN += int(len(system_prompt.split()) * 1.35)
+        provider_name = "cloud" if os.getenv("HEXAMIND_USE_CLOUD", "0") in {"1", "true", "yes", "on"} else "local-ollama"
+        record_llm_call_started(prompt_tokens_estimated=prompt_tokens_estimated, provider=provider_name)
 
         messages = []
         if system_prompt:
@@ -80,7 +86,9 @@ class InferenceProvider:
                 content = content.replace('<think>', '').replace('</think>', '').strip()
                 
                 # Increment output tokens
-                InferenceProvider.TOTAL_TOKENS_OUT += int(len(content.split()) * 1.45)
+                completion_tokens_estimated = int(len(content.split()) * 1.45)
+                InferenceProvider.TOTAL_TOKENS_OUT += completion_tokens_estimated
+                record_llm_completion_tokens(completion_tokens_estimated)
                 return content
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
@@ -98,6 +106,15 @@ class InferenceProvider:
 
     async def stream_text(self, prompt: str, system_prompt: Optional[str] = None, max_tokens: int = 2000) -> AsyncGenerator[str, None]:
         """Streaming generation for the UI using Native Ollama API."""
+        InferenceProvider.API_CALL_COUNT += 1
+        prompt_tokens_estimated = int(len(prompt.split()) * 1.35)
+        if system_prompt:
+            prompt_tokens_estimated += int(len(system_prompt.split()) * 1.35)
+        InferenceProvider.TOTAL_TOKENS_IN += prompt_tokens_estimated
+        streamed_output_tokens_estimated = 0
+        provider_name = "cloud" if os.getenv("HEXAMIND_USE_CLOUD", "0") in {"1", "true", "yes", "on"} else "local-ollama"
+        record_llm_call_started(prompt_tokens_estimated=prompt_tokens_estimated, provider=provider_name)
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -135,8 +152,12 @@ class InferenceProvider:
                             if "message" in chunk and "content" in chunk["message"]:
                                 content = chunk["message"]["content"]
                                 if content:
+                                    chunk_tokens = int(len(content.split()) * 1.45)
+                                    streamed_output_tokens_estimated += chunk_tokens
+                                    InferenceProvider.TOTAL_TOKENS_OUT += chunk_tokens
                                     yield content
                             if chunk.get("done"):
+                                record_llm_completion_tokens(streamed_output_tokens_estimated)
                                 break
                         except json.JSONDecodeError:
                             continue

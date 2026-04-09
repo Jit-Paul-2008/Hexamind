@@ -242,19 +242,23 @@ def _build_search_intents(query: str, analysis: TopicAnalysis, audience: str) ->
         f"{base} official documentation",
         f"{base} implementation guide",
         f"{base} limitations failures",
-        f"{base} benchmark evaluation",
-        f"{base} methodology",
-        f"{base} peer reviewed",
-        f"{base} systematic review",
-        f"{core} case study",
-        f"{core} scholarly article",
-        f"{base} site:.gov",
-        f"{base} site:.edu",
-        f"{base} site:arxiv.org",
     ]
-    if audience in {"phd", "professor"} or analysis.complexity_score >= 0.7:
+    if analysis.complexity_score >= 0.45 or audience in {"phd", "professor"} or analysis.query_type in {"technical", "forecast"}:
         intents.extend(
             [
+                f"{base} benchmark evaluation",
+                f"{base} methodology",
+                f"{base} peer reviewed",
+            ]
+        )
+    if analysis.complexity_score >= 0.65 or audience in {"phd", "professor"}:
+        intents.extend(
+            [
+                f"{core} case study",
+                f"{core} scholarly article",
+                f"{base} site:.gov",
+                f"{base} site:.edu",
+                f"{base} site:arxiv.org",
                 f"{base} theoretical background",
                 f"{base} comparative analysis",
                 f"{base} recent review paper",
@@ -483,16 +487,12 @@ def _build_adversarial_queries(query: str, analysis: TopicAnalysis) -> list[str]
         f"{core} criticism limitations",
         f"{core} failures problems",
         f"{core} does not work when",
-        f"{core} risks dangers",
-        f"{core} counterargument rebuttal",
     ])
     
     # Edge case queries (under what conditions does this fail?)
     adversarial.extend([
         f"{core} edge cases exceptions",
         f"{core} when fails",
-        f"{core} not recommended when",
-        f"{core} prerequisites requirements",
     ])
     
     # Assumption-challenging queries
@@ -500,12 +500,16 @@ def _build_adversarial_queries(query: str, analysis: TopicAnalysis) -> list[str]
         f"{core} assumptions wrong",
         f"{core} alternative approaches",
         f"{core} conflicting evidence",
-        f"{core} outdated obsolete",
     ])
     
     # High-complexity or high-risk topics get deeper adversarial coverage
     if analysis.complexity_score >= 0.6 or analysis.domain_risk_score >= 0.4:
         adversarial.extend([
+            f"{core} risks dangers",
+            f"{core} counterargument rebuttal",
+            f"{core} not recommended when",
+            f"{core} prerequisites requirements",
+            f"{core} outdated obsolete",
             f"{core} systematic review negative",
             f"{core} meta-analysis limitations",
             f"{core} replication failure",

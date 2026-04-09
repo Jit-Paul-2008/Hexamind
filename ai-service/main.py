@@ -17,10 +17,13 @@ from contextlib import asynccontextmanager
 from sse_starlette.sse import EventSourceResponse
 
 
-# Repo root is one level above ai-service/ (Docker WORKDIR is ai-service; .env lives at project root).
+# Repo root is one level above ai-service/ (Docker WORKDIR is ai-service; env files may live at both levels).
 _REPO_ROOT = Path(__file__).resolve().parent.parent
+_SERVICE_ROOT = Path(__file__).resolve().parent
 load_dotenv(_REPO_ROOT / ".env")
 load_dotenv(_REPO_ROOT / ".env.local")
+load_dotenv(_SERVICE_ROOT / ".env", override=True)
+load_dotenv(_SERVICE_ROOT / ".env.local", override=True)
 load_dotenv()
 
 from agents import AGENTS
@@ -187,7 +190,8 @@ def metrics() -> Response:
 @app.get("/api/models/status")
 async def model_status() -> dict[str, object]:
     payload = pipeline_service.health()
-    payload["cloudOnlyMode"] = True
+    provider_name = str(payload.get("configuredProvider", "")).strip().lower()
+    payload["cloudOnlyMode"] = provider_name not in {"local"}
     payload["providerDiagnostics"] = payload.copy()
     return payload
 

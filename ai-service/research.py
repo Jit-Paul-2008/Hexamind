@@ -17,6 +17,7 @@ from embeddings import LocalEmbeddingsClient
 from knowledge_cache import LocalKnowledgeCache
 from governance import redact_pii
 from workflow import ResearchWorkflowProfile, build_workflow_profile
+from usage_tracking import record_retrieval_call
 
 
 @dataclass(frozen=True)
@@ -880,6 +881,7 @@ class InternetResearcher:
         for attempt in range(self._search_retry_attempts):
             await self._throttle_search_requests()
             try:
+                record_retrieval_call(self._search_provider)
                 response = await client.request(method, url, **kwargs)
                 if response.status_code in retryable_status:
                     raise httpx.HTTPStatusError(

@@ -74,6 +74,39 @@ class AuroraGraph:
 
         walk(self.task_tree)
         return "\n".join(lines)
+
+    def _fallback_outline(self) -> List[TaxonomyNode]:
+        topic = self.query.strip()
+        return [
+            TaxonomyNode(id="scope", topic=f"Scope and framing of {topic}", role="researcher"),
+            TaxonomyNode(id="evidence", topic=f"Current evidence and landscape for {topic}", role="researcher"),
+            TaxonomyNode(id="history", topic=f"Historical and policy context for {topic}", role="historian"),
+            TaxonomyNode(id="dimensions", topic=f"Key dimensions and subtopics in {topic}", role="researcher"),
+            TaxonomyNode(id="risks", topic=f"Constraints and risks in {topic}", role="auditor"),
+            TaxonomyNode(id="implementation", topic=f"Implementation pathways for {topic}", role="analyst"),
+        ]
+
+    @staticmethod
+    def _is_generic_outline(node: TaxonomyNode) -> bool:
+        generic_topics = {
+            "introduction",
+            "methodology",
+            "data sources",
+            "analysis framework",
+            "results and interpretation",
+            "results",
+            "conclusion",
+            "research query",
+            "report outline",
+            "executive summary",
+        }
+        topic = node.topic.strip().lower()
+        if topic in generic_topics:
+            return True
+        if len(node.children) == 0:
+            return False
+        child_topics = {child.topic.strip().lower() for child in node.children}
+        return bool(child_topics & generic_topics)
     
     def _count_taxonomy_nodes(self, nodes: List[TaxonomyNode]) -> int:
         """Count total nodes in taxonomy tree (depth-first)."""
@@ -196,20 +229,16 @@ class AuroraGraph:
 
             root_signature = (_norm_topic(root_node.topic), root_node.role.strip().lower())
             prune_duplicate_nodes(root_node, {root_signature})
-            self.task_tree = [root_node]
+            if self._is_generic_outline(root_node) or len(root_node.children) < 2:
+                logger.warning("Planner returned a generic outline; using query-specific fallback outline.")
+                self.task_tree = self._fallback_outline()
+            else:
+                self.task_tree = [root_node]
             logger.info("Taxonomic Architecture initialized and pruned.")
             return True
         except Exception as e:
             logger.error(f"Taxonomic planning failed: {e}. Falling back to Diamond Experts.")
-            topic = self.query.strip()
-            self.task_tree = [
-                TaxonomyNode(id="scope", topic=f"Scope and framing of {topic}", role="researcher"),
-                TaxonomyNode(id="evidence", topic=f"Current evidence and landscape for {topic}", role="researcher"),
-                TaxonomyNode(id="history", topic=f"Historical and policy context for {topic}", role="historian"),
-                TaxonomyNode(id="dimensions", topic=f"Key dimensions and subtopics in {topic}", role="researcher"),
-                TaxonomyNode(id="risks", topic=f"Constraints and risks in {topic}", role="auditor"),
-                TaxonomyNode(id="implementation", topic=f"Implementation pathways for {topic}", role="analyst"),
-            ]
+            self.task_tree = self._fallback_outline()
             return True
 
     async def run(self):

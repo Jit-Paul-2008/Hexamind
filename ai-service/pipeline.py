@@ -30,6 +30,7 @@ from cost_aware_routing import route_query, estimate_query_cost
 from confidence_scoring import score_research_confidence
 from research_memory import store_session, query_research_memory, get_research_graph
 from collaboration import create_collaboration_session, create_context_handoff
+from usage_tracking import activate_session, deactivate_session, get_session_usage
 
 
 _PUBLIC_OVERLOAD_MESSAGE = (
@@ -152,11 +153,17 @@ class PipelineService:
         if not self.has_session(session_id, tenant_id):
             raise KeyError(session_id)
 
+        usage_snapshot = get_session_usage(session_id)
+
         if session_id in self._quality_reports:
             report = dict(self._quality_reports[session_id])
             report.pop("passing", None)
             report["status"] = "ready"
             report["sessionId"] = session_id
+            report["usage"] = {
+                **usage_snapshot,
+                "note": "Estimated token and API-call equivalents for this session (what a real key-backed API run would bill at request/token level).",
+            }
             notes = _string_list(report.get("notes", []))
             if notes:
                 report["notes"] = [
@@ -188,6 +195,10 @@ class PipelineService:
             "contradictionFindings": [],
             "notes": ["Pipeline has not produced a completed report yet."],
             "deliveryMode": "best-effort",
+            "usage": {
+                **usage_snapshot,
+                "note": "Estimated token and API-call equivalents for this in-flight session (what a real key-backed API run would bill at request/token level).",
+            },
         }
 
     def get_final_report(self, session_id: str, tenant_id: str | None = None) -> str:
@@ -259,6 +270,7 @@ class PipelineService:
 
     async def stream_events(self, session_id: str, tenant_id: str | None = None):
         session = self._get_session(session_id, tenant_id)
+        usage_context_token = activate_session(session_id)
         
         # Convert stored taxonomy (list of dicts) back to TaxonomyNode objects if present
         task_tree = None
@@ -307,7 +319,8 @@ class PipelineService:
                                 "metrics": {
                                     "sourceCount": len(graph.context.get("sources", [])),
                                     "stepsTaken": 5
-                                }
+                                },
+                                "usage": get_session_usage(session_id),
                             }
                 finally:
                     self._active_streams = max(0, self._active_streams - 1)
@@ -327,6 +340,8 @@ class PipelineService:
                 "event": error_event.type.value,
                 "data": error_event.model_dump_json()
             }
+        finally:
+            deactivate_session(usage_context_token)
 
     def _build_run_metadata(self, **kwargs) -> dict[str, object]:
         # Placeholder for Aurora metadata integration
