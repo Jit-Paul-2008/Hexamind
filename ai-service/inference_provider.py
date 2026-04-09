@@ -147,17 +147,18 @@ class InferenceProvider:
     async def verify_readiness(self) -> bool:
         """Pings Ollama to ensure the model is pulled and the service is alive."""
         try:
-            # Check Ollama root (/api/tags or equivalent) 
-            # We'll use a direct ping to the v1/models endpoint
+            # We need the root endpoint for /api/tags
+            root_url = self.base_url.replace("/api/chat", "")
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{self.base_url}/models")
+                response = await client.get(f"{root_url}/api/tags")
                 if response.status_code == 200:
                     data = response.json()
-                    models = [m["id"] for m in data.get("data", [])]
+                    models = [m["name"] for m in data.get("models", [])]
                     if self.model_name in models:
                         return True
             return False
-        except Exception:
+        except Exception as e:
+            logger.error(f"Readiness check failed: {e}")
             return False
 
 

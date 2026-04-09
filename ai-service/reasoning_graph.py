@@ -88,7 +88,7 @@ class AuroraGraph:
         try:
             orch_config = get_agent_model_config("orchestrator")
             orch_provider = InferenceProvider(model_name=orch_config.primary_ollama_model)
-            response = await orch_provider.generate_text(prompt, system_prompt="You are a High-Precision Taxonomy Architect. Output ONLY JSON.", max_tokens=1500)
+            response = await orch_provider.generate_text(prompt, system_prompt="You are a High-Precision Taxonomy Architect. Output ONLY JSON.", max_tokens=orch_config.max_tokens)
             
             # More aggressive JSON extraction: find the first { and last }
             match = re.search(r'(\{.*\})', response, re.DOTALL)

@@ -1,0 +1,72 @@
+[
+  {
+    "id": "orchestrator",
+    "name": "Orchestrator",
+    "role": "Task Decomposition and Planning",
+    "purpose": "Decomposes the research query into specialized expert tasks for the Aurora diamond team.",
+    "accent_color": "#6366f1",
+    "glow_color": "rgba(99, 102, 241, 0.28)",
+    "shape": "sphere",
+    "processing_order": 0
+  },
+  {
+    "id": "historian",
+    "name": "Historian",
+    "role": "Historical Evolution and Contextual Grounding",
+    "purpose": "Traces the historical development, timelines, and pedagogical evolution of the research topic.",
+    "accent_color": "#a78bfa",
+    "glow_color": "rgba(167, 139, 250, 0.28)",
+    "shape": "tetrahedron",
+    "processing_order": 1
+  },
+  {
+    "id": "researcher",
+    "name": "Researcher",
+    "role": "Evidence Gathering and Structured Analysis",
+    "purpose": "Synthesizes sources into a comprehensive, well-structured research report.",
+    "accent_color": "#10b981",
+    "glow_color": "rgba(16, 185, 129, 0.28)",
+    "shape": "tetrahedron",
+    "processing_order": 1
+  },
+  {
+    "id": "drafter",
+    "name": "Drafter",
+    "role": "Initial Synthesis and Drafting",
+    "purpose": "Assembles the initial research draft from gathered evidence and grounding anchors.",
+    "accent_color": "#8b5cf6",
+    "glow_color": "rgba(139, 92, 246, 0.28)",
+    "shape": "box",
+    "processing_order": 2
+  },
+  {
+    "id": "auditor",
+    "name": "Auditor",
+    "role": "Critical Assessment and Gap Analysis",
+    "purpose": "Identifies gaps, contradictions, and educator challenges in the research evidence.",
+    "accent_color": "#f87171",
+    "glow_color": "rgba(248, 113, 113, 0.28)",
+    "shape": "icosahedron",
+    "processing_order": 2
+  },
+  {
+    "id": "analyst",
+    "name": "Analyst",
+    "role": "Implementation Strategy and Practical Outcomes",
+    "purpose": "Evaluates implementation pathways, practical mechanisms, and measurable outcomes.",
+    "accent_color": "#38bdf8",
+    "glow_color": "rgba(56, 189, 248, 0.28)",
+    "shape": "box",
+    "processing_order": 3
+  },
+  {
+    "id": "synthesiser",
+    "name": "Synthesiser",
+    "role": "Tradeoff Integration and Decision Framing",
+    "purpose": "Integrates competing perspectives into a decision-ready recommendation.",
+    "accent_color": "#34d399",
+    "glow_color": "rgba(16, 185, 129, 0.28)",
+    "shape": "dodecahedron",
+    "processing_order": 4
+  }
+]
