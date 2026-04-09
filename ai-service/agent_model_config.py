@@ -72,15 +72,6 @@ AGENT_MODEL_SPECIALIZATION = {
         system_prompt_suffix="Identify technical implementation errors or outcome gaps in the draft. Output ONLY JSON diffs."
     ),
 
-    "drafter": AgentModelConfig(
-        agent_id="drafter",
-        primary_ollama_model=MODEL_LARGE,
-        fallback_hf_model="mistralai/Mistral-7B-Instruct-v0.2",
-        temperature=0.4,
-        max_tokens=2000,
-        system_prompt_suffix="Generate a comprehensive, encyclopedic Markdown research report in an LLM-Wiki format."
-    ),
-
     "orchestrator": AgentModelConfig(
         agent_id="orchestrator",
         primary_ollama_model=MODEL_SMALL,

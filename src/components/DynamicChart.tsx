@@ -36,6 +36,13 @@ export default function DynamicChart({ data }: ChartProps) {
 
   const keys = Object.keys(data.data[0]).filter(k => k !== data.xAxis && k !== 'Year' && k !== 'name');
   const colors = ['#818cf8', '#34d399', '#f472b6', '#fbbf24', '#60a5fa'];
+  const colorClassMap: Record<string, string> = {
+    '#818cf8': 'bg-indigo-400',
+    '#34d399': 'bg-emerald-400',
+    '#f472b6': 'bg-pink-400',
+    '#fbbf24': 'bg-amber-400',
+    '#60a5fa': 'bg-sky-400',
+  };
 
   // Choose chart based on requested type, default to area for "Supercomputer" feel
   const chartType = data.chartType || 'area';
@@ -47,7 +54,9 @@ export default function DynamicChart({ data }: ChartProps) {
           <p className="text-slate-300 font-bold mb-2">{`${label}`}</p>
           {payload.map((entry, index: number) => (
             <div key={index} className="flex items-center space-x-2 text-sm my-1">
-              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: entry.color }}></span>
+              <span
+                className={`w-3 h-3 rounded-full ${colorClassMap[entry.color] ?? 'bg-slate-400'}`}
+              />
               <span className="text-slate-200">{entry.name}:</span>
               <span className="font-mono text-white font-semibold">{String(entry.value)}</span>
             </div>
@@ -121,7 +130,7 @@ export default function DynamicChart({ data }: ChartProps) {
   };
 
   return (
-    <div className="w-full h-[400px] p-6 glass-card rounded-2xl bg-slate-900 border border-slate-700/50 relative overflow-hidden group shadow-[0_0_30px_rgba(99,102,241,0.05)] hover:shadow-[0_0_40px_rgba(99,102,241,0.15)] transition-shadow duration-500">
+    <div className="w-full h-100 p-6 glass-card rounded-2xl bg-slate-900 border border-slate-700/50 relative overflow-hidden group shadow-[0_0_30px_rgba(99,102,241,0.05)] hover:shadow-[0_0_40px_rgba(99,102,241,0.15)] transition-shadow duration-500">
       {/* Decorative background glow */}
       <div className="absolute -top-24 -right-24 w-48 h-48 bg-indigo-500/20 rounded-full blur-[100px] pointer-events-none transition-opacity duration-500 opacity-50 group-hover:opacity-100" />
 
@@ -132,7 +141,7 @@ export default function DynamicChart({ data }: ChartProps) {
         </span>
       </div>
 
-      <div className="h-[300px] relative z-10">
+      <div className="h-75 relative z-10">
         <ResponsiveContainer width="100%" height="100%">
           {renderChart()}
         </ResponsiveContainer>

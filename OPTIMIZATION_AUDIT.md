@@ -562,11 +562,11 @@ def get_optimal_thread_count() -> int:
 ```python
 MODEL_SMALL = "deepseek-r1:1.5b"    # Workers, lightweight tasks
 MODEL_MEDIUM = "deepseek-r1:1.5b"   # Synthesis (note: same as SMALL)
-MODEL_LARGE = "deepseek-r1:7b"      # Heavy reasoning (researcher, drafter)
+MODEL_LARGE = "deepseek-r1:7b"      # Heavy reasoning (researcher, synthesiser)
 ```
 
 **Agent Assignments** [L32-96]:
-- **Researcher/Drafter**: 7B (max tokens: 400-2000)
+- **Researcher/Synthesiser**: 7B (max tokens: 400-2000)
 - **Historian/Auditor/Analyst**: 1.5B (max tokens: 400)
 - **Synthesiser**: 1.5B → 7B (tuned per workflow)
 - **Orchestrator**: 1.5B (max tokens: 200)

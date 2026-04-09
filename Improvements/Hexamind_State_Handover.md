@@ -14,7 +14,7 @@ The goal is to transition Hexamind Aurora from a localized research tool into an
 
 ### 1. Diamond Expert Consolidation (Implemented)
 - **Problem**: Inconsistent agent lists between frontend and backend caused reasoning drift.
-- **Solution**: Created `public/agents.json` as the single source of truth for the 7 core roles: Orchestrator, Historian, Researcher, Drafter, Auditor, Analyst, and Synthesiser.
+- **Solution**: Created `public/agents.json` as the single source of truth for the core roles: Orchestrator, Historian, Researcher, Auditor, Analyst, and Synthesiser.
 - **Where to find it**: `public/agents.json`, `ai-service/agents.py`, `src/components/ResearchConsole.tsx`.
 
 ### 2. The 15-Pillar Strategic Roadmap (Documented)

@@ -16,7 +16,7 @@ Every tool has a soul, and Hexamind’s soul was forged in the fire of hardware 
 The journey began with a simple, yet "impossible" goal: **Bring Gemini-level deep research to the local workstation.** Early versions (v1.0 - v4.0) struggled with the **Context Paradox**. To reach high fidelity, we needed 100+ sources. But feeding 100 sources into a local 1.5B-7B model is a recipe for disaster—prompt overflows, endless inference loops, and "reasoning noise" that rendered reports useless.
 
 ### The Evolution
-We realized that the solution wasn't a bigger model; it was a **smarter swarm**. We moved away from the "One Model to Rule Them All" philosophy and engineered the **Atomic Distillation Swarm (ADS)**. By delegating the heavy lifting of fact-foraging to a army of lightweight 0.5B-1B "Drafters," we effectively decoupled *Extraction* from *Reasoning*.
+We realized that the solution wasn't a bigger model; it was a **smarter swarm**. We moved away from the "One Model to Rule Them All" philosophy and engineered the **Atomic Distillation Swarm (ADS)**. By delegating the heavy lifting of fact-foraging to a swarm of lightweight 0.5B-1B workers, we effectively decoupled *Extraction* from *Reasoning*.
 
 *Hexamind exists not because it's easy, but because the hardware said it was impossible—and we refused to listen.*
 

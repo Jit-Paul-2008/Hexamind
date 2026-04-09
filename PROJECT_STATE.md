@@ -19,7 +19,7 @@
 - **Model Routing (v8.5 Tiered-Ready)**: 
   - **Orchestrator (1.5B)**: [MANDATORY] Fast taxonomy roadmap generation.
   - **Workers (1.5B)**: Historian, Auditor, Analyst (Fast extraction/critique).
-  - **Reasoning/Drafter (7B)**: Researcher, Synthesiser, Drafter (High-fidelity).
+  - **Reasoning (7B)**: Researcher and Synthesiser (High-fidelity).
 - **Human-in-the-Loop**: Mandatory UI-based Taxonomy Mutation via **Report Planner**.
 
 ## 4. Documentation Hierarchy
